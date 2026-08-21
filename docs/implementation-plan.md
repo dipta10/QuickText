@@ -1,0 +1,225 @@
+# Implementation Plan
+
+## Plan Summary
+
+Build a Tauri 2 desktop app with a compact web UI and a Rust backend that owns microphone capture, Soniox streaming, global shortcut handling, clipboard writes, and local settings.
+
+The core product promise is a fast toggle loop:
+
+1. Trigger app.
+2. Show/focus UI.
+3. Start recording immediately.
+4. Trigger again.
+5. Stop recording.
+6. Finalize Soniox stream.
+7. Show transcript.
+8. Copy transcript on demand.
+
+## Current Decisions
+
+- Desktop shell: Tauri 2.
+- Frontend: TypeScript UI, likely React plus Vite unless a lighter local pattern is chosen during scaffolding.
+- Backend: Rust Tauri commands and events.
+- Audio capture: Rust backend, using a cross-platform audio crate such as `cpal`.
+- Transcription path: Soniox real-time STT WebSocket streaming.
+- Clipboard: Tauri clipboard plugin.
+- Global shortcut: Tauri global-shortcut plugin.
+- Settings: local app settings plus OS credential storage for the Soniox API key.
+- Transcript history: out of MVP.
+
+## Architecture
+
+```text
+UI
+  |
+  | Tauri commands/events
+  v
+App controller/state machine
+  |
+  +-- Audio recorder
+  |     |
+  |     v
+  |   PCM audio chunks
+  |
+  +-- Transcription provider interface
+  |     |
+  |     v
+  |   Soniox WebSocket client
+  |
+  +-- Settings store
+  +-- Credential store
+  +-- Clipboard service
+  +-- Shortcut service
+```
+
+## App State Machine
+
+The app should have one source of truth for recording state.
+
+- `idle`: no active recording, ready to start.
+- `starting`: UI has requested recording and backend is opening microphone/provider session.
+- `recording`: microphone is active and audio is streaming.
+- `stopping`: stop requested, audio closed, provider finalizing.
+- `transcribed`: latest transcript is ready.
+- `error`: user-actionable failure state.
+
+State transitions:
+
+- `idle` -> `starting` when trigger is pressed.
+- `starting` -> `recording` when microphone and Soniox session are ready.
+- `starting` -> `error` when setup fails.
+- `recording` -> `stopping` when trigger is pressed.
+- `stopping` -> `transcribed` when final transcript is available.
+- `stopping` -> `error` when finalization fails.
+- `transcribed` -> `starting` when trigger is pressed again.
+- `error` -> `starting` only when the error is retryable.
+
+## Milestone 0: Repo And Tooling
+
+Deliverables:
+
+- Scaffold Tauri 2 app.
+- Add frontend formatting and linting.
+- Add Rust formatting and clippy checks.
+- Add a basic CI plan, even if CI is not wired yet.
+- Add `.env.example` for non-secret configuration only.
+
+Acceptance checks:
+
+- App launches locally.
+- `cargo fmt`, frontend format, and type checks can run.
+- No Soniox key is committed.
+
+## Milestone 1: Static UI Shell
+
+Deliverables:
+
+- Compact main window.
+- Primary record/stop button.
+- Status text for idle, recording, stopping, transcribed, and error states.
+- Transcript output area.
+- Copy button.
+- Settings view for Soniox API key and shortcut preference.
+
+Acceptance checks:
+
+- UI can be driven with mocked state.
+- Button labels and disabled states match the state machine.
+- Transcript text can be copied from mocked data.
+
+## Milestone 2: Backend App Controller
+
+Deliverables:
+
+- Tauri command to toggle recording.
+- Tauri command to copy latest transcript.
+- Event stream from backend to frontend for state changes.
+- In-memory transcript/session state.
+- Guard against double-start and double-stop races.
+
+Acceptance checks:
+
+- Rapid repeated trigger presses do not create overlapping recording sessions.
+- UI state remains consistent when commands fail.
+- Backend unit tests cover core state transitions.
+
+## Milestone 3: Settings And Secrets
+
+Deliverables:
+
+- Store non-secret preferences locally.
+- Store Soniox API key in OS credential storage.
+- Detect missing API key before recording starts.
+- Allow key update and deletion.
+
+Acceptance checks:
+
+- API key is not written to ordinary config files.
+- Missing key produces a clear UI error.
+- Restarting the app preserves settings.
+
+## Milestone 4: Audio Capture Spike
+
+Deliverables:
+
+- Capture microphone audio in Rust.
+- Normalize to the format sent to Soniox.
+- Expose microphone permission/device errors.
+- Add a local debug path to confirm non-empty audio chunks without sending them to Soniox.
+
+Acceptance checks:
+
+- Linux capture works on the development machine.
+- Audio chunks have expected sample rate, channel count, and sample format.
+- Stopping capture releases the microphone.
+
+## Milestone 5: Soniox Streaming Provider
+
+Deliverables:
+
+- Implement provider boundary.
+- Open Soniox real-time STT WebSocket session.
+- Send config with API key, model, audio format, sample rate, and channel count.
+- Stream binary audio frames while recording.
+- Send an empty frame to finalize.
+- Parse tokens into a transcript.
+- Map Soniox/network failures to user-facing errors.
+
+Acceptance checks:
+
+- Short recording produces a final transcript.
+- Stop finalizes the active stream instead of uploading after the fact.
+- Provider errors do not leak raw protocol messages into the UI.
+
+## Milestone 6: Triggering And Clipboard
+
+Deliverables:
+
+- Register default global shortcut.
+- Show/focus app and start recording from shortcut.
+- Stop recording from the same shortcut.
+- Copy latest transcript using Tauri clipboard support.
+- Add optional auto-copy setting if it does not complicate the core loop.
+
+Acceptance checks:
+
+- Shortcut works when another app is focused.
+- Same trigger starts and stops recording.
+- Copy action writes exactly the displayed transcript.
+
+## Milestone 7: Cross-Platform Hardening
+
+Deliverables:
+
+- Test microphone permissions on Linux, macOS, and Windows.
+- Test shortcut registration conflicts.
+- Test packaging basics.
+- Add app logs with sensitive values redacted.
+- Document platform-specific setup issues.
+
+Acceptance checks:
+
+- App starts, records, transcribes, and copies on each target OS.
+- Permission failures have useful recovery text.
+- Logs never contain the Soniox API key.
+
+## Grilling Notes
+
+These are the decisions most likely to break the plan if answered casually.
+
+- Trigger model: Is the "button" a global shortcut, a floating button, a tray/menu item, or all three? Current plan starts with global shortcut plus visible UI button.
+- Credential model: Is this for personal local use only, or will it be distributed to users who should not handle raw Soniox keys? Current plan assumes personal/local key storage. A commercial app likely needs a backend that issues temporary Soniox API keys.
+- Streaming complexity: Are partial transcripts required in MVP? Current plan streams audio for fast finalization but does not require partial transcript UI.
+- Window behavior: Should the UI hide after copy, after stop, or never automatically? Current plan keeps it visible after transcription.
+- Recording bounds: What prevents accidental long recordings? Current plan should add a conservative maximum duration before public release.
+- Language defaults: Is the app English-only at first, or should language hints be configurable? Current plan starts with English-oriented defaults and leaves language settings for a follow-up.
+
+## Immediate Next Step
+
+Scaffold the Tauri app and implement Milestone 1 with mocked backend state. Do not integrate Soniox first; the UI state machine and app controller should be stable before real audio and network behavior are added.
+
+## References
+
+- Soniox STT WebSocket API: https://soniox.com/docs/api-reference/stt/websocket-api
+- Tauri global shortcut plugin: https://v2.tauri.app/plugin/global-shortcut/
+- Tauri plugin overview: https://v2.tauri.app/plugin/

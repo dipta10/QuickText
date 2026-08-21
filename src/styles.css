@@ -36,6 +36,13 @@ body {
   padding: 32px;
 }
 
+.app-shell {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+  width: min(100%, 320px);
+}
+
 .record-button {
   min-width: 168px;
   min-height: 56px;
@@ -66,4 +73,54 @@ body {
 .record-button:focus-visible {
   outline: 3px solid rgba(94, 179, 255, 0.48);
   outline-offset: 4px;
+}
+
+.keybind-panel {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.keybind-label {
+  color: #8c99aa;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.keybind-button {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f7fa;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.keybind-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.keybind-button:focus-visible {
+  outline: 3px solid rgba(94, 179, 255, 0.48);
+  outline-offset: 4px;
+}
+
+.keybind-status {
+  min-height: 18px;
+  margin: 0;
+  color: #8c99aa;
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  text-align: center;
 }

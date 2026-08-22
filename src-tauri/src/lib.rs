@@ -1,8 +1,10 @@
 use std::{sync::Mutex, thread, time::Duration};
 
 mod app_controller;
+mod audio_recorder;
 
 use app_controller::{fake_transcript, AppController, AppError, AppSnapshot, AppStatus};
+use audio_recorder::{AudioCaptureStats, AudioRecorder};
 use keyring::{Entry, Error as KeyringError};
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -24,6 +26,11 @@ struct AppControllerState {
 #[derive(Default)]
 struct CredentialState {
     soniox_api_key: Mutex<Option<String>>,
+}
+
+#[derive(Default)]
+struct AudioRecorderState {
+    recorder: Mutex<Option<AudioRecorder>>,
 }
 
 fn soniox_key_entry() -> Result<Entry, String> {
@@ -55,8 +62,16 @@ fn schedule_max_recording_duration(app: tauri::AppHandle, session_id: u64) {
         };
         emit_app_snapshot(&app, &stopping);
 
+        let recorder = app.state::<AudioRecorderState>();
+        let audio_stats = match stop_audio_recorder(&recorder) {
+            Ok(audio_stats) => audio_stats,
+            Err(_) => return,
+        };
+
         let transcribed = match lock_controller(&controller) {
-            Ok(mut controller) => controller.finish_stop(fake_transcript()),
+            Ok(mut controller) => {
+                controller.finish_stop(fake_transcript(&audio_stats), audio_stats)
+            }
             Err(_) => return,
         };
         emit_app_snapshot(&app, &transcribed);
@@ -73,6 +88,10 @@ fn credential_store_error(message: String) -> AppError {
     AppError::CredentialStore { message }
 }
 
+fn microphone_unavailable_error(message: String) -> AppError {
+    AppError::MicrophoneUnavailable { message }
+}
+
 fn lock_controller<'a>(
     controller: &'a State<'_, AppControllerState>,
 ) -> Result<std::sync::MutexGuard<'a, AppController>, String> {
@@ -80,6 +99,15 @@ fn lock_controller<'a>(
         .controller
         .lock()
         .map_err(|_| "Could not update recording state.".to_string())
+}
+
+fn lock_recorder<'a>(
+    recorder: &'a State<'_, AudioRecorderState>,
+) -> Result<std::sync::MutexGuard<'a, Option<AudioRecorder>>, String> {
+    recorder
+        .recorder
+        .lock()
+        .map_err(|_| "Could not update microphone state.".to_string())
 }
 
 fn cache_soniox_api_key(
@@ -155,6 +183,7 @@ fn toggle_recording(
     app: tauri::AppHandle,
     controller: State<'_, AppControllerState>,
     credentials: State<'_, CredentialState>,
+    recorder: State<'_, AudioRecorderState>,
 ) -> Result<AppSnapshot, String> {
     let current_status = lock_controller(&controller)?.snapshot().status;
 
@@ -186,9 +215,26 @@ fn toggle_recording(
                 }
             }
 
+            let audio_recorder = match AudioRecorder::start() {
+                Ok(recorder) => recorder,
+                Err(error) => {
+                    let error_snapshot = {
+                        let mut controller = lock_controller(&controller)?;
+                        controller.fail_start(microphone_unavailable_error(error))
+                    };
+                    emit_app_snapshot(&app, &error_snapshot);
+                    return Ok(error_snapshot);
+                }
+            };
+            let audio_format = audio_recorder.format();
+            {
+                let mut active_recorder = lock_recorder(&recorder)?;
+                *active_recorder = Some(audio_recorder);
+            }
+
             let recording = {
                 let mut controller = lock_controller(&controller)?;
-                controller.finish_start()
+                controller.finish_start(audio_format)
             };
             let session_id = lock_controller(&controller)?.active_session_id();
             emit_app_snapshot(&app, &recording);
@@ -204,9 +250,10 @@ fn toggle_recording(
             };
             emit_app_snapshot(&app, &stopping);
 
+            let audio_stats = stop_audio_recorder(&recorder)?;
             let transcribed = {
                 let mut controller = lock_controller(&controller)?;
-                controller.finish_stop(fake_transcript())
+                controller.finish_stop(fake_transcript(&audio_stats), audio_stats)
             };
             emit_app_snapshot(&app, &transcribed);
             Ok(transcribed)
@@ -216,6 +263,17 @@ fn toggle_recording(
             Ok(snapshot)
         }
     }
+}
+
+fn stop_audio_recorder(
+    recorder: &State<'_, AudioRecorderState>,
+) -> Result<AudioCaptureStats, String> {
+    let active_recorder = {
+        let mut recorder = lock_recorder(recorder)?;
+        recorder.take()
+    };
+
+    Ok(active_recorder.map(AudioRecorder::stop).unwrap_or_default())
 }
 
 #[tauri::command]
@@ -288,6 +346,7 @@ pub fn run() {
         .manage(ShortcutSettings::default())
         .manage(AppControllerState::default())
         .manage(CredentialState::default())
+        .manage(AudioRecorderState::default())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {

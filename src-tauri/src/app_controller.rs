@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::audio_recorder::{AudioCaptureStats, AudioFormat};
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AppStatus {
@@ -22,6 +24,7 @@ pub struct TranscriptResult {
 pub enum AppError {
     MissingApiKey { message: String },
     CredentialStore { message: String },
+    MicrophoneUnavailable { message: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -30,6 +33,8 @@ pub struct AppSnapshot {
     pub status: AppStatus,
     pub transcript: Option<TranscriptResult>,
     pub error: Option<AppError>,
+    pub audio_format: Option<AudioFormat>,
+    pub audio_stats: Option<AudioCaptureStats>,
 }
 
 #[derive(Debug)]
@@ -46,6 +51,8 @@ impl Default for AppController {
                 status: AppStatus::Idle,
                 transcript: None,
                 error: None,
+                audio_format: None,
+                audio_stats: None,
             },
             active_session_id: None,
             next_session_id: 1,
@@ -76,6 +83,8 @@ impl AppController {
                     status: AppStatus::Starting,
                     transcript: None,
                     error: None,
+                    audio_format: None,
+                    audio_stats: None,
                 };
             }
             AppStatus::Starting | AppStatus::Recording | AppStatus::Stopping => {}
@@ -84,12 +93,14 @@ impl AppController {
         self.snapshot()
     }
 
-    pub fn finish_start(&mut self) -> AppSnapshot {
+    pub fn finish_start(&mut self, audio_format: AudioFormat) -> AppSnapshot {
         if self.snapshot.status == AppStatus::Starting {
             self.snapshot = AppSnapshot {
                 status: AppStatus::Recording,
                 transcript: None,
                 error: None,
+                audio_format: Some(audio_format),
+                audio_stats: None,
             };
         }
 
@@ -102,6 +113,8 @@ impl AppController {
                 status: AppStatus::Error,
                 transcript: None,
                 error: Some(error),
+                audio_format: None,
+                audio_stats: None,
             };
             self.active_session_id = None;
         }
@@ -115,18 +128,26 @@ impl AppController {
                 status: AppStatus::Stopping,
                 transcript: None,
                 error: None,
+                audio_format: self.snapshot.audio_format.clone(),
+                audio_stats: None,
             };
         }
 
         self.snapshot()
     }
 
-    pub fn finish_stop(&mut self, transcript: TranscriptResult) -> AppSnapshot {
+    pub fn finish_stop(
+        &mut self,
+        transcript: TranscriptResult,
+        audio_stats: AudioCaptureStats,
+    ) -> AppSnapshot {
         if self.snapshot.status == AppStatus::Stopping {
             self.snapshot = AppSnapshot {
                 status: AppStatus::Transcribed,
                 transcript: Some(transcript),
                 error: None,
+                audio_format: self.snapshot.audio_format.clone(),
+                audio_stats: Some(audio_stats),
             };
             self.active_session_id = None;
         }
@@ -135,10 +156,32 @@ impl AppController {
     }
 }
 
-pub fn fake_transcript() -> TranscriptResult {
+pub fn fake_transcript(audio_stats: &AudioCaptureStats) -> TranscriptResult {
     TranscriptResult {
-        text: "Fake transcript from backend controller. Soniox streaming is next.".to_string(),
+        text: format!(
+            "Captured {} audio chunks ({} samples, {} bytes). Soniox streaming is next.",
+            audio_stats.chunk_count, audio_stats.sample_count, audio_stats.byte_count
+        ),
         provider: "fake".to_string(),
+    }
+}
+
+#[cfg(test)]
+fn test_audio_format() -> AudioFormat {
+    AudioFormat {
+        sample_rate: 48_000,
+        channels: 1,
+        encoding: crate::audio_recorder::AudioEncoding::F32,
+    }
+}
+
+#[cfg(test)]
+fn test_audio_stats() -> AudioCaptureStats {
+    AudioCaptureStats {
+        chunk_count: 2,
+        sample_count: 960,
+        byte_count: 3_840,
+        elapsed_ms: 20,
     }
 }
 
@@ -152,7 +195,9 @@ mod tests {
 
         assert_eq!(controller.begin_start().status, AppStatus::Starting);
         assert_eq!(controller.active_session_id(), Some(1));
-        assert_eq!(controller.finish_start().status, AppStatus::Recording);
+        let snapshot = controller.finish_start(test_audio_format());
+        assert_eq!(snapshot.status, AppStatus::Recording);
+        assert_eq!(snapshot.audio_format, Some(test_audio_format()));
     }
 
     #[test]
@@ -160,7 +205,7 @@ mod tests {
         let mut controller = AppController::default();
 
         controller.begin_start();
-        controller.finish_start();
+        controller.finish_start(test_audio_format());
 
         assert_eq!(controller.begin_start().status, AppStatus::Recording);
     }
@@ -170,10 +215,11 @@ mod tests {
         let mut controller = AppController::default();
 
         controller.begin_start();
-        controller.finish_start();
+        controller.finish_start(test_audio_format());
         assert_eq!(controller.begin_stop().status, AppStatus::Stopping);
 
-        let snapshot = controller.finish_stop(fake_transcript());
+        let audio_stats = test_audio_stats();
+        let snapshot = controller.finish_stop(fake_transcript(&audio_stats), audio_stats);
 
         assert_eq!(snapshot.status, AppStatus::Transcribed);
         assert_eq!(
@@ -181,6 +227,7 @@ mod tests {
             Some("fake".to_string())
         );
         assert_eq!(controller.active_session_id(), None);
+        assert_eq!(snapshot.audio_stats, Some(test_audio_stats()));
     }
 
     #[test]
@@ -218,17 +265,35 @@ mod tests {
     }
 
     #[test]
+    fn microphone_error_moves_starting_to_error() {
+        let mut controller = AppController::default();
+
+        controller.begin_start();
+        let snapshot = controller.fail_start(AppError::MicrophoneUnavailable {
+            message: "No microphone input device was found.".to_string(),
+        });
+
+        assert_eq!(snapshot.status, AppStatus::Error);
+        assert_eq!(controller.active_session_id(), None);
+        assert!(matches!(
+            snapshot.error,
+            Some(AppError::MicrophoneUnavailable { .. })
+        ));
+    }
+
+    #[test]
     fn stale_session_id_does_not_match_new_recording() {
         let mut controller = AppController::default();
 
         controller.begin_start();
-        controller.finish_start();
+        controller.finish_start(test_audio_format());
         let first_session_id = controller.active_session_id().unwrap();
         controller.begin_stop();
-        controller.finish_stop(fake_transcript());
+        let audio_stats = test_audio_stats();
+        controller.finish_stop(fake_transcript(&audio_stats), audio_stats);
 
         controller.begin_start();
-        controller.finish_start();
+        controller.finish_start(test_audio_format());
 
         assert!(!controller.is_recording_session(first_session_id));
         assert!(controller.is_recording_session(2));

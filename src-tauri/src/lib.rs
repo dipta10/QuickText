@@ -1,11 +1,13 @@
-use std::{sync::Mutex, thread, time::Duration};
+use std::{sync::Mutex, time::Duration};
 
 mod app_controller;
 mod audio_recorder;
+mod soniox_provider;
 
-use app_controller::{fake_transcript, AppController, AppError, AppSnapshot, AppStatus};
+use app_controller::{AppController, AppError, AppSnapshot, AppStatus, TranscriptResult};
 use audio_recorder::{AudioCaptureStats, AudioRecorder};
 use keyring::{Entry, Error as KeyringError};
+use soniox_provider::SonioxSession;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
@@ -33,6 +35,11 @@ struct AudioRecorderState {
     recorder: Mutex<Option<AudioRecorder>>,
 }
 
+#[derive(Default)]
+struct TranscriptionState {
+    session: Mutex<Option<SonioxSession>>,
+}
+
 fn soniox_key_entry() -> Result<Entry, String> {
     Entry::new(SONIOX_KEY_SERVICE, SONIOX_KEY_ACCOUNT)
         .map_err(|error| format!("Could not open credential store: {error}"))
@@ -43,8 +50,8 @@ fn emit_app_snapshot(app: &tauri::AppHandle, snapshot: &AppSnapshot) {
 }
 
 fn schedule_max_recording_duration(app: tauri::AppHandle, session_id: u64) {
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(MAX_RECORDING_SECONDS));
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(MAX_RECORDING_SECONDS)).await;
 
         let controller = app.state::<AppControllerState>();
         let should_stop = match lock_controller(&controller) {
@@ -68,10 +75,21 @@ fn schedule_max_recording_duration(app: tauri::AppHandle, session_id: u64) {
             Err(_) => return,
         };
 
-        let transcribed = match lock_controller(&controller) {
-            Ok(mut controller) => {
-                controller.finish_stop(fake_transcript(&audio_stats), audio_stats)
+        let transcription = app.state::<TranscriptionState>();
+        let transcript = match stop_transcription_session(&transcription).await {
+            Ok(transcript) => transcript,
+            Err(error) => {
+                let error_snapshot = match lock_controller(&controller) {
+                    Ok(mut controller) => controller.fail_stop(provider_unavailable_error(error)),
+                    Err(_) => return,
+                };
+                emit_app_snapshot(&app, &error_snapshot);
+                return;
             }
+        };
+
+        let transcribed = match lock_controller(&controller) {
+            Ok(mut controller) => controller.finish_stop(transcript, audio_stats),
             Err(_) => return,
         };
         emit_app_snapshot(&app, &transcribed);
@@ -92,6 +110,10 @@ fn microphone_unavailable_error(message: String) -> AppError {
     AppError::MicrophoneUnavailable { message }
 }
 
+fn provider_unavailable_error(message: String) -> AppError {
+    AppError::ProviderUnavailable { message }
+}
+
 fn lock_controller<'a>(
     controller: &'a State<'_, AppControllerState>,
 ) -> Result<std::sync::MutexGuard<'a, AppController>, String> {
@@ -108,6 +130,15 @@ fn lock_recorder<'a>(
         .recorder
         .lock()
         .map_err(|_| "Could not update microphone state.".to_string())
+}
+
+fn lock_transcription<'a>(
+    transcription: &'a State<'_, TranscriptionState>,
+) -> Result<std::sync::MutexGuard<'a, Option<SonioxSession>>, String> {
+    transcription
+        .session
+        .lock()
+        .map_err(|_| "Could not update transcription state.".to_string())
 }
 
 fn cache_soniox_api_key(
@@ -133,7 +164,9 @@ fn clear_cached_soniox_api_key(credentials: &State<'_, CredentialState>) -> Resu
     Ok(())
 }
 
-fn has_cached_soniox_api_key(credentials: &State<'_, CredentialState>) -> Result<bool, String> {
+fn get_cached_soniox_api_key(
+    credentials: &State<'_, CredentialState>,
+) -> Result<Option<String>, String> {
     let cached_key = credentials
         .soniox_api_key
         .lock()
@@ -141,8 +174,8 @@ fn has_cached_soniox_api_key(credentials: &State<'_, CredentialState>) -> Result
 
     Ok(cached_key
         .as_ref()
-        .map(|api_key| !api_key.trim().is_empty())
-        .unwrap_or(false))
+        .filter(|api_key| !api_key.trim().is_empty())
+        .cloned())
 }
 
 fn read_soniox_api_key_from_store() -> Result<Option<String>, String> {
@@ -160,16 +193,22 @@ fn read_soniox_api_key_from_store() -> Result<Option<String>, String> {
 }
 
 fn has_soniox_api_key_available(credentials: &State<'_, CredentialState>) -> Result<bool, String> {
-    if has_cached_soniox_api_key(credentials)? {
-        return Ok(true);
+    Ok(get_soniox_api_key_available(credentials)?.is_some())
+}
+
+fn get_soniox_api_key_available(
+    credentials: &State<'_, CredentialState>,
+) -> Result<Option<String>, String> {
+    if let Some(api_key) = get_cached_soniox_api_key(credentials)? {
+        return Ok(Some(api_key));
     }
 
     match read_soniox_api_key_from_store()? {
         Some(api_key) => {
             cache_soniox_api_key(credentials, &api_key)?;
-            Ok(true)
+            Ok(Some(api_key))
         }
-        None => Ok(false),
+        None => Ok(None),
     }
 }
 
@@ -179,11 +218,12 @@ fn get_app_state(controller: State<'_, AppControllerState>) -> Result<AppSnapsho
 }
 
 #[tauri::command]
-fn toggle_recording(
+async fn toggle_recording(
     app: tauri::AppHandle,
     controller: State<'_, AppControllerState>,
     credentials: State<'_, CredentialState>,
     recorder: State<'_, AudioRecorderState>,
+    transcription: State<'_, TranscriptionState>,
 ) -> Result<AppSnapshot, String> {
     let current_status = lock_controller(&controller)?.snapshot().status;
 
@@ -195,9 +235,9 @@ fn toggle_recording(
             };
             emit_app_snapshot(&app, &starting);
 
-            match has_soniox_api_key_available(&credentials) {
-                Ok(true) => {}
-                Ok(false) => {
+            let api_key = match get_soniox_api_key_available(&credentials) {
+                Ok(Some(api_key)) => api_key,
+                Ok(None) => {
                     let error_snapshot = {
                         let mut controller = lock_controller(&controller)?;
                         controller.fail_start(missing_api_key_error())
@@ -213,10 +253,10 @@ fn toggle_recording(
                     emit_app_snapshot(&app, &error_snapshot);
                     return Ok(error_snapshot);
                 }
-            }
+            };
 
-            let audio_recorder = match AudioRecorder::start() {
-                Ok(recorder) => recorder,
+            let audio_format = match AudioRecorder::input_format() {
+                Ok(audio_format) => audio_format,
                 Err(error) => {
                     let error_snapshot = {
                         let mut controller = lock_controller(&controller)?;
@@ -226,10 +266,38 @@ fn toggle_recording(
                     return Ok(error_snapshot);
                 }
             };
-            let audio_format = audio_recorder.format();
+
+            let soniox_session = match SonioxSession::start(api_key, audio_format.clone()).await {
+                Ok(session) => session,
+                Err(error) => {
+                    let error_snapshot = {
+                        let mut controller = lock_controller(&controller)?;
+                        controller.fail_start(provider_unavailable_error(error))
+                    };
+                    emit_app_snapshot(&app, &error_snapshot);
+                    return Ok(error_snapshot);
+                }
+            };
+
+            let audio_recorder = match AudioRecorder::start(soniox_session.audio_sender()) {
+                Ok(recorder) => recorder,
+                Err(error) => {
+                    soniox_session.cancel();
+                    let error_snapshot = {
+                        let mut controller = lock_controller(&controller)?;
+                        controller.fail_start(microphone_unavailable_error(error))
+                    };
+                    emit_app_snapshot(&app, &error_snapshot);
+                    return Ok(error_snapshot);
+                }
+            };
             {
                 let mut active_recorder = lock_recorder(&recorder)?;
                 *active_recorder = Some(audio_recorder);
+            }
+            {
+                let mut active_session = lock_transcription(&transcription)?;
+                *active_session = Some(soniox_session);
             }
 
             let recording = {
@@ -251,9 +319,21 @@ fn toggle_recording(
             emit_app_snapshot(&app, &stopping);
 
             let audio_stats = stop_audio_recorder(&recorder)?;
+            let transcript = match stop_transcription_session(&transcription).await {
+                Ok(transcript) => transcript,
+                Err(error) => {
+                    let error_snapshot = {
+                        let mut controller = lock_controller(&controller)?;
+                        controller.fail_stop(provider_unavailable_error(error))
+                    };
+                    emit_app_snapshot(&app, &error_snapshot);
+                    return Ok(error_snapshot);
+                }
+            };
+
             let transcribed = {
                 let mut controller = lock_controller(&controller)?;
-                controller.finish_stop(fake_transcript(&audio_stats), audio_stats)
+                controller.finish_stop(transcript, audio_stats)
             };
             emit_app_snapshot(&app, &transcribed);
             Ok(transcribed)
@@ -262,6 +342,20 @@ fn toggle_recording(
             let snapshot = lock_controller(&controller)?.snapshot();
             Ok(snapshot)
         }
+    }
+}
+
+async fn stop_transcription_session(
+    transcription: &State<'_, TranscriptionState>,
+) -> Result<TranscriptResult, String> {
+    let active_session = {
+        let mut transcription = lock_transcription(transcription)?;
+        transcription.take()
+    };
+
+    match active_session {
+        Some(session) => session.stop().await,
+        None => Err("No active Soniox transcription session was found.".to_string()),
     }
 }
 
@@ -347,6 +441,7 @@ pub fn run() {
         .manage(AppControllerState::default())
         .manage(CredentialState::default())
         .manage(AudioRecorderState::default())
+        .manage(TranscriptionState::default())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {

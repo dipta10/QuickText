@@ -25,6 +25,7 @@ pub enum AppError {
     MissingApiKey { message: String },
     CredentialStore { message: String },
     MicrophoneUnavailable { message: String },
+    ProviderUnavailable { message: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -122,6 +123,21 @@ impl AppController {
         self.snapshot()
     }
 
+    pub fn fail_stop(&mut self, error: AppError) -> AppSnapshot {
+        if self.snapshot.status == AppStatus::Stopping {
+            self.snapshot = AppSnapshot {
+                status: AppStatus::Error,
+                transcript: None,
+                error: Some(error),
+                audio_format: self.snapshot.audio_format.clone(),
+                audio_stats: self.snapshot.audio_stats.clone(),
+            };
+            self.active_session_id = None;
+        }
+
+        self.snapshot()
+    }
+
     pub fn begin_stop(&mut self) -> AppSnapshot {
         if self.snapshot.status == AppStatus::Recording {
             self.snapshot = AppSnapshot {
@@ -156,7 +172,8 @@ impl AppController {
     }
 }
 
-pub fn fake_transcript(audio_stats: &AudioCaptureStats) -> TranscriptResult {
+#[cfg(test)]
+fn fake_transcript(audio_stats: &AudioCaptureStats) -> TranscriptResult {
     TranscriptResult {
         text: format!(
             "Captured {} audio chunks ({} samples, {} bytes). Soniox streaming is next.",
@@ -278,6 +295,25 @@ mod tests {
         assert!(matches!(
             snapshot.error,
             Some(AppError::MicrophoneUnavailable { .. })
+        ));
+    }
+
+    #[test]
+    fn provider_error_moves_stopping_to_error() {
+        let mut controller = AppController::default();
+
+        controller.begin_start();
+        controller.finish_start(test_audio_format());
+        controller.begin_stop();
+        let snapshot = controller.fail_stop(AppError::ProviderUnavailable {
+            message: "Soniox finalization failed.".to_string(),
+        });
+
+        assert_eq!(snapshot.status, AppStatus::Error);
+        assert_eq!(controller.active_session_id(), None);
+        assert!(matches!(
+            snapshot.error,
+            Some(AppError::ProviderUnavailable { .. })
         ));
     }
 

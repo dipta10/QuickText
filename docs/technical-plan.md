@@ -15,6 +15,7 @@ The architecture should keep the app responsive even while audio capture, networ
 - Soniox client: Soniox-specific authentication, streaming or upload protocol, response parsing, and error mapping.
 - Settings store: saves non-secret user preferences locally.
 - Credential store: saves the Soniox API key in OS-backed secret storage.
+- IPC listener: local socket/named pipe inside the resident app that dispatches external `toggle`/`status` commands to the app controller and enforces single instance.
 
 ## State Model
 
@@ -45,6 +46,17 @@ Once launched, the app should remain resident in the system tray/menu bar until 
 - The global shortcut should continue working while the window is hidden.
 - Recording/transcription state remains backend-owned regardless of whether the window is visible.
 - Quit should stop or cancel any active recording/transcription session before process exit.
+
+## IPC And Companion CLI
+
+Global shortcut grabs are X11-only on Linux and do not fire for Wayland-native windows, so compositor bindings need an executable entry point into the app.
+
+- The resident app exposes `toggle` and `status` over a local socket (named pipe on Windows).
+- The same binary acts as the CLI: `quicktext toggle` and `quicktext status` forward requests to the running instance; plain `quicktext` launches the GUI.
+- Socket binding doubles as single-instance enforcement.
+- IPC toggles reuse the app-controller path and must not focus the window.
+
+The decision is recorded in [ADR 0005](adrs/0005-ipc-companion-cli.md).
 
 ## Provider Boundary
 

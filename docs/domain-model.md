@@ -5,6 +5,8 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 ## Terms
 
 - App trigger: Any user action that toggles the core loop. This can be the primary UI button, a global shortcut, or a tray/menu item.
+- IPC command: An external request, such as from the companion CLI, delivered to the resident app over a local socket and dispatched to the same app controller path as UI triggers.
+- Companion CLI: The command-line mode of the app binary (`quicktext toggle`, `quicktext status`) that forwards IPC commands to the resident app for compositor bindings and scripts.
 - Capture view: The primary UI view for recording, stopping, viewing transcripts, and copying text.
 - Settings view: The secondary UI view for keybinds, Soniox API key setup, and app preferences.
 - Tray/menu bar resident app: The long-running app process after launch, even when the main window is hidden.
@@ -116,6 +118,31 @@ Minimum fields:
 
 Owns the tray/menu bar item, show/hide actions, explicit quit action, and window-close-to-hide behavior.
 
+### IpcListener
+
+Owns the local socket/named pipe inside the resident app process.
+
+Responsibilities:
+
+- Bind the platform-local endpoint with owner-only permissions.
+- Enforce single-instance by failing to bind when another instance is live.
+- Parse versioned line-delimited JSON requests.
+- Dispatch `toggle` through the same app-controller trigger path as UI triggers.
+- Answer `status` with the current app snapshot without changing state.
+
+It must not show or focus windows and must not own recording logic.
+
+### CompanionCli
+
+The argv-based command-line mode of the app binary.
+
+Responsibilities:
+
+- Branch to GUI launch when no subcommand is given.
+- Forward `toggle` and `status` requests to the resident app over IPC.
+- Print human-readable status by default and full JSON with `--json`.
+- Exit 0 on success, 1 on generic failure, 2 when no resident app is running.
+
 ### UiViewState
 
 Frontend-only view state that decides whether Capture or Settings is visible.
@@ -129,7 +156,8 @@ It must not own recording state once backend recording is connected. Recording s
 - Audio capture must not write provider-specific JSON.
 - Soniox client must not own window behavior.
 - Clipboard writes must use the transcript currently displayed by app state.
-- Global shortcuts and UI button presses must call the same app-controller trigger path.
+- Global shortcuts, UI button presses, and IPC commands must call the same app-controller trigger path.
+- IPC-triggered commands must not show or focus windows.
 - Frontend recording state must be derived from backend app-state events once real recording starts.
 - Window visibility must not be treated as app lifetime; explicit quit is required to stop the resident process.
 - Settings controls must stay out of the Capture view.

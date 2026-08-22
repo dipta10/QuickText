@@ -25,6 +25,7 @@ Read the project docs before making architectural changes:
 - `docs/adrs/0002-streaming-soniox-stt.md`.
 - `docs/adrs/0003-backend-first-soniox-integration.md`.
 - `docs/adrs/0004-capture-settings-ui.md`.
+- `docs/adrs/0005-ipc-companion-cli.md`.
 
 ## Current Stack
 
@@ -68,6 +69,7 @@ npm run tauri dev
 - Do not store API keys in ordinary config files, local storage, or committed files.
 - Backend state should become the source of truth for recording/transcription state as the app grows.
 - Global shortcuts should emit app events or call app-controller behavior, not duplicate recording logic in the frontend.
+- IPC commands and companion CLI calls must go through the same backend toggle path as UI triggers; they must not show or focus windows.
 - Tray/menu bar actions should show/hide the same main window and use explicit quit for process exit.
 - Use Tauri commands/events for frontend-to-backend communication.
 - Add or update Tauri capability permissions when adding new commands or plugins.

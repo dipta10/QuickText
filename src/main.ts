@@ -32,7 +32,6 @@ import {
   getAppState,
   hasSonioxApiKey,
   onAppStateChanged,
-  onGlobalShortcutPressed,
   saveSonioxApiKey,
   setGlobalShortcut,
   toggleBackendRecording,
@@ -322,14 +321,6 @@ window.addEventListener("keydown", (event) => {
   }
 
   void registerShortcut(result.shortcut);
-});
-
-void onGlobalShortcutPressed(() => {
-  void toggleRecording();
-}).catch(() => {
-  updateState(
-    setStatus(state, "Shortcut registration runs in the desktop app."),
-  );
 });
 
 void onAppStateChanged((snapshot) => {

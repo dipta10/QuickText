@@ -8,7 +8,11 @@ use app_controller::{AppController, AppError, AppSnapshot, AppStatus, Transcript
 use audio_recorder::{AudioCaptureStats, AudioRecorder};
 use keyring::{Entry, Error as KeyringError};
 use soniox_provider::SonioxSession;
-use tauri::{Emitter, Manager, State};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Emitter, Manager, State, WindowEvent,
+};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const SONIOX_KEY_SERVICE: &str = "com.dipta.stt";
@@ -47,6 +51,55 @@ fn soniox_key_entry() -> Result<Entry, String> {
 
 fn emit_app_snapshot(app: &tauri::AppHandle, snapshot: &AppSnapshot) {
     let _ = app.emit("app-state-changed", snapshot);
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn hide_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
+    let show_item = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
+    let hide_item = MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show_item, &hide_item, &quit_item])?;
+
+    let mut tray = TrayIconBuilder::with_id("quicktext")
+        .tooltip("QuickText")
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => show_main_window(app),
+            "hide" => hide_main_window(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray = tray.icon(icon);
+    }
+
+    tray.build(app)?;
+    Ok(())
 }
 
 fn schedule_max_recording_duration(
@@ -224,12 +277,20 @@ fn get_app_state(controller: State<'_, AppControllerState>) -> Result<AppSnapsho
 #[tauri::command]
 async fn toggle_recording(
     app: tauri::AppHandle,
-    controller: State<'_, AppControllerState>,
-    credentials: State<'_, CredentialState>,
-    recorder: State<'_, AudioRecorderState>,
-    transcription: State<'_, TranscriptionState>,
     max_recording_seconds: Option<u64>,
 ) -> Result<AppSnapshot, String> {
+    show_main_window(&app);
+    toggle_recording_for_app(app, max_recording_seconds).await
+}
+
+async fn toggle_recording_for_app(
+    app: tauri::AppHandle,
+    max_recording_seconds: Option<u64>,
+) -> Result<AppSnapshot, String> {
+    let controller = app.state::<AppControllerState>();
+    let credentials = app.state::<CredentialState>();
+    let recorder = app.state::<AudioRecorderState>();
+    let transcription = app.state::<TranscriptionState>();
     let max_recording_seconds = max_recording_seconds
         .filter(|seconds| *seconds > 0)
         .unwrap_or(DEFAULT_MAX_RECORDING_SECONDS);
@@ -315,7 +376,7 @@ async fn toggle_recording(
             let session_id = lock_controller(&controller)?.active_session_id();
             emit_app_snapshot(&app, &recording);
             if let Some(session_id) = session_id {
-                schedule_max_recording_duration(app, session_id, max_recording_seconds);
+                schedule_max_recording_duration(app.clone(), session_id, max_recording_seconds);
             }
             Ok(recording)
         }
@@ -453,13 +514,21 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, shortcut, event| {
+                .with_handler(|app, _shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
-                        let _ = app.emit("global-shortcut-pressed", shortcut.to_string());
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            show_main_window(&app);
+                            let _ = toggle_recording_for_app(app, None).await;
+                        });
                     }
                 })
                 .build(),
         )
+        .setup(|app| {
+            setup_tray(app)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_app_state,
             toggle_recording,
@@ -468,6 +537,19 @@ pub fn run() {
             save_soniox_api_key,
             delete_soniox_api_key
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building Tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::WindowEvent {
+                label,
+                event: WindowEvent::CloseRequested { api, .. },
+                ..
+            } = event
+            {
+                if label == "main" {
+                    api.prevent_close();
+                    hide_main_window(app);
+                }
+            }
+        });
 }

@@ -9,7 +9,6 @@ const setGlobalShortcutCommand = "set_global_shortcut";
 const hasSonioxApiKeyCommand = "has_soniox_api_key";
 const saveSonioxApiKeyCommand = "save_soniox_api_key";
 const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
-const globalShortcutPressedEvent = "global-shortcut-pressed";
 const appStateChangedEvent = "app-state-changed";
 
 const assertTauriRuntime = () => {
@@ -55,13 +54,6 @@ export const deleteSonioxApiKey = async () => {
 export const copyTextToClipboard = async (text: string) => {
   assertTauriRuntime();
   await writeText(text);
-};
-
-export const onGlobalShortcutPressed = (handler: () => void) => {
-  assertTauriRuntime();
-  return listen<string>(globalShortcutPressedEvent, () => {
-    handler();
-  });
 };
 
 export const onAppStateChanged = (

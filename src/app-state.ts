@@ -112,10 +112,16 @@ export const applyBackendSnapshot = (
   snapshot: BackendAppSnapshot,
 ): AppState => {
   const isMissingApiKey = snapshot.error?.type === "missing_api_key";
+  const shouldShowCapture =
+    snapshot.status !== "idle" && snapshot.status !== "error";
 
   return {
     ...state,
-    activeView: isMissingApiKey ? "settings" : state.activeView,
+    activeView: isMissingApiKey
+      ? "settings"
+      : shouldShowCapture
+        ? "capture"
+        : state.activeView,
     recording: snapshot.status,
     status: statusText(snapshot),
     transcript: snapshot.transcript?.text ?? state.transcript,

@@ -29,6 +29,8 @@ export type AppState = {
   recording: RecordingState;
   shortcutCapture: ShortcutCaptureState;
   selectedShortcut: string;
+  maxRecordingSeconds: number;
+  autoCopyTranscript: boolean;
   hasApiKey: boolean;
   apiKeyStatus: string;
   status: string;
@@ -36,11 +38,17 @@ export type AppState = {
   recordingStartedAt: number | null;
 };
 
-export const createAppState = (selectedShortcut: string): AppState => ({
+export const createAppState = (
+  selectedShortcut: string,
+  maxRecordingSeconds: number,
+  autoCopyTranscript: boolean,
+): AppState => ({
   activeView: "capture",
   recording: "idle",
   shortcutCapture: "idle",
   selectedShortcut,
+  maxRecordingSeconds,
+  autoCopyTranscript,
   hasApiKey: false,
   apiKeyStatus: "",
   status: "Ready.",
@@ -154,6 +162,26 @@ export const setApiKeyStatus = (
 ): AppState => ({
   ...state,
   apiKeyStatus,
+});
+
+export const setMaxRecordingSeconds = (
+  state: AppState,
+  maxRecordingSeconds: number,
+): AppState => ({
+  ...state,
+  maxRecordingSeconds,
+  status: `Maximum recording set to ${maxRecordingSeconds} seconds.`,
+});
+
+export const setAutoCopyTranscript = (
+  state: AppState,
+  autoCopyTranscript: boolean,
+): AppState => ({
+  ...state,
+  autoCopyTranscript,
+  status: autoCopyTranscript
+    ? "Auto-copy enabled."
+    : "Auto-copy disabled.",
 });
 
 export const setStatus = (state: AppState, status: string): AppState => ({

@@ -15,6 +15,8 @@ export type AppView = {
   apiKeySaveButton: HTMLButtonElement;
   apiKeyDeleteButton: HTMLButtonElement;
   apiKeyStatus: HTMLParagraphElement;
+  maxRecordingSecondsInput: HTMLInputElement;
+  autoCopyCheckbox: HTMLInputElement;
   bottomStatus: HTMLParagraphElement;
 };
 
@@ -82,8 +84,25 @@ const appTemplate = `
 
         <section class="settings-section">
           <h2 class="section-title">Behavior</h2>
-          <p class="settings-note">Manual copy after transcription.</p>
-          <p class="settings-note">Maximum recording: 5 minutes.</p>
+          <label class="settings-field" for="max-recording-seconds">
+            <span class="settings-field-label">Maximum recording seconds</span>
+            <input
+              class="max-recording-seconds-input"
+              id="max-recording-seconds"
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+            />
+          </label>
+          <label class="checkbox-field" for="auto-copy-transcript">
+            <input
+              class="auto-copy-checkbox"
+              id="auto-copy-transcript"
+              type="checkbox"
+            />
+            <span>Automatically copy transcript when done</span>
+          </label>
         </section>
 
         <section class="settings-section">
@@ -132,6 +151,12 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const apiKeyStatus =
     root.querySelector<HTMLParagraphElement>(".api-key-status");
+  const maxRecordingSecondsInput = root.querySelector<HTMLInputElement>(
+    ".max-recording-seconds-input",
+  );
+  const autoCopyCheckbox = root.querySelector<HTMLInputElement>(
+    ".auto-copy-checkbox",
+  );
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
 
@@ -152,6 +177,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     !apiKeySaveButton ||
     !apiKeyDeleteButton ||
     !apiKeyStatus ||
+    !maxRecordingSecondsInput ||
+    !autoCopyCheckbox ||
     !bottomStatus
   ) {
     throw new Error("App controls were not found");
@@ -174,6 +201,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     apiKeySaveButton,
     apiKeyDeleteButton,
     apiKeyStatus,
+    maxRecordingSecondsInput,
+    autoCopyCheckbox,
     bottomStatus,
   };
 };

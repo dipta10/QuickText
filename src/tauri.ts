@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { BackendAppSnapshot } from "./app-state";
 
 const getAppStateCommand = "get_app_state";
@@ -27,9 +28,13 @@ export const getAppState = async (): Promise<BackendAppSnapshot> => {
   return await invoke<BackendAppSnapshot>(getAppStateCommand);
 };
 
-export const toggleBackendRecording = async (): Promise<BackendAppSnapshot> => {
+export const toggleBackendRecording = async (
+  maxRecordingSeconds: number,
+): Promise<BackendAppSnapshot> => {
   assertTauriRuntime();
-  return await invoke<BackendAppSnapshot>(toggleRecordingCommand);
+  return await invoke<BackendAppSnapshot>(toggleRecordingCommand, {
+    maxRecordingSeconds,
+  });
 };
 
 export const hasSonioxApiKey = async (): Promise<boolean> => {
@@ -45,6 +50,11 @@ export const saveSonioxApiKey = async (apiKey: string): Promise<boolean> => {
 export const deleteSonioxApiKey = async () => {
   assertTauriRuntime();
   await invoke(deleteSonioxApiKeyCommand);
+};
+
+export const copyTextToClipboard = async (text: string) => {
+  assertTauriRuntime();
+  await writeText(text);
 };
 
 export const onGlobalShortcutPressed = (handler: () => void) => {

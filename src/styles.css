@@ -293,7 +293,19 @@ button {
   font-weight: 700;
 }
 
-.api-key-input {
+.settings-field {
+  display: grid;
+  gap: 7px;
+}
+
+.settings-field-label {
+  color: #8c99aa;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.api-key-input,
+.max-recording-seconds-input {
   width: 100%;
   min-height: 42px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -305,8 +317,26 @@ button {
   font-weight: 500;
 }
 
-.api-key-input::placeholder {
+.api-key-input::placeholder,
+.max-recording-seconds-input::placeholder {
   color: #687488;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  color: #d7dee9;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.auto-copy-checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #e8eef8;
 }
 
 .api-key-actions {
@@ -341,6 +371,8 @@ button {
 .copy-button:focus-visible,
 .keybind-button:focus-visible,
 .api-key-input:focus-visible,
+.max-recording-seconds-input:focus-visible,
+.auto-copy-checkbox:focus-visible,
 .api-key-save-button:focus-visible,
 .api-key-delete-button:focus-visible,
 .transcript-text:focus-visible {

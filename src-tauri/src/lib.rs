@@ -13,7 +13,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const SONIOX_KEY_SERVICE: &str = "com.dipta.stt";
 const SONIOX_KEY_ACCOUNT: &str = "soniox-api-key";
-const MAX_RECORDING_SECONDS: u64 = 5 * 60;
+const DEFAULT_MAX_RECORDING_SECONDS: u64 = 5 * 60;
 
 #[derive(Default)]
 struct ShortcutSettings {
@@ -49,9 +49,13 @@ fn emit_app_snapshot(app: &tauri::AppHandle, snapshot: &AppSnapshot) {
     let _ = app.emit("app-state-changed", snapshot);
 }
 
-fn schedule_max_recording_duration(app: tauri::AppHandle, session_id: u64) {
+fn schedule_max_recording_duration(
+    app: tauri::AppHandle,
+    session_id: u64,
+    max_recording_seconds: u64,
+) {
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(MAX_RECORDING_SECONDS)).await;
+        tokio::time::sleep(Duration::from_secs(max_recording_seconds)).await;
 
         let controller = app.state::<AppControllerState>();
         let should_stop = match lock_controller(&controller) {
@@ -224,7 +228,11 @@ async fn toggle_recording(
     credentials: State<'_, CredentialState>,
     recorder: State<'_, AudioRecorderState>,
     transcription: State<'_, TranscriptionState>,
+    max_recording_seconds: Option<u64>,
 ) -> Result<AppSnapshot, String> {
+    let max_recording_seconds = max_recording_seconds
+        .filter(|seconds| *seconds > 0)
+        .unwrap_or(DEFAULT_MAX_RECORDING_SECONDS);
     let current_status = lock_controller(&controller)?.snapshot().status;
 
     match current_status {
@@ -307,7 +315,7 @@ async fn toggle_recording(
             let session_id = lock_controller(&controller)?.active_session_id();
             emit_app_snapshot(&app, &recording);
             if let Some(session_id) = session_id {
-                schedule_max_recording_duration(app, session_id);
+                schedule_max_recording_duration(app, session_id, max_recording_seconds);
             }
             Ok(recording)
         }
@@ -442,6 +450,7 @@ pub fn run() {
         .manage(CredentialState::default())
         .manage(AudioRecorderState::default())
         .manage(TranscriptionState::default())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {

@@ -9,6 +9,8 @@ import {
   saveShortcut,
   setApiKeyPresence,
   setApiKeyStatus,
+  setAutoCopyTranscript,
+  setMaxRecordingSeconds,
   setStatus,
   showCapture,
   showSettings,
@@ -16,8 +18,16 @@ import {
 } from "./app-state";
 import { createAppView } from "./app-view";
 import { formatShortcut } from "./shortcut";
-import { getGlobalShortcut, saveGlobalShortcut } from "./settings";
 import {
+  getAutoCopyTranscript,
+  getGlobalShortcut,
+  getMaxRecordingSeconds,
+  saveAutoCopyTranscript,
+  saveGlobalShortcut,
+  saveMaxRecordingSeconds,
+} from "./settings";
+import {
+  copyTextToClipboard,
   deleteSonioxApiKey,
   getAppState,
   hasSonioxApiKey,
@@ -34,8 +44,13 @@ if (!app) {
   throw new Error("App root was not found");
 }
 
-let state = createAppState(getGlobalShortcut());
+let state = createAppState(
+  getGlobalShortcut(),
+  getMaxRecordingSeconds(),
+  getAutoCopyTranscript(),
+);
 const view = createAppView(app);
+let lastAutoCopiedTranscript = "";
 
 const formatElapsedTime = (startedAt: number | null): string => {
   if (!startedAt) {
@@ -103,6 +118,10 @@ const render = () => {
   view.apiKeyStatus.textContent =
     state.apiKeyStatus ||
     (state.hasApiKey ? "API key saved." : "No API key saved.");
+  if (document.activeElement !== view.maxRecordingSecondsInput) {
+    view.maxRecordingSecondsInput.value = state.maxRecordingSeconds.toString();
+  }
+  view.autoCopyCheckbox.checked = state.autoCopyTranscript;
   view.bottomStatus.textContent =
     state.activeView === "capture"
       ? state.status
@@ -114,6 +133,35 @@ const render = () => {
 const updateState = (nextState: typeof state) => {
   state = nextState;
   render();
+};
+
+const copyTranscript = async (successMessage = "Transcript copied.") => {
+  if (!state.transcript) {
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(state.transcript);
+    updateState(setStatus(state, successMessage));
+  } catch (error) {
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
+const maybeAutoCopyTranscript = () => {
+  if (
+    !state.autoCopyTranscript ||
+    state.recording !== "transcribed" ||
+    !state.transcript ||
+    state.transcript === lastAutoCopiedTranscript
+  ) {
+    return;
+  }
+
+  lastAutoCopiedTranscript = state.transcript;
+  void copyTranscript("Transcript copied automatically.");
 };
 
 const registerShortcut = async (shortcut: string) => {
@@ -155,7 +203,13 @@ const toggleRecording = async () => {
   try {
     const nextState = showCapture(state);
     state = nextState;
-    updateState(applyBackendSnapshot(state, await toggleBackendRecording()));
+    updateState(
+      applyBackendSnapshot(
+        state,
+        await toggleBackendRecording(state.maxRecordingSeconds),
+      ),
+    );
+    maybeAutoCopyTranscript();
   } catch (error) {
     updateState(
       setStatus(state, error instanceof Error ? error.message : String(error)),
@@ -201,21 +255,6 @@ const deleteApiKey = async () => {
   }
 };
 
-const copyTranscript = async () => {
-  if (!state.transcript) {
-    return;
-  }
-
-  try {
-    await navigator.clipboard.writeText(state.transcript);
-    updateState(setStatus(state, "Transcript copied."));
-  } catch (error) {
-    updateState(
-      setStatus(state, error instanceof Error ? error.message : String(error)),
-    );
-  }
-};
-
 view.recordButton.addEventListener("click", () => {
   void toggleRecording();
 });
@@ -228,6 +267,25 @@ view.viewToggleButton.addEventListener("click", () => {
 
 view.copyButton.addEventListener("click", () => {
   void copyTranscript();
+});
+
+view.maxRecordingSecondsInput.addEventListener("change", () => {
+  const seconds = Number(view.maxRecordingSecondsInput.value);
+
+  if (!Number.isInteger(seconds) || seconds < 1) {
+    view.maxRecordingSecondsInput.value = state.maxRecordingSeconds.toString();
+    updateState(setStatus(state, "Enter a recording limit of at least 1 second."));
+    return;
+  }
+
+  saveMaxRecordingSeconds(seconds);
+  updateState(setMaxRecordingSeconds(state, seconds));
+});
+
+view.autoCopyCheckbox.addEventListener("change", () => {
+  const autoCopyTranscript = view.autoCopyCheckbox.checked;
+  saveAutoCopyTranscript(autoCopyTranscript);
+  updateState(setAutoCopyTranscript(state, autoCopyTranscript));
 });
 
 view.keybindButton.addEventListener("click", () => {
@@ -276,6 +334,7 @@ void onGlobalShortcutPressed(() => {
 
 void onAppStateChanged((snapshot) => {
   updateState(applyBackendSnapshot(state, snapshot));
+  maybeAutoCopyTranscript();
 }).catch(() => {
   updateState(
     setStatus(state, "Backend state events run in the desktop app."),

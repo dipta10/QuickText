@@ -3,6 +3,7 @@ export type ShortcutResult =
   | { ok: false; message?: string };
 
 const modifierKeys = new Set(["Control", "Shift", "Alt", "Meta"]);
+const functionKeyPattern = /^F(?:[1-9]|1\d|2[0-4])$/;
 
 const namedKeys: Record<string, string> = {
   ArrowDown: "ArrowDown",
@@ -26,7 +27,7 @@ const formatKey = (event: KeyboardEvent): string | null => {
     return event.code.replace("Digit", "");
   }
 
-  if (/^F\d{1,2}$/.test(event.code)) {
+  if (functionKeyPattern.test(event.code)) {
     return event.code;
   }
 
@@ -58,9 +59,9 @@ export const formatShortcut = (event: KeyboardEvent): ShortcutResult => {
     modifiers.push("Shift");
   }
 
-  if (modifiers.length === 0) {
-    return { ok: false, message: "Use at least one modifier." };
+  if (modifiers.length === 0 && !functionKeyPattern.test(key)) {
+    return { ok: false, message: "Use a modifier unless using a function key." };
   }
 
-  return { ok: true, shortcut: [...modifiers, key].join("+") };
+  return { ok: true, shortcut: [...modifiers, key].join("+") || key };
 };

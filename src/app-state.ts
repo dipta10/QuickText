@@ -23,7 +23,7 @@ export const isCapturingShortcut = (state: AppState) =>
 export const startShortcutCapture = (state: AppState): AppState => ({
   ...state,
   shortcutCapture: "capturing",
-  status: "Press a modifier plus a key. Esc cancels.",
+  status: "Press a shortcut. Esc cancels.",
 });
 
 export const cancelShortcutCapture = (state: AppState): AppState => ({

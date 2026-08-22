@@ -1,5 +1,6 @@
 export type AppView = {
   recordButton: HTMLButtonElement;
+  transcriptOutput: HTMLTextAreaElement;
   keybindButton: HTMLButtonElement;
   keybindStatus: HTMLParagraphElement;
   apiKeyInput: HTMLInputElement;
@@ -13,6 +14,13 @@ const appTemplate = `
     <button class="record-button" type="button" aria-label="Start recording">
       Record
     </button>
+
+    <textarea
+      class="transcript-output"
+      aria-label="Transcript"
+      readonly
+      placeholder="Transcript will appear here"
+    ></textarea>
 
     <div class="keybind-panel">
       <span class="keybind-label">Keybind</span>
@@ -45,6 +53,8 @@ export const createAppView = (root: HTMLElement): AppView => {
 
   const recordButton =
     root.querySelector<HTMLButtonElement>(".record-button");
+  const transcriptOutput =
+    root.querySelector<HTMLTextAreaElement>(".transcript-output");
   const keybindButton =
     root.querySelector<HTMLButtonElement>(".keybind-button");
   const keybindStatus =
@@ -61,6 +71,7 @@ export const createAppView = (root: HTMLElement): AppView => {
 
   if (
     !recordButton ||
+    !transcriptOutput ||
     !keybindButton ||
     !keybindStatus ||
     !apiKeyInput ||
@@ -73,6 +84,7 @@ export const createAppView = (root: HTMLElement): AppView => {
 
   return {
     recordButton,
+    transcriptOutput,
     keybindButton,
     keybindStatus,
     apiKeyInput,

@@ -1,11 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { BackendAppSnapshot } from "./app-state";
 
+const getAppStateCommand = "get_app_state";
+const toggleRecordingCommand = "toggle_recording";
 const setGlobalShortcutCommand = "set_global_shortcut";
 const hasSonioxApiKeyCommand = "has_soniox_api_key";
 const saveSonioxApiKeyCommand = "save_soniox_api_key";
 const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
 const globalShortcutPressedEvent = "global-shortcut-pressed";
+const appStateChangedEvent = "app-state-changed";
 
 const assertTauriRuntime = () => {
   if (!("__TAURI_INTERNALS__" in window)) {
@@ -18,14 +22,24 @@ export const setGlobalShortcut = async (shortcut: string) => {
   await invoke(setGlobalShortcutCommand, { shortcut });
 };
 
+export const getAppState = async (): Promise<BackendAppSnapshot> => {
+  assertTauriRuntime();
+  return await invoke<BackendAppSnapshot>(getAppStateCommand);
+};
+
+export const toggleBackendRecording = async (): Promise<BackendAppSnapshot> => {
+  assertTauriRuntime();
+  return await invoke<BackendAppSnapshot>(toggleRecordingCommand);
+};
+
 export const hasSonioxApiKey = async (): Promise<boolean> => {
   assertTauriRuntime();
   return await invoke<boolean>(hasSonioxApiKeyCommand);
 };
 
-export const saveSonioxApiKey = async (apiKey: string) => {
+export const saveSonioxApiKey = async (apiKey: string): Promise<boolean> => {
   assertTauriRuntime();
-  await invoke(saveSonioxApiKeyCommand, { apiKey });
+  return await invoke<boolean>(saveSonioxApiKeyCommand, { apiKey });
 };
 
 export const deleteSonioxApiKey = async () => {
@@ -37,5 +51,14 @@ export const onGlobalShortcutPressed = (handler: () => void) => {
   assertTauriRuntime();
   return listen<string>(globalShortcutPressedEvent, () => {
     handler();
+  });
+};
+
+export const onAppStateChanged = (
+  handler: (snapshot: BackendAppSnapshot) => void,
+) => {
+  assertTauriRuntime();
+  return listen<BackendAppSnapshot>(appStateChangedEvent, (event) => {
+    handler(event.payload);
   });
 };

@@ -25,6 +25,7 @@ The core product promise is a fast toggle loop:
 - Clipboard: Tauri clipboard plugin.
 - Global shortcut: Tauri global-shortcut plugin.
 - Settings: local app settings plus OS credential storage for the Soniox API key.
+- Maximum recording duration: 5 minutes for MVP, with configurability deferred.
 - Transcript history: out of MVP.
 
 ## Architecture
@@ -69,6 +70,7 @@ State transitions:
 - `starting` -> `recording` when microphone and Soniox session are ready.
 - `starting` -> `error` when setup fails.
 - `recording` -> `stopping` when trigger is pressed.
+- `recording` -> `stopping` automatically when the 5 minute MVP duration limit is reached.
 - `stopping` -> `transcribed` when final transcript is available.
 - `stopping` -> `error` when finalization fails.
 - `transcribed` -> `starting` when trigger is pressed again.
@@ -116,10 +118,12 @@ Deliverables:
 - Event stream from backend to frontend for state changes.
 - In-memory transcript/session state.
 - Guard against double-start and double-stop races.
+- Auto-stop active recordings after the 5 minute MVP duration limit.
 
 Acceptance checks:
 
 - Rapid repeated trigger presses do not create overlapping recording sessions.
+- A stale max-duration timer cannot stop a newer recording session.
 - UI state remains consistent when commands fail.
 - Backend unit tests cover core state transitions.
 

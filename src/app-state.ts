@@ -1,5 +1,27 @@
-export type RecordingState = "idle" | "recording";
+export type RecordingState =
+  | "idle"
+  | "starting"
+  | "recording"
+  | "stopping"
+  | "transcribed"
+  | "error";
 export type ShortcutCaptureState = "idle" | "capturing";
+
+export type TranscriptResult = {
+  text: string;
+  provider: string;
+};
+
+export type BackendAppError = {
+  type: string;
+  message: string;
+};
+
+export type BackendAppSnapshot = {
+  status: RecordingState;
+  transcript: TranscriptResult | null;
+  error: BackendAppError | null;
+};
 
 export type AppState = {
   recording: RecordingState;
@@ -8,6 +30,7 @@ export type AppState = {
   hasApiKey: boolean;
   apiKeyStatus: string;
   status: string;
+  transcript: string;
 };
 
 export const createAppState = (selectedShortcut: string): AppState => ({
@@ -16,10 +39,13 @@ export const createAppState = (selectedShortcut: string): AppState => ({
   selectedShortcut,
   hasApiKey: false,
   apiKeyStatus: "",
-  status: "",
+  status: "Ready.",
+  transcript: "",
 });
 
 export const isRecording = (state: AppState) => state.recording === "recording";
+export const isBusy = (state: AppState) =>
+  state.recording === "starting" || state.recording === "stopping";
 
 export const isCapturingShortcut = (state: AppState) =>
   state.shortcutCapture === "capturing";
@@ -36,9 +62,35 @@ export const cancelShortcutCapture = (state: AppState): AppState => ({
   status: "Canceled.",
 });
 
-export const toggleRecording = (state: AppState): AppState => ({
+const statusText = (snapshot: BackendAppSnapshot): string => {
+  if (snapshot.error) {
+    return snapshot.error.message;
+  }
+
+  switch (snapshot.status) {
+    case "idle":
+      return "Ready.";
+    case "starting":
+      return "Starting recording...";
+    case "recording":
+      return "Recording.";
+    case "stopping":
+      return "Finalizing transcription...";
+    case "transcribed":
+      return "Transcript ready.";
+    case "error":
+      return "Recording failed.";
+  }
+};
+
+export const applyBackendSnapshot = (
+  state: AppState,
+  snapshot: BackendAppSnapshot,
+): AppState => ({
   ...state,
-  recording: isRecording(state) ? "idle" : "recording",
+  recording: snapshot.status,
+  status: statusText(snapshot),
+  transcript: snapshot.transcript?.text ?? state.transcript,
 });
 
 export const saveShortcut = (

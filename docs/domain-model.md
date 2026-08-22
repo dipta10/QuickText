@@ -30,9 +30,28 @@ Owns microphone device selection, permission errors, audio format conversion, an
 
 Provider-neutral interface used by the app controller.
 
+Responsibilities:
+
+- Start a provider session from app-level transcription options.
+- Accept normalized audio chunks from the audio recorder.
+- Finalize or cancel the active session.
+- Return app-level transcript results and app-level errors.
+
+It must not expose provider protocol frames, raw provider response objects, or API key handling to the UI.
+
 ### SonioxTranscriptionProvider
 
 Concrete transcription provider that opens the Soniox WebSocket, sends config/audio/end frames, and parses token responses.
+
+Responsibilities:
+
+- Read the Soniox credential through the backend credential service.
+- Connect to the Soniox real-time WebSocket endpoint.
+- Send the initial Soniox session configuration.
+- Stream binary audio frames.
+- Send the provider-specific finalization signal.
+- Convert token responses into transcript text.
+- Map Soniox and network failures into app-level errors.
 
 ### TranscriptResult
 
@@ -44,6 +63,36 @@ Minimum fields:
 - `duration_ms`
 - `provider`
 - `created_at`
+
+### AudioFormat
+
+The normalized audio shape passed from `AudioRecorder` to `TranscriptionProvider`.
+
+Minimum fields:
+
+- `sample_rate`
+- `channels`
+- `encoding`
+
+For MVP, prefer one explicit raw PCM format so Soniox configuration is deterministic.
+
+### AppError
+
+User-actionable error produced by the backend app controller.
+
+Minimum categories:
+
+- `missing_api_key`
+- `invalid_api_key`
+- `microphone_permission_denied`
+- `no_microphone_device`
+- `network_unavailable`
+- `provider_unavailable`
+- `provider_timeout`
+- `empty_audio`
+- `internal_error`
+
+UI text should be generated from these categories and should not include raw provider protocol details.
 
 ### AppSettings
 
@@ -63,4 +112,5 @@ Minimum fields:
 - Audio capture must not write provider-specific JSON.
 - Soniox client must not own window behavior.
 - Clipboard writes must use the transcript currently displayed by app state.
-
+- Global shortcuts and UI button presses must call the same app-controller trigger path.
+- Frontend recording state must be derived from backend app-state events once real recording starts.

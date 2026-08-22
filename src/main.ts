@@ -2,24 +2,28 @@ import "./styles.css";
 import {
   cancelShortcutCapture,
   createAppState,
+  applyBackendSnapshot,
   isCapturingShortcut,
+  isBusy,
   isRecording,
   saveShortcut,
   setApiKeyPresence,
   setApiKeyStatus,
   setStatus,
   startShortcutCapture,
-  toggleRecording,
 } from "./app-state";
 import { createAppView } from "./app-view";
 import { formatShortcut } from "./shortcut";
 import { getGlobalShortcut, saveGlobalShortcut } from "./settings";
 import {
   deleteSonioxApiKey,
+  getAppState,
   hasSonioxApiKey,
+  onAppStateChanged,
   onGlobalShortcutPressed,
   saveSonioxApiKey,
   setGlobalShortcut,
+  toggleBackendRecording,
 } from "./tauri";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -37,6 +41,8 @@ const render = () => {
     "aria-label",
     isRecording(state) ? "Stop recording" : "Start recording",
   );
+  view.recordButton.disabled = isBusy(state);
+  view.transcriptOutput.value = state.transcript;
 
   view.keybindButton.textContent = isCapturingShortcut(state)
     ? "Press keys"
@@ -77,11 +83,39 @@ const loadApiKeyStatus = async () => {
   }
 };
 
+const loadBackendState = async () => {
+  try {
+    updateState(applyBackendSnapshot(state, await getAppState()));
+  } catch (error) {
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
+const toggleRecording = async () => {
+  try {
+    updateState(applyBackendSnapshot(state, await toggleBackendRecording()));
+  } catch (error) {
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
 const saveApiKey = async () => {
   try {
-    await saveSonioxApiKey(view.apiKeyInput.value);
+    const hasApiKey = await saveSonioxApiKey(view.apiKeyInput.value);
     view.apiKeyInput.value = "";
-    updateState(setApiKeyPresence(state, true, "API key saved."));
+    updateState(
+      setApiKeyPresence(
+        state,
+        hasApiKey,
+        hasApiKey
+          ? "API key saved."
+          : "The API key could not be read after saving.",
+      ),
+    );
   } catch (error) {
     updateState(
       setApiKeyStatus(
@@ -108,7 +142,7 @@ const deleteApiKey = async () => {
 };
 
 view.recordButton.addEventListener("click", () => {
-  updateState(toggleRecording(state));
+  void toggleRecording();
 });
 
 view.keybindButton.addEventListener("click", () => {
@@ -148,14 +182,23 @@ window.addEventListener("keydown", (event) => {
 });
 
 void onGlobalShortcutPressed(() => {
-  updateState(toggleRecording(state));
+  void toggleRecording();
 }).catch(() => {
   updateState(
     setStatus(state, "Shortcut registration runs in the desktop app."),
   );
 });
 
+void onAppStateChanged((snapshot) => {
+  updateState(applyBackendSnapshot(state, snapshot));
+}).catch(() => {
+  updateState(
+    setStatus(state, "Backend state events run in the desktop app."),
+  );
+});
+
 render();
+void loadBackendState();
 void loadApiKeyStatus();
 
 if (state.selectedShortcut) {

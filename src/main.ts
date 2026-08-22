@@ -1,6 +1,18 @@
 import "./styles.css";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import {
+  cancelShortcutCapture,
+  createAppState,
+  isCapturingShortcut,
+  isRecording,
+  saveShortcut,
+  setStatus,
+  startShortcutCapture,
+  toggleRecording,
+} from "./app-state";
+import { createAppView } from "./app-view";
+import { formatShortcut } from "./shortcut";
+import { getGlobalShortcut, saveGlobalShortcut } from "./settings";
+import { onGlobalShortcutPressed, setGlobalShortcut } from "./tauri";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -8,167 +20,81 @@ if (!app) {
   throw new Error("App root was not found");
 }
 
-const shortcutStorageKey = "stt.globalShortcut";
-let isCapturingShortcut = false;
-let isRecording = false;
-let selectedShortcut = localStorage.getItem(shortcutStorageKey) ?? "";
+let state = createAppState(getGlobalShortcut());
+const view = createAppView(app);
 
-app.innerHTML = `
-  <section class="app-shell" aria-label="Speech to Text">
-    <button class="record-button" type="button" aria-label="Start recording">
-      Record
-    </button>
+const render = () => {
+  view.recordButton.textContent = isRecording(state) ? "Stop" : "Record";
+  view.recordButton.setAttribute(
+    "aria-label",
+    isRecording(state) ? "Stop recording" : "Start recording",
+  );
 
-    <div class="keybind-panel">
-      <span class="keybind-label">Keybind</span>
-      <button class="keybind-button" type="button">
-        Set shortcut
-      </button>
-      <p class="keybind-status" role="status"></p>
-    </div>
-  </section>
-`;
-
-const recordButton =
-  document.querySelector<HTMLButtonElement>(".record-button");
-const keybindButton =
-  document.querySelector<HTMLButtonElement>(".keybind-button");
-const keybindStatus =
-  document.querySelector<HTMLParagraphElement>(".keybind-status");
-
-if (!recordButton || !keybindButton || !keybindStatus) {
-  throw new Error("App controls were not found");
-}
-
-keybindButton.textContent = selectedShortcut || "Set shortcut";
-
-const setStatus = (message: string) => {
-  keybindStatus.textContent = message;
+  view.keybindButton.textContent = isCapturingShortcut(state)
+    ? "Press keys"
+    : state.selectedShortcut || "Set shortcut";
+  view.keybindStatus.textContent = state.status;
 };
 
-const setRecording = (recording: boolean) => {
-  isRecording = recording;
-  recordButton.textContent = isRecording ? "Stop" : "Record";
-  recordButton.setAttribute(
-    "aria-label",
-    isRecording ? "Stop recording" : "Start recording",
-  );
+const updateState = (nextState: typeof state) => {
+  state = nextState;
+  render();
 };
 
 const registerShortcut = async (shortcut: string) => {
   try {
-    await invoke("set_global_shortcut", { shortcut });
-    localStorage.setItem(shortcutStorageKey, shortcut);
-    selectedShortcut = shortcut;
-    keybindButton.textContent = shortcut;
-    setStatus("Saved.");
+    await setGlobalShortcut(shortcut);
+    saveGlobalShortcut(shortcut);
+    updateState(saveShortcut(state, shortcut));
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
   }
 };
 
-const formatKey = (event: KeyboardEvent): string | null => {
-  if (/^Key[A-Z]$/.test(event.code)) {
-    return event.code.replace("Key", "");
-  }
-
-  if (/^Digit[0-9]$/.test(event.code)) {
-    return event.code.replace("Digit", "");
-  }
-
-  if (/^F\d{1,2}$/.test(event.code)) {
-    return event.code;
-  }
-
-  const namedKeys: Record<string, string> = {
-    ArrowDown: "ArrowDown",
-    ArrowLeft: "ArrowLeft",
-    ArrowRight: "ArrowRight",
-    ArrowUp: "ArrowUp",
-    Backspace: "Backspace",
-    Delete: "Delete",
-    Enter: "Enter",
-    Escape: "Escape",
-    Space: "Space",
-    Tab: "Tab",
-  };
-
-  return namedKeys[event.code] ?? null;
-};
-
-const formatShortcut = (event: KeyboardEvent): string | null => {
-  const key = formatKey(event);
-
-  if (!key || ["Control", "Shift", "Alt", "Meta"].includes(event.key)) {
-    return null;
-  }
-
-  if (key === "Escape") {
-    return "Escape";
-  }
-
-  const modifiers: string[] = [];
-
-  if (event.ctrlKey || event.metaKey) {
-    modifiers.push("CmdOrCtrl");
-  }
-
-  if (event.altKey) {
-    modifiers.push("Alt");
-  }
-
-  if (event.shiftKey) {
-    modifiers.push("Shift");
-  }
-
-  if (modifiers.length === 0) {
-    setStatus("Use at least one modifier.");
-    return null;
-  }
-
-  return [...modifiers, key].join("+");
-};
-
-recordButton.addEventListener("click", () => {
-  setRecording(!isRecording);
+view.recordButton.addEventListener("click", () => {
+  updateState(toggleRecording(state));
 });
 
-keybindButton.addEventListener("click", () => {
-  isCapturingShortcut = true;
-  keybindButton.textContent = "Press keys";
-  setStatus("Press a modifier plus a key. Esc cancels.");
+view.keybindButton.addEventListener("click", () => {
+  updateState(startShortcutCapture(state));
 });
 
 window.addEventListener("keydown", (event) => {
-  if (!isCapturingShortcut) {
+  if (!isCapturingShortcut(state)) {
     return;
   }
 
   event.preventDefault();
 
   if (event.key === "Escape") {
-    isCapturingShortcut = false;
-    keybindButton.textContent = selectedShortcut || "Set shortcut";
-    setStatus("Canceled.");
+    updateState(cancelShortcutCapture(state));
     return;
   }
 
-  const shortcut = formatShortcut(event);
+  const result = formatShortcut(event);
 
-  if (!shortcut) {
+  if (!result.ok) {
+    if (result.message) {
+      updateState(setStatus(state, result.message));
+    }
     return;
   }
 
-  isCapturingShortcut = false;
-  void registerShortcut(shortcut);
+  void registerShortcut(result.shortcut);
 });
 
-void listen<string>("global-shortcut-pressed", () => {
-  setRecording(!isRecording);
+void onGlobalShortcutPressed(() => {
+  updateState(toggleRecording(state));
 }).catch(() => {
-  setStatus("Shortcut registration runs in the desktop app.");
+  updateState(
+    setStatus(state, "Shortcut registration runs in the desktop app."),
+  );
 });
 
-if (selectedShortcut) {
-  void registerShortcut(selectedShortcut);
+render();
+
+if (state.selectedShortcut) {
+  void registerShortcut(state.selectedShortcut);
 }

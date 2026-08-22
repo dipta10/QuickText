@@ -75,21 +75,26 @@ body {
   outline-offset: 4px;
 }
 
-.keybind-panel {
+.keybind-panel,
+.api-key-panel {
   display: grid;
   justify-items: center;
   gap: 8px;
   width: 100%;
 }
 
-.keybind-label {
+.keybind-label,
+.api-key-label {
   color: #8c99aa;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0;
 }
 
-.keybind-button {
+.keybind-button,
+.api-key-input,
+.api-key-save-button,
+.api-key-delete-button {
   width: 100%;
   min-height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -106,17 +111,44 @@ body {
     border-color 140ms ease;
 }
 
-.keybind-button:hover {
+.api-key-input {
+  cursor: text;
+  font-weight: 500;
+}
+
+.api-key-input::placeholder {
+  color: #687488;
+}
+
+.keybind-button:hover,
+.api-key-save-button:hover,
+.api-key-delete-button:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.24);
 }
 
-.keybind-button:focus-visible {
+.keybind-button:focus-visible,
+.api-key-input:focus-visible,
+.api-key-save-button:focus-visible,
+.api-key-delete-button:focus-visible {
   outline: 3px solid rgba(94, 179, 255, 0.48);
   outline-offset: 4px;
 }
 
-.keybind-status {
+.api-key-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.api-key-delete-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.44;
+}
+
+.keybind-status,
+.api-key-status {
   min-height: 18px;
   margin: 0;
   color: #8c99aa;

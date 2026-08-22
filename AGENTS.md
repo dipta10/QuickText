@@ -81,11 +81,14 @@ npm run tauri dev
 
 When splitting frontend code, prefer these module boundaries:
 
+- `src/app-view.ts`: HTML template creation and DOM element lookup only.
 - `src/shortcut.ts`: shortcut parsing, validation, and display formatting.
 - `src/settings.ts`: non-secret local settings persistence.
 - `src/tauri.ts`: Tauri command and event wrappers.
 - `src/app-state.ts`: recording and shortcut-capture state transitions.
 - `src/main.ts`: DOM setup, rendering, and event wiring.
+
+Keep these responsibilities separate. Do not move HTML templates, shortcut parsing, settings persistence, or raw Tauri command/event names back into `src/main.ts`. Do not put app behavior, state transitions, Tauri calls, or persistence into `src/app-view.ts`; it should remain a DOM factory.
 
 ## Git And Generated Files
 

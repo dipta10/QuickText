@@ -5,6 +5,8 @@ import {
   isCapturingShortcut,
   isRecording,
   saveShortcut,
+  setApiKeyPresence,
+  setApiKeyStatus,
   setStatus,
   startShortcutCapture,
   toggleRecording,
@@ -12,7 +14,13 @@ import {
 import { createAppView } from "./app-view";
 import { formatShortcut } from "./shortcut";
 import { getGlobalShortcut, saveGlobalShortcut } from "./settings";
-import { onGlobalShortcutPressed, setGlobalShortcut } from "./tauri";
+import {
+  deleteSonioxApiKey,
+  hasSonioxApiKey,
+  onGlobalShortcutPressed,
+  saveSonioxApiKey,
+  setGlobalShortcut,
+} from "./tauri";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -34,6 +42,9 @@ const render = () => {
     ? "Press keys"
     : state.selectedShortcut || "Set shortcut";
   view.keybindStatus.textContent = state.status;
+  view.apiKeyDeleteButton.disabled = !state.hasApiKey;
+  view.apiKeyStatus.textContent =
+    state.apiKeyStatus || (state.hasApiKey ? "API key saved." : "No API key saved.");
 };
 
 const updateState = (nextState: typeof state) => {
@@ -53,12 +64,63 @@ const registerShortcut = async (shortcut: string) => {
   }
 };
 
+const loadApiKeyStatus = async () => {
+  try {
+    updateState(setApiKeyPresence(state, await hasSonioxApiKey()));
+  } catch (error) {
+    updateState(
+      setApiKeyStatus(
+        state,
+        error instanceof Error ? error.message : String(error),
+      ),
+    );
+  }
+};
+
+const saveApiKey = async () => {
+  try {
+    await saveSonioxApiKey(view.apiKeyInput.value);
+    view.apiKeyInput.value = "";
+    updateState(setApiKeyPresence(state, true, "API key saved."));
+  } catch (error) {
+    updateState(
+      setApiKeyStatus(
+        state,
+        error instanceof Error ? error.message : String(error),
+      ),
+    );
+  }
+};
+
+const deleteApiKey = async () => {
+  try {
+    await deleteSonioxApiKey();
+    view.apiKeyInput.value = "";
+    updateState(setApiKeyPresence(state, false, "API key deleted."));
+  } catch (error) {
+    updateState(
+      setApiKeyStatus(
+        state,
+        error instanceof Error ? error.message : String(error),
+      ),
+    );
+  }
+};
+
 view.recordButton.addEventListener("click", () => {
   updateState(toggleRecording(state));
 });
 
 view.keybindButton.addEventListener("click", () => {
   updateState(startShortcutCapture(state));
+});
+
+view.apiKeySaveButton.addEventListener("click", () => {
+  void saveApiKey();
+});
+
+view.apiKeyDeleteButton.addEventListener("click", () => {
+  void deleteApiKey();
 });
 
 window.addEventListener("keydown", (event) => {
@@ -94,6 +156,7 @@ void onGlobalShortcutPressed(() => {
 });
 
 render();
+void loadApiKeyStatus();
 
 if (state.selectedShortcut) {
   void registerShortcut(state.selectedShortcut);

@@ -2,6 +2,10 @@ export type AppView = {
   recordButton: HTMLButtonElement;
   keybindButton: HTMLButtonElement;
   keybindStatus: HTMLParagraphElement;
+  apiKeyInput: HTMLInputElement;
+  apiKeySaveButton: HTMLButtonElement;
+  apiKeyDeleteButton: HTMLButtonElement;
+  apiKeyStatus: HTMLParagraphElement;
 };
 
 const appTemplate = `
@@ -17,6 +21,22 @@ const appTemplate = `
       </button>
       <p class="keybind-status" role="status"></p>
     </div>
+
+    <div class="api-key-panel">
+      <label class="api-key-label" for="soniox-api-key">Soniox API key</label>
+      <input
+        class="api-key-input"
+        id="soniox-api-key"
+        type="password"
+        autocomplete="off"
+        placeholder="Paste key"
+      />
+      <div class="api-key-actions">
+        <button class="api-key-save-button" type="button">Save</button>
+        <button class="api-key-delete-button" type="button">Delete</button>
+      </div>
+      <p class="api-key-status" role="status"></p>
+    </div>
   </section>
 `;
 
@@ -29,8 +49,25 @@ export const createAppView = (root: HTMLElement): AppView => {
     root.querySelector<HTMLButtonElement>(".keybind-button");
   const keybindStatus =
     root.querySelector<HTMLParagraphElement>(".keybind-status");
+  const apiKeyInput = root.querySelector<HTMLInputElement>(".api-key-input");
+  const apiKeySaveButton = root.querySelector<HTMLButtonElement>(
+    ".api-key-save-button",
+  );
+  const apiKeyDeleteButton = root.querySelector<HTMLButtonElement>(
+    ".api-key-delete-button",
+  );
+  const apiKeyStatus =
+    root.querySelector<HTMLParagraphElement>(".api-key-status");
 
-  if (!recordButton || !keybindButton || !keybindStatus) {
+  if (
+    !recordButton ||
+    !keybindButton ||
+    !keybindStatus ||
+    !apiKeyInput ||
+    !apiKeySaveButton ||
+    !apiKeyDeleteButton ||
+    !apiKeyStatus
+  ) {
     throw new Error("App controls were not found");
   }
 
@@ -38,5 +75,9 @@ export const createAppView = (root: HTMLElement): AppView => {
     recordButton,
     keybindButton,
     keybindStatus,
+    apiKeyInput,
+    apiKeySaveButton,
+    apiKeyDeleteButton,
+    apiKeyStatus,
   };
 };

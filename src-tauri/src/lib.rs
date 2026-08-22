@@ -284,12 +284,13 @@ async fn toggle_recording(
     max_recording_seconds: Option<u64>,
 ) -> Result<AppSnapshot, String> {
     show_main_window(&app);
-    toggle_recording_for_app(app, max_recording_seconds).await
+    toggle_recording_for_app(app, max_recording_seconds, false).await
 }
 
 pub(crate) async fn toggle_recording_for_app(
     app: tauri::AppHandle,
     max_recording_seconds: Option<u64>,
+    focus_window: bool,
 ) -> Result<AppSnapshot, String> {
     let controller = app.state::<AppControllerState>();
     let credentials = app.state::<CredentialState>();
@@ -307,6 +308,10 @@ pub(crate) async fn toggle_recording_for_app(
                 controller.begin_start()
             };
             emit_app_snapshot(&app, &starting);
+
+            if focus_window {
+                show_main_window(&app);
+            }
 
             let api_key = match get_soniox_api_key_available(&credentials) {
                 Ok(Some(api_key)) => api_key,
@@ -409,6 +414,11 @@ pub(crate) async fn toggle_recording_for_app(
                 controller.finish_stop(transcript, audio_stats)
             };
             emit_app_snapshot(&app, &transcribed);
+
+            if focus_window {
+                hide_main_window(&app);
+            }
+
             Ok(transcribed)
         }
         AppStatus::Starting | AppStatus::Stopping => {
@@ -534,7 +544,7 @@ pub fn run() {
                         let app = app.clone();
                         tauri::async_runtime::spawn(async move {
                             show_main_window(&app);
-                            let _ = toggle_recording_for_app(app, None).await;
+                            let _ = toggle_recording_for_app(app, None, false).await;
                         });
                     }
                 })

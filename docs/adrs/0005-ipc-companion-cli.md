@@ -22,8 +22,9 @@ Run a local IPC listener inside the resident app process and branch the same bin
 - The binary supports subcommands:
   - `quicktext` with no arguments launches the GUI.
   - `quicktext toggle` toggles recording through the same backend path as the button and shortcut.
+  - `quicktext toggle focus` additionally manages window visibility: when it starts a recording, the main window is shown and focused; when it stops a recording, the window hides after the transcript is ready. The flag applies per call only.
   - `quicktext status` prints current state without changing it.
-- IPC-triggered toggles must not steal window focus; showing the window stays a UI-button behavior.
+- Plain IPC toggles must not steal window focus; showing the window stays a UI-button behavior unless `focus` is requested.
 - Wire format is line-delimited JSON with a protocol version field; responses carry the app snapshot.
 - CLI output is human-readable text by default and full JSON with `--json`.
 - Exit codes are deterministic: 0 success, 1 generic failure, 2 app not running (`toggle` fails fast rather than auto-launching).
@@ -44,7 +45,8 @@ The MVP IPC surface is `toggle` and `status` only.
 - **Transport?** Local socket/named pipe behind one abstraction; D-Bus rejected as Linux-first and heavier; signals rejected as fragile and non-viable on Windows.
 - **Toggle when app not running?** Fail fast with exit code 2; auto-launch was rejected as surprising side effects from a keypress.
 - **Status output format?** Text by default, `--json` flag returns the snapshot; JSON-only annoys humans, text-only starves scripts.
-- **Does IPC toggle focus the window?** No; dictation should not yank focus mid-typing.
+- **Does IPC toggle focus the window?** Plain toggles do not. `toggle focus` opts into window management: show and focus on start, hide after the transcript is ready on stop, per call only.
+- **When does the focused stop hide the window?** After finalization so the transcript is visible and auto-copy can fire; immediate hiding was rejected because manual-copy users would never see the result.
 - **Single instance enforced via socket?** Yes.
 - **Binary layout?** Same binary, argv branch; a separate CLI binary doubles packaging work for MVP.
 - **Commands in MVP?** `toggle` and `status`; `start`/`stop` deferred until a real caller needs them.

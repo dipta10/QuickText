@@ -54,7 +54,7 @@ Global shortcut grabs are X11-only on Linux and do not fire for Wayland-native w
 - The resident app exposes `toggle` and `status` over a local socket (named pipe on Windows).
 - The same binary acts as the CLI: `quicktext toggle` and `quicktext status` forward requests to the running instance; plain `quicktext` launches the GUI.
 - Socket binding doubles as single-instance enforcement.
-- IPC toggles reuse the app-controller path and must not focus the window.
+- IPC toggles reuse the app-controller path. `quicktext toggle focus` additionally shows and focuses the window when starting and hides it once the transcript is ready when stopping.
 
 The decision is recorded in [ADR 0005](adrs/0005-ipc-companion-cli.md).
 

@@ -130,7 +130,7 @@ Responsibilities:
 - Dispatch `toggle` through the same app-controller trigger path as UI triggers.
 - Answer `status` with the current app snapshot without changing state.
 
-It must not show or focus windows and must not own recording logic.
+It must not own recording logic. When a request asks for window management, it may show, focus, or hide the main window through the shared window helpers and nothing more.
 
 ### CompanionCli
 
@@ -157,7 +157,7 @@ It must not own recording state once backend recording is connected. Recording s
 - Soniox client must not own window behavior.
 - Clipboard writes must use the transcript currently displayed by app state.
 - Global shortcuts, UI button presses, and IPC commands must call the same app-controller trigger path.
-- IPC-triggered commands must not show or focus windows.
+- IPC toggles must not show or focus windows unless the request explicitly asks for window management (`focus`).
 - Frontend recording state must be derived from backend app-state events once real recording starts.
 - Window visibility must not be treated as app lifetime; explicit quit is required to stop the resident process.
 - Settings controls must stay out of the Capture view.

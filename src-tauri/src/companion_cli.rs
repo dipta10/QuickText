@@ -15,16 +15,17 @@ pub const EXIT_SUCCESS: i32 = 0;
 pub const EXIT_FAILURE: i32 = 1;
 pub const EXIT_NOT_RUNNING: i32 = 2;
 
-const USAGE: &str =
-    "Usage: quicktext [toggle|status] [--json]\n\nRun without arguments to launch the app.";
+const USAGE: &str = "Usage: quicktext [toggle|status] [focus] [--json]\n\nRun without arguments to launch the app. `focus` manages the window around a toggle: shown and focused when recording starts, hidden once the transcript is ready.";
 
 pub fn run(args: &[String]) -> i32 {
     let mut json_output = false;
+    let mut focus_window = false;
     let mut command: Option<IpcCommand> = None;
 
     for arg in args {
         match arg.as_str() {
             "--json" => json_output = true,
+            "focus" => focus_window = true,
             "toggle" => command = Some(IpcCommand::Toggle),
             "status" => command = Some(IpcCommand::Status),
             _ => {
@@ -39,6 +40,11 @@ pub fn run(args: &[String]) -> i32 {
         return EXIT_FAILURE;
     };
 
+    if focus_window && command != IpcCommand::Toggle {
+        eprintln!("`focus` can only be used with `toggle`.\n{USAGE}");
+        return EXIT_FAILURE;
+    }
+
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -47,7 +53,7 @@ pub fn run(args: &[String]) -> i32 {
         }
     };
 
-    match runtime.block_on(send_request(command)) {
+    match runtime.block_on(send_request(command, focus_window)) {
         Ok(response) => print_response(&response, json_output),
         Err(ClientError::NotRunning(message)) => {
             eprintln!("{message}");
@@ -104,10 +110,13 @@ enum ClientError {
     Failed(String),
 }
 
-async fn send_request(command: IpcCommand) -> Result<serde_json::Value, ClientError> {
+async fn send_request(
+    command: IpcCommand,
+    focus_window: bool,
+) -> Result<serde_json::Value, ClientError> {
     #[cfg(windows)]
     {
-        let _ = command;
+        let _ = (command, focus_window);
         return Err(ClientError::Failed(
             "IPC is not yet supported on this platform.".to_string(),
         ));
@@ -115,12 +124,15 @@ async fn send_request(command: IpcCommand) -> Result<serde_json::Value, ClientEr
 
     #[cfg(unix)]
     {
-        send_unix_request(command).await
+        send_unix_request(command, focus_window).await
     }
 }
 
 #[cfg(unix)]
-async fn send_unix_request(command: IpcCommand) -> Result<serde_json::Value, ClientError> {
+async fn send_unix_request(
+    command: IpcCommand,
+    focus_window: bool,
+) -> Result<serde_json::Value, ClientError> {
     let path = super::ipc::socket_path();
     let connect = timeout(
         Duration::from_secs(CONNECT_TIMEOUT_SECONDS),
@@ -142,8 +154,11 @@ async fn send_unix_request(command: IpcCommand) -> Result<serde_json::Value, Cli
         }
     };
 
-    let request = serde_json::to_string(&IpcRequest::new(command))
-        .map_err(|error| ClientError::Failed(format!("Could not encode the request: {error}")))?;
+    let request = match focus_window {
+        true => serde_json::to_string(&IpcRequest::new_focus(command)),
+        false => serde_json::to_string(&IpcRequest::new(command)),
+    }
+    .map_err(|error| ClientError::Failed(format!("Could not encode the request: {error}")))?;
 
     stream
         .write_all(request.as_bytes())

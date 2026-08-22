@@ -15,6 +15,8 @@ pub enum IpcCommand {
 pub struct IpcRequest {
     v: u32,
     cmd: IpcCommand,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    focus: bool,
 }
 
 impl IpcRequest {
@@ -22,6 +24,15 @@ impl IpcRequest {
         Self {
             v: IPC_PROTOCOL_VERSION,
             cmd,
+            focus: false,
+        }
+    }
+
+    pub fn new_focus(cmd: IpcCommand) -> Self {
+        Self {
+            v: IPC_PROTOCOL_VERSION,
+            cmd,
+            focus: true,
         }
     }
 
@@ -41,6 +52,10 @@ impl IpcRequest {
 
     pub fn command(&self) -> IpcCommand {
         self.cmd
+    }
+
+    pub fn wants_window_focus(&self) -> bool {
+        self.focus
     }
 }
 
@@ -151,6 +166,18 @@ mod tests {
         let line = serde_json::to_string(&IpcRequest::new(IpcCommand::Toggle)).unwrap();
 
         assert_eq!(line, r#"{"v":1,"cmd":"toggle"}"#);
+    }
+
+    #[test]
+    fn parses_focus_flag_and_defaults_to_false() {
+        let focused = IpcRequest::parse(r#"{"v":1,"cmd":"toggle","focus":true}"#).unwrap();
+
+        assert!(focused.wants_window_focus());
+        assert!(IpcRequest::new_focus(IpcCommand::Toggle).wants_window_focus());
+
+        let plain = IpcRequest::parse(r#"{"v":1,"cmd":"toggle"}"#).unwrap();
+
+        assert!(!plain.wants_window_focus());
     }
 
     #[test]

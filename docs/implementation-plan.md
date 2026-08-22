@@ -1,8 +1,8 @@
-# Implementation Plan
+# QuickText Implementation Plan
 
 ## Plan Summary
 
-Build a Tauri 2 desktop app with a compact web UI and a Rust backend that owns microphone capture, Soniox streaming, global shortcut handling, clipboard writes, and local settings.
+Build QuickText as a Tauri 2 desktop app with a compact web UI and a Rust backend that owns microphone capture, Soniox streaming, tray/menu bar residency, global shortcut handling, clipboard writes, and local settings.
 
 The core product promise is a fast toggle loop:
 
@@ -19,10 +19,12 @@ The core product promise is a fast toggle loop:
 
 - Desktop shell: Tauri 2.
 - Frontend: TypeScript UI, likely React plus Vite unless a lighter local pattern is chosen during scaffolding.
+- UI structure: Capture view plus Settings view, without adding a frontend framework for MVP.
 - Backend: Rust Tauri commands and events.
 - Audio capture: Rust backend, using a cross-platform audio crate such as `cpal`.
 - Transcription path: Soniox real-time STT WebSocket streaming.
 - Clipboard: Tauri clipboard plugin.
+- Background mode: app stays resident in tray/menu bar after launch.
 - Global shortcut: Tauri global-shortcut plugin.
 - Settings: local app settings plus OS credential storage for the Soniox API key.
 - Maximum recording duration: 5 minutes for MVP, with configurability deferred.
@@ -50,6 +52,7 @@ App controller/state machine
   +-- Settings store
   +-- Credential store
   +-- Clipboard service
+  +-- Tray/menu service
   +-- Shortcut service
 ```
 
@@ -97,17 +100,22 @@ Acceptance checks:
 Deliverables:
 
 - Compact main window.
+- Top bar with app identity, status, and Settings/Capture toggle.
+- Capture view for record/stop, recording status, transcript display, and copy action.
+- Settings view for Soniox API key, shortcut, behavior, and tray/background information.
 - Primary record/stop button.
 - Status text for idle, recording, stopping, transcribed, and error states.
-- Transcript output area.
+- Selectable transcript result panel instead of a textarea.
 - Copy button.
-- Settings view for Soniox API key and shortcut preference.
 
 Acceptance checks:
 
 - UI can be driven with mocked state.
+- Opening the app shows Capture by default.
+- Keybind and API key controls are only in Settings.
 - Button labels and disabled states match the state machine.
 - Transcript text can be copied from mocked data.
+- Transcript display reads as output, not as an editable form field.
 
 ## Milestone 2: Backend App Controller
 
@@ -179,6 +187,9 @@ Acceptance checks:
 
 Deliverables:
 
+- Add tray/menu bar item with show/hide and quit actions.
+- Keep the app running in the tray/menu bar after launch.
+- Hide the main window instead of quitting when the window is closed.
 - Register default global shortcut.
 - Show/focus app and start recording from shortcut.
 - Stop recording from the same shortcut.
@@ -187,7 +198,11 @@ Deliverables:
 
 Acceptance checks:
 
+- Closing the main window leaves the app running in the tray/menu bar.
+- Tray/menu show action focuses the main window.
+- Tray/menu quit action exits the process explicitly.
 - Shortcut works when another app is focused.
+- Shortcut works while the main window is hidden.
 - Same trigger starts and stops recording.
 - Copy action writes exactly the displayed transcript.
 
@@ -212,9 +227,11 @@ Acceptance checks:
 These are the decisions most likely to break the plan if answered casually.
 
 - Trigger model: Is the "button" a global shortcut, a floating button, a tray/menu item, or all three? Current plan starts with global shortcut plus visible UI button.
+- Background model: Does closing the window quit the app? No, the app remains resident in the tray/menu bar until explicit quit.
 - Credential model: Is this for personal local use only, or will it be distributed to users who should not handle raw Soniox keys? Current plan assumes personal/local key storage. A commercial app likely needs a backend that issues temporary Soniox API keys.
 - Streaming complexity: Are partial transcripts required in MVP? Current plan streams audio for fast finalization but does not require partial transcript UI.
 - Window behavior: Should the UI hide after copy, after stop, or never automatically? Current plan keeps it visible after transcription.
+- UI structure: Do keybind and API key controls belong on the recording screen? No, they belong in Settings so Capture stays focused.
 - Recording bounds: What prevents accidental long recordings? Current plan should add a conservative maximum duration before public release.
 - Language defaults: Is the app English-only at first, or should language hints be configurable? Current plan starts with English-oriented defaults and leaves language settings for a follow-up.
 

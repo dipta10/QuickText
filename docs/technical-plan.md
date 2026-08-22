@@ -1,8 +1,8 @@
-# Technical Plan
+# QuickText Technical Plan
 
 ## Recommended Shape
 
-Use a cross-platform desktop shell with a small frontend, a local audio capture layer, and a provider boundary around Soniox.
+Build QuickText as a cross-platform desktop shell with a small frontend, a local audio capture layer, and a provider boundary around Soniox.
 
 The architecture should keep the app responsive even while audio capture, network I/O, and transcription finalization are in progress.
 
@@ -35,6 +35,16 @@ The primary button should be the only required control for the core loop.
 - In `stopping`, pressing it should be disabled or ignored.
 - In `transcribed`, pressing it starts a new recording.
 - In `error`, pressing it retries from a clean recording state when appropriate.
+
+## Tray And Background Behavior
+
+Once launched, the app should remain resident in the system tray/menu bar until the user explicitly quits.
+
+- Closing the main window hides the window instead of terminating the process.
+- The tray/menu bar item should expose show/hide and quit actions.
+- The global shortcut should continue working while the window is hidden.
+- Recording/transcription state remains backend-owned regardless of whether the window is visible.
+- Quit should stop or cancel any active recording/transcription session before process exit.
 
 ## Provider Boundary
 
@@ -117,7 +127,7 @@ The first configuration should target `stt-rt-v5`, send microphone audio as bina
 4. Add local settings and OS credential storage.
 5. Implement microphone capture on one platform.
 6. Add Soniox streaming transcription behind the provider interface.
-7. Add clipboard copy and global shortcut trigger.
+7. Add clipboard copy, global shortcut trigger, and tray/menu bar background behavior.
 8. Test on Linux, macOS, and Windows.
 
 See [Implementation plan](implementation-plan.md) for the expanded milestone breakdown.

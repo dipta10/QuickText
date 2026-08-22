@@ -6,7 +6,7 @@ Accepted for MVP unless the audio spike exposes a blocking issue.
 
 ## Context
 
-The product needs to feel snappy. If the app records locally and uploads only after stop, users wait for the full provider round trip after speaking. Soniox provides a real-time STT WebSocket API that accepts binary audio frames and finalizes the stream when the client sends an empty frame.
+QuickText needs to feel snappy. If the app records locally and uploads only after stop, users wait for the full provider round trip after speaking. Soniox provides a real-time STT WebSocket API that accepts binary audio frames and finalizes the stream when the client sends an empty frame.
 
 Current Soniox documentation identifies the real-time STT endpoint as:
 

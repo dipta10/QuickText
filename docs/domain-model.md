@@ -1,8 +1,13 @@
-# Domain Model
+# QuickText Domain Model
+
+QuickText is a compact desktop speech-to-text app for fast short dictation.
 
 ## Terms
 
 - App trigger: Any user action that toggles the core loop. This can be the primary UI button, a global shortcut, or a tray/menu item.
+- Capture view: The primary UI view for recording, stopping, viewing transcripts, and copying text.
+- Settings view: The secondary UI view for keybinds, Soniox API key setup, and app preferences.
+- Tray/menu bar resident app: The long-running app process after launch, even when the main window is hidden.
 - Recording session: One attempt to capture microphone audio from start until stop/cancel.
 - Transcription session: One provider connection or request that turns audio for a recording session into text.
 - Transcript: The final user-visible text produced from a transcription session.
@@ -21,6 +26,8 @@
 ### AppController
 
 Owns the state machine and coordinates UI commands, recording, transcription, settings, and clipboard actions.
+
+It should keep recording/transcription behavior independent from window visibility.
 
 ### AudioRecorder
 
@@ -105,6 +112,16 @@ Minimum fields:
 - `language_hints`
 - `max_recording_seconds`
 
+### TrayMenuService
+
+Owns the tray/menu bar item, show/hide actions, explicit quit action, and window-close-to-hide behavior.
+
+### UiViewState
+
+Frontend-only view state that decides whether Capture or Settings is visible.
+
+It must not own recording state once backend recording is connected. Recording state comes from backend app-state events.
+
 ## Boundaries
 
 - UI must not know Soniox protocol details.
@@ -114,3 +131,6 @@ Minimum fields:
 - Clipboard writes must use the transcript currently displayed by app state.
 - Global shortcuts and UI button presses must call the same app-controller trigger path.
 - Frontend recording state must be derived from backend app-state events once real recording starts.
+- Window visibility must not be treated as app lifetime; explicit quit is required to stop the resident process.
+- Settings controls must stay out of the Capture view.
+- Capture should render transcript text as output, not as an editable input.

@@ -1,10 +1,10 @@
-# Product Brief
+# QuickText Product Brief
 
 ## Summary
 
-Build a desktop speech-to-text app that can be opened quickly, record speech, transcribe it through Soniox, and make the resulting text easy to copy.
+Build QuickText, a desktop speech-to-text app that can be opened quickly, record speech, transcribe it through Soniox, and make the resulting text easy to copy.
 
-The app is meant for fast capture rather than long-form audio editing. The core loop should feel instant and predictable.
+QuickText is meant for fast capture rather than long-form audio editing. The core loop should feel instant and predictable.
 
 ## Target Platforms
 
@@ -24,9 +24,12 @@ The app is meant for fast capture rather than long-form audio editing. The core 
 8. The transcript appears in the UI.
 9. User can copy the transcript to the clipboard.
 
+The app should keep running in the background after launch. Closing the main window should hide it to the tray/menu bar, not quit the process. Quitting should be an explicit tray/menu action.
+
 ## MVP Requirements
 
 - Desktop app with a small, fast UI.
+- Capture-first UI with a separate Settings view.
 - One primary control that toggles between start and stop.
 - Visible recording state.
 - Visible transcription/progress state.
@@ -34,6 +37,7 @@ The app is meant for fast capture rather than long-form audio editing. The core 
 - Copy-to-clipboard button.
 - Soniox API key configuration.
 - Global shortcut for start/stop.
+- Tray/menu bar background mode after launch.
 - Basic error handling for missing API key, microphone permission failure, network failure, and provider failure.
 
 ## Non-Goals for MVP
@@ -53,23 +57,26 @@ The app is meant for fast capture rather than long-form audio editing. The core 
 - Local transcript history.
 - Custom vocabulary or context hints if supported by the provider.
 - Streaming partial transcript display while speaking.
-- Tray/menu bar mode.
 - Offline fallback provider.
 
 ## UX Principles
 
 - The first action should start listening, not show a setup-heavy screen.
+- Normal dictation should happen in Capture; configuration belongs in Settings.
 - The primary button should always communicate the next action.
 - Recording and processing states should be unmistakable.
 - The app should stay compact, but the transcript must remain readable.
+- The transcript should look like selectable result text, not an input box.
 - Errors should tell the user what to fix without exposing low-level provider details.
 
 ## Resolved Product Questions
 
 - First trigger surface: use a global shortcut plus visible UI button for MVP.
+- Background behavior: app stays resident in tray/menu bar after launch; closing the window hides it.
 - Recording strategy: stream live to Soniox instead of upload-after-stop.
 - Auto-copy default: keep manual copy as the MVP default; auto-copy can be added as an option.
 - UI after transcription: keep the UI open so the user can inspect and copy the transcript.
+- UI information architecture: use a Capture view for recording/transcripts and a Settings view for keybind/API/preferences.
 
 ## Open Product Questions
 

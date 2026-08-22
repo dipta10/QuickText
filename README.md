@@ -21,10 +21,13 @@ This repository is in the product definition stage. See:
 - [Technical plan](docs/technical-plan.md)
 - [Implementation plan](docs/implementation-plan.md)
 - [Domain model](docs/domain-model.md)
+- [UI plan](docs/ui-plan.md)
 
 ## Core Experience
 
 - One primary record/stop control.
+- Always-on tray/background process after launch.
+- Capture-first UI with settings separated from the dictation flow.
 - Low-latency startup and recording.
 - Clear listening, processing, success, and error states.
 - Copy-to-clipboard action for the latest transcript.
@@ -35,6 +38,7 @@ This repository is in the product definition stage. See:
 - Desktop-first, not browser-first.
 - Cross-platform support for Linux, macOS, and Windows.
 - UI must feel lightweight and quick to open.
+- Once started, the app should continue running in the tray/background until the user explicitly quits.
 - Provider integration should be isolated so Soniox-specific code does not leak through the rest of the app.
 
 ## Initial Direction

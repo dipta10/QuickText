@@ -2,7 +2,7 @@
 
 ## Project
 
-This is a desktop speech-to-text app for fast short dictation. The MVP target is a compact cross-platform Tauri 2 app for Linux, macOS, and Windows.
+QuickText is a desktop speech-to-text app for fast short dictation. The MVP target is a compact cross-platform Tauri 2 app for Linux, macOS, and Windows.
 
 Core loop:
 
@@ -12,14 +12,19 @@ Core loop:
 4. Finalize transcription through Soniox real-time STT.
 5. Show the transcript and let the user copy it.
 
+Once started, the app should remain resident in the tray/menu bar until the user explicitly quits. Closing the main window should hide it, not terminate the process.
+
 Read the project docs before making architectural changes:
 
 - `docs/product-brief.md`.
 - `docs/domain-model.md`.
 - `docs/technical-plan.md`.
 - `docs/implementation-plan.md`.
+- `docs/ui-plan.md`.
 - `docs/adrs/0001-tauri-desktop-shell.md`.
 - `docs/adrs/0002-streaming-soniox-stt.md`.
+- `docs/adrs/0003-backend-first-soniox-integration.md`.
+- `docs/adrs/0004-capture-settings-ui.md`.
 
 ## Current Stack
 
@@ -27,6 +32,7 @@ Read the project docs before making architectural changes:
 - Frontend: Vite plus TypeScript, currently plain DOM code.
 - Backend: Rust Tauri commands and events.
 - Global shortcuts: `tauri-plugin-global-shortcut`.
+- Tray/background mode: app remains resident after launch; window close hides to tray/menu bar.
 - Planned audio capture: Rust backend, likely `cpal`.
 - Planned transcription: Soniox real-time WebSocket STT.
 
@@ -56,10 +62,13 @@ npm run tauri dev
 
 - Keep the UI dark mode by default.
 - Keep the app compact and task-focused; avoid marketing-page structure.
+- Keep the UI Capture-first: recording, transcript review, and copy belong in Capture; keybinds, API keys, and preferences belong in Settings.
+- Do not render the final transcript as a textarea; it should be selectable output text.
 - Do not leak Soniox-specific protocol details into the UI.
 - Do not store API keys in ordinary config files, local storage, or committed files.
 - Backend state should become the source of truth for recording/transcription state as the app grows.
 - Global shortcuts should emit app events or call app-controller behavior, not duplicate recording logic in the frontend.
+- Tray/menu bar actions should show/hide the same main window and use explicit quit for process exit.
 - Use Tauri commands/events for frontend-to-backend communication.
 - Add or update Tauri capability permissions when adding new commands or plugins.
 - Keep provider integration behind a narrow provider boundary so Soniox can be changed later.
@@ -90,6 +99,8 @@ When splitting frontend code, prefer these module boundaries:
 
 Keep these responsibilities separate. Do not move HTML templates, shortcut parsing, settings persistence, or raw Tauri command/event names back into `src/main.ts`. Do not put app behavior, state transitions, Tauri calls, or persistence into `src/app-view.ts`; it should remain a DOM factory.
 
+The UI should expose separate Capture and Settings regions. `src/main.ts` may own which view is active, but recording/transcription state should come from backend app-state events once real recording is connected.
+
 ## Git And Generated Files
 
 - `node_modules/`, `dist/`, and Rust `target/` output are ignored and should not be committed.
@@ -101,5 +112,6 @@ Keep these responsibilities separate. Do not move HTML templates, shortcut parsi
 - MVP is desktop-first, not browser-first.
 - MVP should support Linux, macOS, and Windows.
 - The primary control should remain a single start/stop action.
+- Once launched, the app should run in the background/tray until explicit quit.
 - Manual copy is the MVP default; auto-copy can be added later as an option.
 - Transcript history, diarization UI, long-form import, and multi-provider UI are out of MVP scope.

@@ -1,3 +1,3 @@
 fn main() {
-    stt_desktop_lib::run()
+    std::process::exit(stt_desktop_lib::entry());
 }

@@ -2,6 +2,10 @@ use std::{sync::Mutex, time::Duration};
 
 mod app_controller;
 mod audio_recorder;
+mod companion_cli;
+mod ipc;
+#[cfg(unix)]
+mod ipc_server;
 mod soniox_provider;
 
 use app_controller::{AppController, AppError, AppSnapshot, AppStatus, TranscriptResult};
@@ -171,7 +175,7 @@ fn provider_unavailable_error(message: String) -> AppError {
     AppError::ProviderUnavailable { message }
 }
 
-fn lock_controller<'a>(
+pub(crate) fn lock_controller<'a>(
     controller: &'a State<'_, AppControllerState>,
 ) -> Result<std::sync::MutexGuard<'a, AppController>, String> {
     controller
@@ -283,7 +287,7 @@ async fn toggle_recording(
     toggle_recording_for_app(app, max_recording_seconds).await
 }
 
-async fn toggle_recording_for_app(
+pub(crate) async fn toggle_recording_for_app(
     app: tauri::AppHandle,
     max_recording_seconds: Option<u64>,
 ) -> Result<AppSnapshot, String> {
@@ -503,6 +507,17 @@ fn delete_soniox_api_key(credentials: State<'_, CredentialState>) -> Result<(), 
     }
 }
 
+pub fn entry() -> i32 {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
+    if !args.is_empty() {
+        return companion_cli::run(&args);
+    }
+
+    run();
+    0
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -527,6 +542,16 @@ pub fn run() {
         )
         .setup(|app| {
             setup_tray(app)?;
+
+            match ipc_server::start(app.handle().clone()) {
+                Ok(ipc_server::ServerStart::Listening) => {}
+                Ok(ipc_server::ServerStart::AlreadyRunning) => {
+                    eprintln!("Another QuickText instance is already running.");
+                    app.handle().exit(1);
+                }
+                Err(error) => return Err(error.into()),
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

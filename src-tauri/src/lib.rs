@@ -53,7 +53,54 @@ fn soniox_key_entry() -> Result<Entry, String> {
         .map_err(|error| format!("Could not open credential store: {error}"))
 }
 
+const RECORDING_TRAY_ICON_SIZE: u32 = 32;
+const RECORDING_TRAY_ICON_RADIUS: f32 = 13.0;
+
+fn recording_tray_icon() -> tauri::image::Image<'static> {
+    let size = RECORDING_TRAY_ICON_SIZE;
+    let mut rgba = vec![0u8; (size * size * 4) as usize];
+    let center = (size - 1) as f32 / 2.0;
+
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f32 - center;
+            let dy = y as f32 - center;
+            if dx * dx + dy * dy <= RECORDING_TRAY_ICON_RADIUS * RECORDING_TRAY_ICON_RADIUS {
+                let offset = ((y * size + x) * 4) as usize;
+                rgba[offset] = 220;
+                rgba[offset + 1] = 38;
+                rgba[offset + 2] = 38;
+                rgba[offset + 3] = 255;
+            }
+        }
+    }
+
+    tauri::image::Image::new_owned(rgba, size, size)
+}
+
+fn update_tray_icon(app: &tauri::AppHandle, status: &AppStatus) {
+    let Some(tray) = app.tray_by_id("quicktext") else {
+        return;
+    };
+
+    let result = if *status == AppStatus::Recording {
+        tray.set_icon(Some(recording_tray_icon()))
+            .and_then(|()| tray.set_tooltip(Some("QuickText — Recording")))
+    } else {
+        app.default_window_icon()
+            .cloned()
+            .map(|icon| tray.set_icon(Some(icon)))
+            .unwrap_or(Ok(()))
+            .and_then(|()| tray.set_tooltip(Some("QuickText")))
+    };
+
+    if let Err(error) = result {
+        eprintln!("Could not update tray icon: {error}");
+    }
+}
+
 fn emit_app_snapshot(app: &tauri::AppHandle, snapshot: &AppSnapshot) {
+    update_tray_icon(app, &snapshot.status);
     let _ = app.emit("app-state-changed", snapshot);
 }
 

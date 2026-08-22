@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Speech to Text",
+  "productName": "QuickText",
   "version": "0.1.0",
   "identifier": "com.dipta.stt",
   "build": {
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "Speech to Text",
-        "width": 420,
-        "height": 320,
+        "title": "QuickText",
+        "width": 480,
+        "height": 620,
+        "minWidth": 360,
+        "minHeight": 520,
         "resizable": true,
         "fullscreen": false
       }

@@ -6,6 +6,7 @@ export type RecordingState =
   | "transcribed"
   | "error";
 export type ShortcutCaptureState = "idle" | "capturing";
+export type ActiveView = "capture" | "settings";
 
 export type TranscriptResult = {
   text: string;
@@ -24,6 +25,7 @@ export type BackendAppSnapshot = {
 };
 
 export type AppState = {
+  activeView: ActiveView;
   recording: RecordingState;
   shortcutCapture: ShortcutCaptureState;
   selectedShortcut: string;
@@ -31,9 +33,11 @@ export type AppState = {
   apiKeyStatus: string;
   status: string;
   transcript: string;
+  recordingStartedAt: number | null;
 };
 
 export const createAppState = (selectedShortcut: string): AppState => ({
+  activeView: "capture",
   recording: "idle",
   shortcutCapture: "idle",
   selectedShortcut,
@@ -41,6 +45,7 @@ export const createAppState = (selectedShortcut: string): AppState => ({
   apiKeyStatus: "",
   status: "Ready.",
   transcript: "",
+  recordingStartedAt: null,
 });
 
 export const isRecording = (state: AppState) => state.recording === "recording";
@@ -83,14 +88,44 @@ const statusText = (snapshot: BackendAppSnapshot): string => {
   }
 };
 
+const recordingStartedAt = (
+  state: AppState,
+  snapshot: BackendAppSnapshot,
+): number | null => {
+  if (snapshot.status === "recording") {
+    return state.recordingStartedAt ?? Date.now();
+  }
+
+  return null;
+};
+
 export const applyBackendSnapshot = (
   state: AppState,
   snapshot: BackendAppSnapshot,
-): AppState => ({
+): AppState => {
+  const isMissingApiKey = snapshot.error?.type === "missing_api_key";
+
+  return {
+    ...state,
+    activeView: isMissingApiKey ? "settings" : state.activeView,
+    recording: snapshot.status,
+    status: statusText(snapshot),
+    transcript: snapshot.transcript?.text ?? state.transcript,
+    recordingStartedAt: recordingStartedAt(state, snapshot),
+    apiKeyStatus: isMissingApiKey
+      ? snapshot.error?.message ?? state.apiKeyStatus
+      : state.apiKeyStatus,
+  };
+};
+
+export const showCapture = (state: AppState): AppState => ({
   ...state,
-  recording: snapshot.status,
-  status: statusText(snapshot),
-  transcript: snapshot.transcript?.text ?? state.transcript,
+  activeView: "capture",
+});
+
+export const showSettings = (state: AppState): AppState => ({
+  ...state,
+  activeView: "settings",
 });
 
 export const saveShortcut = (

@@ -10,6 +10,8 @@ import {
   setApiKeyPresence,
   setApiKeyStatus,
   setStatus,
+  showCapture,
+  showSettings,
   startShortcutCapture,
 } from "./app-state";
 import { createAppView } from "./app-view";
@@ -35,14 +37,63 @@ if (!app) {
 let state = createAppState(getGlobalShortcut());
 const view = createAppView(app);
 
+const formatElapsedTime = (startedAt: number | null): string => {
+  if (!startedAt) {
+    return "00:00";
+  }
+
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((Date.now() - startedAt) / 1000),
+  );
+  const minutes = Math.floor(elapsedSeconds / 60).toString().padStart(2, "0");
+  const seconds = (elapsedSeconds % 60).toString().padStart(2, "0");
+
+  return `${minutes}:${seconds}`;
+};
+
+const statusLabel = () => {
+  switch (state.recording) {
+    case "idle":
+      return "Ready";
+    case "starting":
+      return "Starting";
+    case "recording":
+      return "Listening";
+    case "stopping":
+      return "Finalizing";
+    case "transcribed":
+      return "Transcript ready";
+    case "error":
+      return "Error";
+  }
+};
+
 const render = () => {
+  const isSettings = state.activeView === "settings";
+  view.captureView.hidden = isSettings;
+  view.settingsView.hidden = !isSettings;
+  view.viewToggleButton.textContent = isSettings ? "Capture" : "Settings";
+  view.viewToggleButton.setAttribute(
+    "aria-label",
+    isSettings ? "Open capture" : "Open settings",
+  );
+  view.statusChip.textContent = statusLabel();
+  view.statusChip.dataset.status = state.recording;
+
   view.recordButton.textContent = isRecording(state) ? "Stop" : "Record";
   view.recordButton.setAttribute(
     "aria-label",
     isRecording(state) ? "Stop recording" : "Start recording",
   );
   view.recordButton.disabled = isBusy(state);
-  view.transcriptOutput.value = state.transcript;
+  view.recordStatus.textContent = statusLabel();
+  view.recordingTimer.textContent = formatElapsedTime(state.recordingStartedAt);
+  view.activityIndicator.hidden = !isRecording(state);
+  view.copyButton.disabled = !state.transcript;
+  view.transcriptText.textContent =
+    state.transcript || "Transcript will appear here.";
+  view.transcriptText.classList.toggle("is-empty", !state.transcript);
 
   view.keybindButton.textContent = isCapturingShortcut(state)
     ? "Press keys"
@@ -50,7 +101,14 @@ const render = () => {
   view.keybindStatus.textContent = state.status;
   view.apiKeyDeleteButton.disabled = !state.hasApiKey;
   view.apiKeyStatus.textContent =
-    state.apiKeyStatus || (state.hasApiKey ? "API key saved." : "No API key saved.");
+    state.apiKeyStatus ||
+    (state.hasApiKey ? "API key saved." : "No API key saved.");
+  view.bottomStatus.textContent =
+    state.activeView === "capture"
+      ? state.status
+      : state.selectedShortcut
+        ? `Shortcut: ${state.selectedShortcut}`
+        : "No shortcut saved.";
 };
 
 const updateState = (nextState: typeof state) => {
@@ -95,6 +153,8 @@ const loadBackendState = async () => {
 
 const toggleRecording = async () => {
   try {
+    const nextState = showCapture(state);
+    state = nextState;
     updateState(applyBackendSnapshot(state, await toggleBackendRecording()));
   } catch (error) {
     updateState(
@@ -141,8 +201,33 @@ const deleteApiKey = async () => {
   }
 };
 
+const copyTranscript = async () => {
+  if (!state.transcript) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(state.transcript);
+    updateState(setStatus(state, "Transcript copied."));
+  } catch (error) {
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
 view.recordButton.addEventListener("click", () => {
   void toggleRecording();
+});
+
+view.viewToggleButton.addEventListener("click", () => {
+  updateState(
+    state.activeView === "settings" ? showCapture(state) : showSettings(state),
+  );
+});
+
+view.copyButton.addEventListener("click", () => {
+  void copyTranscript();
 });
 
 view.keybindButton.addEventListener("click", () => {
@@ -198,6 +283,7 @@ void onAppStateChanged((snapshot) => {
 });
 
 render();
+window.setInterval(render, 1000);
 void loadBackendState();
 void loadApiKeyStatus();
 

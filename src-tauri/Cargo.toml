@@ -3,6 +3,7 @@ name = "stt-desktop"
 version = "0.1.0"
 description = "A fast desktop speech-to-text app"
 authors = ["Dipta"]
+license = "MIT"
 edition = "2021"
 
 [lib]

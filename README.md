@@ -86,3 +86,7 @@ bindsym F10 exec quicktext toggle focus
 - [Product brief](docs/product-brief.md)
 - [Technical plan](docs/technical-plan.md)
 - [Architecture decisions](docs/adrs/)
+
+## License
+
+[MIT](LICENSE). QuickText is free to use; transcription runs through your own Soniox account and API key, so Soniox usage and billing are between you and Soniox.

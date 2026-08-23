@@ -1,46 +1,88 @@
-# Speech to Text Desktop App
+# QuickText
 
-A snappy cross-platform desktop speech-to-text application using Soniox as the transcription provider.
+Fast speech-to-text dictation for your desktop. Press a key, speak, get text.
 
-## Goal
+QuickText is a lightweight desktop app that turns your voice into text in seconds: trigger it with the primary button or a global shortcut, speak, trigger again to stop, and copy the transcript. Transcription streams through [Soniox](https://soniox.com) in real time, so results appear the moment you stop talking.
 
-The app should make short dictation fast:
+## Features
 
-1. Press one button or shortcut to show the UI and start listening.
-2. Press the same button again to stop recording.
-3. Show the transcribed text immediately after recording ends.
-4. Let the user copy the text to the clipboard.
+- One-key dictation: start and stop with a single action.
+- Real-time transcription via Soniox streaming STT.
+- Instant copy-to-clipboard for the latest transcript.
+- Lives in the system tray; closing the window keeps the app running.
+- Capture-first UI with settings (API key, shortcuts) kept out of the way.
+- Companion CLI for compositor bindings, scripts, and other apps.
+- Cross-platform: Linux, macOS, and Windows.
 
-The first version is focused on Linux, macOS, and Windows desktop use.
+## Installation
 
-## Current Status
+> Prebuilt packages are not published yet. Build from source below.
 
-This repository is in the product definition stage. See:
+### Prerequisites
+
+- Node.js and npm
+- Rust toolchain
+- Tauri 2 [system dependencies](https://tauri.app/start/prerequisites/) for your platform
+
+### Build From Source
+
+```bash
+git clone https://github.com/<you>/quicktext.git
+cd quicktext
+npm install
+npm run tauri build
+```
+
+The binary is written to `src-tauri/target/release/quicktext`.
+
+## Usage
+
+Launch `quicktext` to start the app. It stays resident in the tray until you quit it explicitly.
+
+1. Press the record button (or your global shortcut) to start listening.
+2. Press again to stop.
+3. Copy the transcript from the window.
+
+Set your Soniox API key from the in-app Settings view; it is stored in the system keyring, never in plain files.
+
+## CLI On Linux
+
+The same binary doubles as a CLI for driving a running instance over a local socket — ideal for Wayland compositors like Hyprland or Sway, where X11 global shortcuts do not work.
+
+```bash
+# Launch the GUI
+quicktext
+
+# Toggle recording
+quicktext toggle
+
+# Toggle plus window management:
+# shown/focused on start, hidden once the transcript is ready
+quicktext toggle focus
+
+# Print current state without changing anything
+quicktext status
+
+# Machine-readable output
+quicktext status --json
+```
+
+Exit codes: `0` success, `1` failure, `2` app not running.
+
+Bind it to a key in Hyprland:
+
+```ini
+bind = , F10, exec, quicktext toggle focus
+```
+
+Or Sway:
+
+```ini
+bindsym F10 exec quicktext toggle focus
+```
+
+## Documentation
 
 - [Product brief](docs/product-brief.md)
 - [Technical plan](docs/technical-plan.md)
-- [Implementation plan](docs/implementation-plan.md)
-- [Domain model](docs/domain-model.md)
-- [UI plan](docs/ui-plan.md)
-
-## Core Experience
-
-- One primary record/stop control.
-- Always-on tray/background process after launch.
-- Capture-first UI with settings separated from the dictation flow.
-- Low-latency startup and recording.
-- Clear listening, processing, success, and error states.
-- Copy-to-clipboard action for the latest transcript.
-- Soniox-backed transcription.
-
-## Early Constraints
-
-- Desktop-first, not browser-first.
-- Cross-platform support for Linux, macOS, and Windows.
-- UI must feel lightweight and quick to open.
-- Once started, the app should continue running in the tray/background until the user explicitly quits.
-- Provider integration should be isolated so Soniox-specific code does not leak through the rest of the app.
-
-## Initial Direction
-
-The implementation plan currently assumes Tauri 2 with a web frontend and Rust backend. Audio should stream to Soniox over its real-time STT WebSocket API so stopping the recording can finalize an active session instead of starting transcription from scratch.
+- [Architecture decisions](docs/adrs/)

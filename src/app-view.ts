@@ -26,6 +26,12 @@ export type AppView = {
   liveTranscriptField: HTMLLabelElement;
   showPartialCheckbox: HTMLInputElement;
   showPartialField: HTMLLabelElement;
+  startSoundCheckbox: HTMLInputElement;
+  startSoundClipField: HTMLLabelElement;
+  startSoundClipSelect: HTMLSelectElement;
+  stopSoundCheckbox: HTMLInputElement;
+  stopSoundClipField: HTMLLabelElement;
+  stopSoundClipSelect: HTMLSelectElement;
   bottomStatus: HTMLParagraphElement;
 };
 
@@ -154,6 +160,42 @@ const appTemplate = `
             />
             <span>Show unconfirmed words as they form</span>
           </label>
+          <label class="checkbox-field" for="start-sound-enabled">
+            <input
+              class="start-sound-checkbox"
+              id="start-sound-enabled"
+              type="checkbox"
+            />
+            <span>Play a sound when recording starts</span>
+          </label>
+          <label
+            class="settings-field sound-clip-field start-sound-clip-field"
+            for="start-sound-clip"
+          >
+            <span class="settings-field-label">Start sound</span>
+            <select
+              class="sound-clip-select"
+              id="start-sound-clip"
+            ></select>
+          </label>
+          <label class="checkbox-field" for="stop-sound-enabled">
+            <input
+              class="stop-sound-checkbox"
+              id="stop-sound-enabled"
+              type="checkbox"
+            />
+            <span>Play a sound when the transcript is ready</span>
+          </label>
+          <label
+            class="settings-field sound-clip-field stop-sound-clip-field"
+            for="stop-sound-clip"
+          >
+            <span class="settings-field-label">Transcript ready sound</span>
+            <select
+              class="sound-clip-select"
+              id="stop-sound-clip"
+            ></select>
+          </label>
         </section>
 
         <section class="settings-section">
@@ -231,6 +273,23 @@ export const createAppView = (root: HTMLElement): AppView => {
   const showPartialCheckbox = root.querySelector<HTMLInputElement>(
     ".show-partial-transcript-checkbox",
   );
+  const startSoundCheckbox = root.querySelector<HTMLInputElement>(
+    ".start-sound-checkbox",
+  );
+  const startSoundClipField = root.querySelector<HTMLLabelElement>(
+    ".start-sound-clip-field",
+  );
+  const startSoundClipSelect = root.querySelector<HTMLSelectElement>(
+    "#start-sound-clip",
+  );
+  const stopSoundCheckbox = root.querySelector<HTMLInputElement>(
+    ".stop-sound-checkbox",
+  );
+  const stopSoundClipField = root.querySelector<HTMLLabelElement>(
+    ".stop-sound-clip-field",
+  );
+  const stopSoundClipSelect =
+    root.querySelector<HTMLSelectElement>("#stop-sound-clip");
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
 
@@ -262,6 +321,12 @@ export const createAppView = (root: HTMLElement): AppView => {
     !liveTranscriptCheckbox ||
     !showPartialField ||
     !showPartialCheckbox ||
+    !startSoundCheckbox ||
+    !startSoundClipField ||
+    !startSoundClipSelect ||
+    !stopSoundCheckbox ||
+    !stopSoundClipField ||
+    !stopSoundClipSelect ||
     !bottomStatus
   ) {
     throw new Error("App controls were not found");
@@ -295,6 +360,12 @@ export const createAppView = (root: HTMLElement): AppView => {
     liveTranscriptCheckbox,
     showPartialField,
     showPartialCheckbox,
+    startSoundCheckbox,
+    startSoundClipField,
+    startSoundClipSelect,
+    stopSoundCheckbox,
+    stopSoundClipField,
+    stopSoundClipSelect,
     bottomStatus,
   };
 };

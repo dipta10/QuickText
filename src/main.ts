@@ -4,6 +4,7 @@ import {
   createAppState,
   applyBackendSnapshot,
   applyPartialTranscript,
+  enteredRecordingState,
   isCapturingShortcut,
   isBusy,
   isRecording,
@@ -16,10 +17,15 @@ import {
   setShowPartialTranscript,
   setShortcutFocusOnStart,
   setShortcutHideOnStop,
+  setStartSoundClipId,
+  setStartSoundEnabled,
+  setStopSoundClipId,
+  setStopSoundEnabled,
   setStatus,
   showCapture,
   showSettings,
   startShortcutCapture,
+  type RecordingState,
 } from "./app-state";
 import { createAppView } from "./app-view";
 import { formatShortcut } from "./shortcut";
@@ -31,6 +37,10 @@ import {
   getShowPartialTranscript,
   getShortcutFocusOnStart,
   getShortcutHideOnStop,
+  getStartSoundClipId,
+  getStartSoundEnabled,
+  getStopSoundClipId,
+  getStopSoundEnabled,
   saveAutoCopyTranscript,
   saveGlobalShortcut,
   saveLiveTranscript,
@@ -38,7 +48,12 @@ import {
   saveShowPartialTranscript,
   saveShortcutFocusOnStart,
   saveShortcutHideOnStop,
+  saveStartSoundClipId,
+  saveStartSoundEnabled,
+  saveStopSoundClipId,
+  saveStopSoundEnabled,
 } from "./settings";
+import { playSoundClip, soundClips } from "./sounds";
 import {
   copyTextToClipboard,
   deleteSonioxApiKey,
@@ -58,17 +73,30 @@ if (!app) {
   throw new Error("App root was not found");
 }
 
-let state = createAppState(
-  getGlobalShortcut(),
-  getMaxRecordingSeconds(),
-  getAutoCopyTranscript(),
-  getShortcutFocusOnStart(),
-  getShortcutHideOnStop(),
-  getLiveTranscript(),
-  getShowPartialTranscript(),
-);
+let state = createAppState({
+  selectedShortcut: getGlobalShortcut(),
+  maxRecordingSeconds: getMaxRecordingSeconds(),
+  autoCopyTranscript: getAutoCopyTranscript(),
+  shortcutFocusOnStart: getShortcutFocusOnStart(),
+  shortcutHideOnStop: getShortcutHideOnStop(),
+  liveTranscript: getLiveTranscript(),
+  showPartialTranscript: getShowPartialTranscript(),
+  startSoundEnabled: getStartSoundEnabled(),
+  startSoundClipId: getStartSoundClipId(),
+  stopSoundEnabled: getStopSoundEnabled(),
+  stopSoundClipId: getStopSoundClipId(),
+});
 const view = createAppView(app);
 let lastAutoCopiedTranscript = "";
+
+for (const clip of soundClips) {
+  for (const select of [view.startSoundClipSelect, view.stopSoundClipSelect]) {
+    const option = document.createElement("option");
+    option.value = clip.id;
+    option.textContent = clip.label;
+    select.append(option);
+  }
+}
 
 const formatElapsedTime = (startedAt: number | null): string => {
   if (!startedAt) {
@@ -148,6 +176,12 @@ const render = () => {
   view.liveTranscriptCheckbox.checked = state.liveTranscript;
   view.showPartialField.hidden = !state.liveTranscript;
   view.showPartialCheckbox.checked = state.showPartialTranscript;
+  view.startSoundCheckbox.checked = state.startSoundEnabled;
+  view.startSoundClipField.hidden = !state.startSoundEnabled;
+  view.startSoundClipSelect.value = state.startSoundClipId;
+  view.stopSoundCheckbox.checked = state.stopSoundEnabled;
+  view.stopSoundClipField.hidden = !state.stopSoundEnabled;
+  view.stopSoundClipSelect.value = state.stopSoundClipId;
   view.bottomStatus.textContent =
     state.activeView === "capture"
       ? state.status
@@ -156,8 +190,29 @@ const render = () => {
         : "No shortcut saved.";
 };
 
+const playTransitionSounds = (
+  previousRecording: RecordingState,
+  currentRecording: RecordingState,
+) => {
+  if (
+    enteredRecordingState(previousRecording, currentRecording, "recording") &&
+    state.startSoundEnabled
+  ) {
+    playSoundClip(state.startSoundClipId);
+  }
+
+  if (
+    enteredRecordingState(previousRecording, currentRecording, "transcribed") &&
+    state.stopSoundEnabled
+  ) {
+    playSoundClip(state.stopSoundClipId);
+  }
+};
+
 const updateState = (nextState: typeof state) => {
+  const previousRecording = state.recording;
   state = nextState;
+  playTransitionSounds(previousRecording, state.recording);
   render();
 };
 
@@ -337,6 +392,30 @@ view.showPartialCheckbox.addEventListener("change", () => {
   const showPartialTranscript = view.showPartialCheckbox.checked;
   saveShowPartialTranscript(showPartialTranscript);
   updateState(setShowPartialTranscript(state, showPartialTranscript));
+});
+
+view.startSoundCheckbox.addEventListener("change", () => {
+  const startSoundEnabled = view.startSoundCheckbox.checked;
+  saveStartSoundEnabled(startSoundEnabled);
+  updateState(setStartSoundEnabled(state, startSoundEnabled));
+});
+
+view.startSoundClipSelect.addEventListener("change", () => {
+  const startSoundClipId = view.startSoundClipSelect.value;
+  saveStartSoundClipId(startSoundClipId);
+  updateState(setStartSoundClipId(state, startSoundClipId));
+});
+
+view.stopSoundCheckbox.addEventListener("change", () => {
+  const stopSoundEnabled = view.stopSoundCheckbox.checked;
+  saveStopSoundEnabled(stopSoundEnabled);
+  updateState(setStopSoundEnabled(state, stopSoundEnabled));
+});
+
+view.stopSoundClipSelect.addEventListener("change", () => {
+  const stopSoundClipId = view.stopSoundClipSelect.value;
+  saveStopSoundClipId(stopSoundClipId);
+  updateState(setStopSoundClipId(state, stopSoundClipId));
 });
 
 view.keybindButton.addEventListener("click", () => {

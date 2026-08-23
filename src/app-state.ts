@@ -40,6 +40,10 @@ export type AppState = {
   autoCopyTranscript: boolean;
   liveTranscript: boolean;
   showPartialTranscript: boolean;
+  startSoundEnabled: boolean;
+  startSoundClipId: string;
+  stopSoundEnabled: boolean;
+  stopSoundClipId: string;
   hasApiKey: boolean;
   apiKeyStatus: string;
   status: string;
@@ -48,25 +52,25 @@ export type AppState = {
   recordingStartedAt: number | null;
 };
 
-export const createAppState = (
-  selectedShortcut: string,
-  maxRecordingSeconds: number,
-  autoCopyTranscript: boolean,
-  shortcutFocusOnStart: boolean,
-  shortcutHideOnStop: boolean,
-  liveTranscript: boolean,
-  showPartialTranscript: boolean,
-): AppState => ({
+export type InitialSettings = {
+  selectedShortcut: string;
+  maxRecordingSeconds: number;
+  autoCopyTranscript: boolean;
+  shortcutFocusOnStart: boolean;
+  shortcutHideOnStop: boolean;
+  liveTranscript: boolean;
+  showPartialTranscript: boolean;
+  startSoundEnabled: boolean;
+  startSoundClipId: string;
+  stopSoundEnabled: boolean;
+  stopSoundClipId: string;
+};
+
+export const createAppState = (settings: InitialSettings): AppState => ({
   activeView: "capture",
   recording: "idle",
   shortcutCapture: "idle",
-  selectedShortcut,
-  shortcutFocusOnStart,
-  shortcutHideOnStop,
-  maxRecordingSeconds,
-  autoCopyTranscript,
-  liveTranscript,
-  showPartialTranscript,
+  ...settings,
   hasApiKey: false,
   apiKeyStatus: "",
   status: "Ready.",
@@ -76,6 +80,12 @@ export const createAppState = (
 });
 
 export const isRecording = (state: AppState) => state.recording === "recording";
+
+export const enteredRecordingState = (
+  previous: RecordingState,
+  current: RecordingState,
+  target: RecordingState,
+) => previous !== target && current === target;
 export const isBusy = (state: AppState) =>
   state.recording === "starting" || state.recording === "stopping";
 
@@ -271,6 +281,44 @@ export const setShortcutHideOnStop = (
   status: shortcutHideOnStop
     ? "Shortcut will hide the window when recording stops."
     : "Shortcut will keep the window open when recording stops.",
+});
+
+export const setStartSoundEnabled = (
+  state: AppState,
+  startSoundEnabled: boolean,
+): AppState => ({
+  ...state,
+  startSoundEnabled,
+  status: startSoundEnabled
+    ? "A sound will play when recording starts."
+    : "No sound when recording starts.",
+});
+
+export const setStartSoundClipId = (
+  state: AppState,
+  startSoundClipId: string,
+): AppState => ({
+  ...state,
+  startSoundClipId,
+});
+
+export const setStopSoundEnabled = (
+  state: AppState,
+  stopSoundEnabled: boolean,
+): AppState => ({
+  ...state,
+  stopSoundEnabled,
+  status: stopSoundEnabled
+    ? "A sound will play when the transcript is ready."
+    : "No sound when the transcript is ready.",
+});
+
+export const setStopSoundClipId = (
+  state: AppState,
+  stopSoundClipId: string,
+): AppState => ({
+  ...state,
+  stopSoundClipId,
 });
 
 export const setStatus = (state: AppState, status: string): AppState => ({

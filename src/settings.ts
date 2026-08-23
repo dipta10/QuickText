@@ -5,7 +5,13 @@ const shortcutFocusOnStartStorageKey = "stt.shortcutFocusOnStart";
 const shortcutHideOnStopStorageKey = "stt.shortcutHideOnStop";
 const liveTranscriptStorageKey = "stt.liveTranscript";
 const showPartialTranscriptStorageKey = "stt.showPartialTranscript";
+const startSoundEnabledStorageKey = "stt.startSoundEnabled";
+const startSoundClipStorageKey = "stt.startSoundClip";
+const stopSoundEnabledStorageKey = "stt.stopSoundEnabled";
+const stopSoundClipStorageKey = "stt.stopSoundClip";
 export const defaultMaxRecordingSeconds = 300;
+export const defaultStartSoundClipId = "subtle-click";
+export const defaultStopSoundClipId = "soft-chime";
 
 export const getGlobalShortcut = (): string => {
   return localStorage.getItem(shortcutStorageKey) ?? "";
@@ -70,4 +76,38 @@ export const getShowPartialTranscript = (): boolean => {
 
 export const saveShowPartialTranscript = (showPartial: boolean) => {
   localStorage.setItem(showPartialTranscriptStorageKey, showPartial.toString());
+};
+
+export const getStartSoundEnabled = (): boolean => {
+  return localStorage.getItem(startSoundEnabledStorageKey) === "true";
+};
+
+export const saveStartSoundEnabled = (startSoundEnabled: boolean) => {
+  localStorage.setItem(startSoundEnabledStorageKey, startSoundEnabled.toString());
+};
+
+export const getStartSoundClipId = (): string => {
+  return (
+    localStorage.getItem(startSoundClipStorageKey) ?? defaultStartSoundClipId
+  );
+};
+
+export const saveStartSoundClipId = (clipId: string) => {
+  localStorage.setItem(startSoundClipStorageKey, clipId);
+};
+
+export const getStopSoundEnabled = (): boolean => {
+  return localStorage.getItem(stopSoundEnabledStorageKey) === "true";
+};
+
+export const saveStopSoundEnabled = (stopSoundEnabled: boolean) => {
+  localStorage.setItem(stopSoundEnabledStorageKey, stopSoundEnabled.toString());
+};
+
+export const getStopSoundClipId = (): string => {
+  return localStorage.getItem(stopSoundClipStorageKey) ?? defaultStopSoundClipId;
+};
+
+export const saveStopSoundClipId = (clipId: string) => {
+  localStorage.setItem(stopSoundClipStorageKey, clipId);
 };

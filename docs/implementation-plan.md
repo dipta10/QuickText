@@ -243,6 +243,23 @@ Acceptance checks:
 - Error or cancel leaves no stale partial on screen.
 - No Soniox protocol details appear in frontend code.
 
+## Milestone 9: Recording Notification Sounds
+
+Deliverables:
+
+- Opt-in synthesized notification sounds when recording starts and when the transcript is ready.
+- Shared palette of bundled tone recipes with per-event clip selection in Settings.
+- Frontend-only playback over Web Audio; state transitions detected from `app-state-changed` snapshots.
+
+Acceptance checks:
+
+- Sounds play on shortcut-triggered recordings with the window hidden.
+- Errors stay silent; only successful transcription plays the stop sound.
+- Clip selectors appear only while their event's checkbox is enabled.
+- Playback failures never surface as UI errors.
+
+See [ADR 0007](adrs/0007-recording-notification-sounds.md).
+
 ## Grilling Notes
 
 These are the decisions most likely to break the plan if answered casually.

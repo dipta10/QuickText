@@ -3,6 +3,7 @@ import {
   cancelShortcutCapture,
   createAppState,
   applyBackendSnapshot,
+  applyPartialTranscript,
   isCapturingShortcut,
   isBusy,
   isRecording,
@@ -10,7 +11,9 @@ import {
   setApiKeyPresence,
   setApiKeyStatus,
   setAutoCopyTranscript,
+  setLiveTranscript,
   setMaxRecordingSeconds,
+  setShowPartialTranscript,
   setShortcutFocusOnStart,
   setShortcutHideOnStop,
   setStatus,
@@ -23,12 +26,16 @@ import { formatShortcut } from "./shortcut";
 import {
   getAutoCopyTranscript,
   getGlobalShortcut,
+  getLiveTranscript,
   getMaxRecordingSeconds,
+  getShowPartialTranscript,
   getShortcutFocusOnStart,
   getShortcutHideOnStop,
   saveAutoCopyTranscript,
   saveGlobalShortcut,
+  saveLiveTranscript,
   saveMaxRecordingSeconds,
+  saveShowPartialTranscript,
   saveShortcutFocusOnStart,
   saveShortcutHideOnStop,
 } from "./settings";
@@ -38,6 +45,7 @@ import {
   getAppState,
   hasSonioxApiKey,
   onAppStateChanged,
+  onPartialTranscript,
   saveSonioxApiKey,
   setGlobalShortcut,
   setShortcutBehavior,
@@ -56,6 +64,8 @@ let state = createAppState(
   getAutoCopyTranscript(),
   getShortcutFocusOnStart(),
   getShortcutHideOnStop(),
+  getLiveTranscript(),
+  getShowPartialTranscript(),
 );
 const view = createAppView(app);
 let lastAutoCopiedTranscript = "";
@@ -114,9 +124,12 @@ const render = () => {
   view.recordingTimer.textContent = formatElapsedTime(state.recordingStartedAt);
   view.activityIndicator.hidden = !isRecording(state);
   view.copyButton.disabled = !state.transcript;
-  view.transcriptText.textContent =
-    state.transcript || "Transcript will appear here.";
-  view.transcriptText.classList.toggle("is-empty", !state.transcript);
+  const hasTranscriptText =
+    Boolean(state.transcript) || Boolean(state.partialTranscript);
+  view.transcriptPlaceholder.hidden = hasTranscriptText;
+  view.transcriptFinal.textContent = state.transcript;
+  view.transcriptPartial.textContent = state.partialTranscript;
+  view.transcriptText.classList.toggle("is-empty", !hasTranscriptText);
 
   view.keybindButton.textContent = isCapturingShortcut(state)
     ? "Press keys"
@@ -132,6 +145,9 @@ const render = () => {
     view.maxRecordingSecondsInput.value = state.maxRecordingSeconds.toString();
   }
   view.autoCopyCheckbox.checked = state.autoCopyTranscript;
+  view.liveTranscriptCheckbox.checked = state.liveTranscript;
+  view.showPartialField.hidden = !state.liveTranscript;
+  view.showPartialCheckbox.checked = state.showPartialTranscript;
   view.bottomStatus.textContent =
     state.activeView === "capture"
       ? state.status
@@ -311,6 +327,18 @@ view.autoCopyCheckbox.addEventListener("change", () => {
   updateState(setAutoCopyTranscript(state, autoCopyTranscript));
 });
 
+view.liveTranscriptCheckbox.addEventListener("change", () => {
+  const liveTranscript = view.liveTranscriptCheckbox.checked;
+  saveLiveTranscript(liveTranscript);
+  updateState(setLiveTranscript(state, liveTranscript));
+});
+
+view.showPartialCheckbox.addEventListener("change", () => {
+  const showPartialTranscript = view.showPartialCheckbox.checked;
+  saveShowPartialTranscript(showPartialTranscript);
+  updateState(setShowPartialTranscript(state, showPartialTranscript));
+});
+
 view.keybindButton.addEventListener("click", () => {
   updateState(startShortcutCapture(state));
 });
@@ -367,6 +395,14 @@ void onAppStateChanged((snapshot) => {
 }).catch(() => {
   updateState(
     setStatus(state, "Backend state events run in the desktop app."),
+  );
+});
+
+void onPartialTranscript((update) => {
+  updateState(applyPartialTranscript(state, update));
+}).catch(() => {
+  updateState(
+    setStatus(state, "Live transcript events run in the desktop app."),
   );
 });
 

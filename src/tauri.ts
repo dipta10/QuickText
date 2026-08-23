@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import type { BackendAppSnapshot } from "./app-state";
+import type { BackendAppSnapshot, PartialTranscriptUpdate } from "./app-state";
 
 const getAppStateCommand = "get_app_state";
 const toggleRecordingCommand = "toggle_recording";
@@ -11,6 +11,7 @@ const hasSonioxApiKeyCommand = "has_soniox_api_key";
 const saveSonioxApiKeyCommand = "save_soniox_api_key";
 const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
 const appStateChangedEvent = "app-state-changed";
+const partialTranscriptEvent = "partial-transcript";
 
 const assertTauriRuntime = () => {
   if (!("__TAURI_INTERNALS__" in window)) {
@@ -70,6 +71,15 @@ export const onAppStateChanged = (
 ) => {
   assertTauriRuntime();
   return listen<BackendAppSnapshot>(appStateChangedEvent, (event) => {
+    handler(event.payload);
+  });
+};
+
+export const onPartialTranscript = (
+  handler: (update: PartialTranscriptUpdate) => void,
+) => {
+  assertTauriRuntime();
+  return listen<PartialTranscriptUpdate>(partialTranscriptEvent, (event) => {
     handler(event.payload);
   });
 };

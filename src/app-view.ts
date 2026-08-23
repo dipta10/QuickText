@@ -8,6 +8,9 @@ export type AppView = {
   recordingTimer: HTMLSpanElement;
   activityIndicator: HTMLSpanElement;
   transcriptText: HTMLDivElement;
+  transcriptPlaceholder: HTMLParagraphElement;
+  transcriptFinal: HTMLSpanElement;
+  transcriptPartial: HTMLSpanElement;
   copyButton: HTMLButtonElement;
   keybindButton: HTMLButtonElement;
   keybindStatus: HTMLParagraphElement;
@@ -19,6 +22,10 @@ export type AppView = {
   apiKeyStatus: HTMLParagraphElement;
   maxRecordingSecondsInput: HTMLInputElement;
   autoCopyCheckbox: HTMLInputElement;
+  liveTranscriptCheckbox: HTMLInputElement;
+  liveTranscriptField: HTMLLabelElement;
+  showPartialCheckbox: HTMLInputElement;
+  showPartialField: HTMLLabelElement;
   bottomStatus: HTMLParagraphElement;
 };
 
@@ -52,9 +59,11 @@ const appTemplate = `
             <h2 class="section-title">Transcript</h2>
             <button class="copy-button" type="button">Copy</button>
           </div>
-          <div class="transcript-text" tabindex="0">
-            Transcript will appear here.
-          </div>
+          <div class="transcript-text" tabindex="0"
+            ><p class="transcript-placeholder">Transcript will appear here.</p
+            ><span class="transcript-final"></span
+            ><span class="transcript-partial" aria-label="Unconfirmed words"></span
+          ></div>
         </section>
       </section>
 
@@ -126,6 +135,25 @@ const appTemplate = `
             />
             <span>Automatically copy transcript when done</span>
           </label>
+          <label class="checkbox-field live-transcript-field" for="live-transcript">
+            <input
+              class="live-transcript-checkbox"
+              id="live-transcript"
+              type="checkbox"
+            />
+            <span>Show transcript in real time while recording</span>
+          </label>
+          <label
+            class="checkbox-field show-partial-field"
+            for="show-partial-transcript"
+          >
+            <input
+              class="show-partial-transcript-checkbox"
+              id="show-partial-transcript"
+              type="checkbox"
+            />
+            <span>Show unconfirmed words as they form</span>
+          </label>
         </section>
 
         <section class="settings-section">
@@ -160,6 +188,13 @@ export const createAppView = (root: HTMLElement): AppView => {
     root.querySelector<HTMLSpanElement>(".activity-indicator");
   const transcriptText =
     root.querySelector<HTMLDivElement>(".transcript-text");
+  const transcriptPlaceholder = root.querySelector<HTMLParagraphElement>(
+    ".transcript-placeholder",
+  );
+  const transcriptFinal =
+    root.querySelector<HTMLSpanElement>(".transcript-final");
+  const transcriptPartial =
+    root.querySelector<HTMLSpanElement>(".transcript-partial");
   const copyButton = root.querySelector<HTMLButtonElement>(".copy-button");
   const keybindButton =
     root.querySelector<HTMLButtonElement>(".keybind-button");
@@ -186,6 +221,16 @@ export const createAppView = (root: HTMLElement): AppView => {
   const autoCopyCheckbox = root.querySelector<HTMLInputElement>(
     ".auto-copy-checkbox",
   );
+  const liveTranscriptField =
+    root.querySelector<HTMLLabelElement>(".live-transcript-field");
+  const liveTranscriptCheckbox = root.querySelector<HTMLInputElement>(
+    ".live-transcript-checkbox",
+  );
+  const showPartialField =
+    root.querySelector<HTMLLabelElement>(".show-partial-field");
+  const showPartialCheckbox = root.querySelector<HTMLInputElement>(
+    ".show-partial-transcript-checkbox",
+  );
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
 
@@ -199,6 +244,9 @@ export const createAppView = (root: HTMLElement): AppView => {
     !recordingTimer ||
     !activityIndicator ||
     !transcriptText ||
+    !transcriptPlaceholder ||
+    !transcriptFinal ||
+    !transcriptPartial ||
     !copyButton ||
     !keybindButton ||
     !keybindStatus ||
@@ -210,6 +258,10 @@ export const createAppView = (root: HTMLElement): AppView => {
     !apiKeyStatus ||
     !maxRecordingSecondsInput ||
     !autoCopyCheckbox ||
+    !liveTranscriptField ||
+    !liveTranscriptCheckbox ||
+    !showPartialField ||
+    !showPartialCheckbox ||
     !bottomStatus
   ) {
     throw new Error("App controls were not found");
@@ -225,6 +277,9 @@ export const createAppView = (root: HTMLElement): AppView => {
     recordingTimer,
     activityIndicator,
     transcriptText,
+    transcriptPlaceholder,
+    transcriptFinal,
+    transcriptPartial,
     copyButton,
     keybindButton,
     keybindStatus,
@@ -236,6 +291,10 @@ export const createAppView = (root: HTMLElement): AppView => {
     apiKeyStatus,
     maxRecordingSecondsInput,
     autoCopyCheckbox,
+    liveTranscriptField,
+    liveTranscriptCheckbox,
+    showPartialField,
+    showPartialCheckbox,
     bottomStatus,
   };
 };

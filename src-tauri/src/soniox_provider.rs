@@ -24,6 +24,12 @@ const SONIOX_STREAM_MARKERS: [&str; 2] = ["<end>", "<fin>"];
 
 type SharedErrorSlot = Arc<Mutex<Option<String>>>;
 
+#[derive(Debug, Clone, Serialize)]
+pub struct PartialTranscript {
+    pub final_text: String,
+    pub partial_text: String,
+}
+
 #[derive(Debug)]
 enum SonioxCommand {
     Finish(oneshot::Sender<Result<TranscriptResult, String>>),
@@ -34,6 +40,7 @@ enum SonioxCommand {
 pub struct SonioxSession {
     audio_tx: UnboundedSender<Vec<u8>>,
     command_tx: UnboundedSender<SonioxCommand>,
+    partial_rx: Option<mpsc::UnboundedReceiver<PartialTranscript>>,
     stream_error: SharedErrorSlot,
 }
 
@@ -60,24 +67,31 @@ impl SonioxSession {
 
         let (audio_tx, audio_rx) = mpsc::unbounded_channel();
         let (command_tx, command_rx) = mpsc::unbounded_channel();
+        let (partial_tx, partial_rx) = mpsc::unbounded_channel();
         let stream_error: SharedErrorSlot = Arc::new(Mutex::new(None));
 
         tauri::async_runtime::spawn(run_soniox_session(
             websocket,
             audio_rx,
             command_rx,
+            partial_tx,
             Arc::clone(&stream_error),
         ));
 
         Ok(Self {
             audio_tx,
             command_tx,
+            partial_rx: Some(partial_rx),
             stream_error,
         })
     }
 
     pub fn audio_sender(&self) -> UnboundedSender<Vec<u8>> {
         self.audio_tx.clone()
+    }
+
+    pub fn take_partial_receiver(&mut self) -> Option<mpsc::UnboundedReceiver<PartialTranscript>> {
+        self.partial_rx.take()
     }
 
     pub async fn stop(self) -> Result<TranscriptResult, String> {
@@ -110,6 +124,7 @@ async fn run_soniox_session(
     >,
     mut audio_rx: mpsc::UnboundedReceiver<Vec<u8>>,
     mut command_rx: mpsc::UnboundedReceiver<SonioxCommand>,
+    partial_tx: UnboundedSender<PartialTranscript>,
     stream_error: SharedErrorSlot,
 ) {
     let mut final_text = String::new();
@@ -163,17 +178,20 @@ async fn run_soniox_session(
                 match message {
                     Some(Ok(Message::Text(text))) => {
                         match handle_soniox_text_response(text.as_str(), &mut final_text) {
-                            Ok(true) => {
-                                respond(
-                                    &mut finish_tx,
-                                    Ok(TranscriptResult {
-                                        text: final_text.trim().to_string(),
-                                        provider: "soniox".to_string(),
-                                    }),
-                                );
-                                break;
+                            Ok(outcome) => {
+                                if !outcome.finished {
+                                    let _ = partial_tx.send(outcome.partial_update);
+                                } else {
+                                    respond(
+                                        &mut finish_tx,
+                                        Ok(TranscriptResult {
+                                            text: final_text.trim().to_string(),
+                                            provider: "soniox".to_string(),
+                                        }),
+                                    );
+                                    break;
+                                }
                             }
-                            Ok(false) => {}
                             Err(error) => {
                                 record_stream_error(&stream_error, &error);
                                 respond(&mut finish_tx, Err(error));
@@ -230,7 +248,16 @@ fn respond(
     }
 }
 
-fn handle_soniox_text_response(text: &str, final_text: &mut String) -> Result<bool, String> {
+#[derive(Debug)]
+struct TextResponseOutcome {
+    finished: bool,
+    partial_update: PartialTranscript,
+}
+
+fn handle_soniox_text_response(
+    text: &str,
+    final_text: &mut String,
+) -> Result<TextResponseOutcome, String> {
     let response: SonioxResponse = serde_json::from_str(text)
         .map_err(|error| format!("Could not parse Soniox response: {error}"))?;
 
@@ -238,13 +265,23 @@ fn handle_soniox_text_response(text: &str, final_text: &mut String) -> Result<bo
         return Err(format!("Soniox provider error: {error_message}"));
     }
 
+    let mut partial_text = String::new();
+
     for token in response.tokens {
         if token.is_final.unwrap_or(false) {
             final_text.push_str(&strip_stream_markers(&token.text));
+        } else {
+            partial_text.push_str(&strip_stream_markers(&token.text));
         }
     }
 
-    Ok(response.finished.unwrap_or(false))
+    Ok(TextResponseOutcome {
+        finished: response.finished.unwrap_or(false),
+        partial_update: PartialTranscript {
+            final_text: final_text.clone(),
+            partial_text,
+        },
+    })
 }
 
 fn strip_stream_markers(text: &str) -> String {
@@ -297,13 +334,13 @@ mod tests {
     fn parses_finished_response() {
         let mut final_text = String::new();
 
-        let finished = handle_soniox_text_response(
+        let outcome = handle_soniox_text_response(
             r#"{"tokens":[{"text":"Hello","is_final":true},{"text":" world","is_final":true}],"finished":true}"#,
             &mut final_text,
         )
         .unwrap();
 
-        assert!(finished);
+        assert!(outcome.finished);
         assert_eq!(final_text, "Hello world");
     }
 
@@ -311,14 +348,48 @@ mod tests {
     fn ignores_non_final_tokens() {
         let mut final_text = String::new();
 
-        let finished = handle_soniox_text_response(
+        let outcome = handle_soniox_text_response(
             r#"{"tokens":[{"text":"maybe","is_final":false}],"finished":false}"#,
             &mut final_text,
         )
         .unwrap();
 
-        assert!(!finished);
+        assert!(!outcome.finished);
         assert_eq!(final_text, "");
+    }
+
+    #[test]
+    fn emits_partial_update_with_finals_and_hypothesis() {
+        let mut final_text = String::new();
+
+        handle_soniox_text_response(
+            r#"{"tokens":[{"text":"Hello world","is_final":true}],"finished":false}"#,
+            &mut final_text,
+        )
+        .unwrap();
+
+        let outcome = handle_soniox_text_response(
+            r#"{"tokens":[{"text":" and par","is_final":false},{"text":"tial","is_final":false}],"finished":false}"#,
+            &mut final_text,
+        )
+        .unwrap();
+
+        assert!(!outcome.finished);
+        assert_eq!(outcome.partial_update.final_text, "Hello world");
+        assert_eq!(outcome.partial_update.partial_text, " and partial");
+    }
+
+    #[test]
+    fn strips_markers_from_partial_tokens() {
+        let mut final_text = String::new();
+
+        let outcome = handle_soniox_text_response(
+            r#"{"tokens":[{"text":"draft<end>","is_final":false},{"text":" more","is_final":false}],"finished":false}"#,
+            &mut final_text,
+        )
+        .unwrap();
+
+        assert_eq!(outcome.partial_update.partial_text, "draft more");
     }
 
     #[test]

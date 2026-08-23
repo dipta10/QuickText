@@ -284,6 +284,16 @@ button {
   color: #687488;
 }
 
+.transcript-placeholder {
+  margin: 0;
+  color: #687488;
+}
+
+.transcript-partial {
+  color: #687488;
+  font-style: italic;
+}
+
 .settings-view {
   align-content: start;
   overflow: auto;

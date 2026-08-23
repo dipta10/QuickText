@@ -115,6 +115,8 @@ Minimum fields:
 - `auto_copy`
 - `language_hints`
 - `max_recording_seconds`
+- `live_transcript` (default on)
+- `show_partial_transcript` (default on, only meaningful when `live_transcript` is on)
 
 ### TrayMenuService
 

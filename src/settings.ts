@@ -3,6 +3,8 @@ const maxRecordingSecondsStorageKey = "stt.maxRecordingSeconds";
 const autoCopyTranscriptStorageKey = "stt.autoCopyTranscript";
 const shortcutFocusOnStartStorageKey = "stt.shortcutFocusOnStart";
 const shortcutHideOnStopStorageKey = "stt.shortcutHideOnStop";
+const liveTranscriptStorageKey = "stt.liveTranscript";
+const showPartialTranscriptStorageKey = "stt.showPartialTranscript";
 export const defaultMaxRecordingSeconds = 300;
 
 export const getGlobalShortcut = (): string => {
@@ -52,4 +54,20 @@ export const getShortcutHideOnStop = (): boolean => {
 
 export const saveShortcutHideOnStop = (hideOnStop: boolean) => {
   localStorage.setItem(shortcutHideOnStopStorageKey, hideOnStop.toString());
+};
+
+export const getLiveTranscript = (): boolean => {
+  return localStorage.getItem(liveTranscriptStorageKey) !== "false";
+};
+
+export const saveLiveTranscript = (liveTranscript: boolean) => {
+  localStorage.setItem(liveTranscriptStorageKey, liveTranscript.toString());
+};
+
+export const getShowPartialTranscript = (): boolean => {
+  return localStorage.getItem(showPartialTranscriptStorageKey) !== "false";
+};
+
+export const saveShowPartialTranscript = (showPartial: boolean) => {
+  localStorage.setItem(showPartialTranscriptStorageKey, showPartial.toString());
 };

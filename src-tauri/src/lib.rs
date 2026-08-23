@@ -11,7 +11,7 @@ mod soniox_provider;
 use app_controller::{AppController, AppError, AppSnapshot, AppStatus, TranscriptResult};
 use audio_recorder::{AudioCaptureStats, AudioRecorder};
 use keyring::{Entry, Error as KeyringError};
-use soniox_provider::SonioxSession;
+use soniox_provider::{PartialTranscript, SonioxSession};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -113,6 +113,15 @@ fn update_tray_icon(app: &tauri::AppHandle, status: &AppStatus) {
 fn emit_app_snapshot(app: &tauri::AppHandle, snapshot: &AppSnapshot) {
     update_tray_icon(app, &snapshot.status);
     let _ = app.emit("app-state-changed", snapshot);
+}
+
+async fn forward_partial_transcripts(
+    app: tauri::AppHandle,
+    mut partial_rx: tokio::sync::mpsc::UnboundedReceiver<PartialTranscript>,
+) {
+    while let Some(update) = partial_rx.recv().await {
+        let _ = app.emit("partial-transcript", update);
+    }
 }
 
 fn show_main_window(app: &tauri::AppHandle) {
@@ -436,7 +445,8 @@ pub(crate) async fn toggle_recording_for_app(
                 }
             };
 
-            let soniox_session = match SonioxSession::start(api_key, audio_format.clone()).await {
+            let mut soniox_session = match SonioxSession::start(api_key, audio_format.clone()).await
+            {
                 Ok(session) => session,
                 Err(error) => {
                     let error_snapshot = {
@@ -447,6 +457,10 @@ pub(crate) async fn toggle_recording_for_app(
                     return Ok(error_snapshot);
                 }
             };
+
+            if let Some(partial_rx) = soniox_session.take_partial_receiver() {
+                tauri::async_runtime::spawn(forward_partial_transcripts(app.clone(), partial_rx));
+            }
 
             let audio_recorder = match AudioRecorder::start(soniox_session.audio_sender()) {
                 Ok(recorder) => recorder,

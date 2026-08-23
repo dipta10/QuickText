@@ -24,6 +24,11 @@ export type BackendAppSnapshot = {
   error: BackendAppError | null;
 };
 
+export type PartialTranscriptUpdate = {
+  final_text: string;
+  partial_text: string;
+};
+
 export type AppState = {
   activeView: ActiveView;
   recording: RecordingState;
@@ -33,10 +38,13 @@ export type AppState = {
   shortcutHideOnStop: boolean;
   maxRecordingSeconds: number;
   autoCopyTranscript: boolean;
+  liveTranscript: boolean;
+  showPartialTranscript: boolean;
   hasApiKey: boolean;
   apiKeyStatus: string;
   status: string;
   transcript: string;
+  partialTranscript: string;
   recordingStartedAt: number | null;
 };
 
@@ -46,6 +54,8 @@ export const createAppState = (
   autoCopyTranscript: boolean,
   shortcutFocusOnStart: boolean,
   shortcutHideOnStop: boolean,
+  liveTranscript: boolean,
+  showPartialTranscript: boolean,
 ): AppState => ({
   activeView: "capture",
   recording: "idle",
@@ -55,10 +65,13 @@ export const createAppState = (
   shortcutHideOnStop,
   maxRecordingSeconds,
   autoCopyTranscript,
+  liveTranscript,
+  showPartialTranscript,
   hasApiKey: false,
   apiKeyStatus: "",
   status: "Ready.",
   transcript: "",
+  partialTranscript: "",
   recordingStartedAt: null,
 });
 
@@ -131,10 +144,30 @@ export const applyBackendSnapshot = (
     recording: snapshot.status,
     status: statusText(snapshot),
     transcript: snapshot.transcript?.text ?? state.transcript,
+    partialTranscript:
+      snapshot.status === "recording" ? state.partialTranscript : "",
     recordingStartedAt: recordingStartedAt(state, snapshot),
     apiKeyStatus: isMissingApiKey
       ? snapshot.error?.message ?? state.apiKeyStatus
       : state.apiKeyStatus,
+  };
+};
+
+export const applyPartialTranscript = (
+  state: AppState,
+  update: PartialTranscriptUpdate,
+): AppState => {
+  if (state.recording !== "recording") {
+    return state;
+  }
+
+  return {
+    ...state,
+    transcript: state.liveTranscript ? update.final_text : state.transcript,
+    partialTranscript:
+      state.liveTranscript && state.showPartialTranscript
+        ? update.partial_text
+        : "",
   };
 };
 
@@ -194,6 +227,28 @@ export const setAutoCopyTranscript = (
   status: autoCopyTranscript
     ? "Auto-copy enabled."
     : "Auto-copy disabled.",
+});
+
+export const setLiveTranscript = (
+  state: AppState,
+  liveTranscript: boolean,
+): AppState => ({
+  ...state,
+  liveTranscript,
+  status: liveTranscript
+    ? "Real-time transcript enabled."
+    : "Real-time transcript disabled.",
+});
+
+export const setShowPartialTranscript = (
+  state: AppState,
+  showPartialTranscript: boolean,
+): AppState => ({
+  ...state,
+  showPartialTranscript,
+  status: showPartialTranscript
+    ? "Unconfirmed words will be shown while recording."
+    : "Unconfirmed words will be hidden.",
 });
 
 export const setShortcutFocusOnStart = (

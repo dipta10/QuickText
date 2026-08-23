@@ -230,12 +230,15 @@ Deliverables:
 - Emit a dedicated Tauri event with `{ final_text, partial_text }` per provider message, without throttling.
 - Strip stream-boundary markers from partial text.
 - Render finals normally and the hypothesis dimmed in the Capture transcript area.
+- Add Settings checkboxes: real-time transcript (default on) with a nested unconfirmed-words option (default on) shown only when real-time is enabled; frontend gates rendering so settings stay out of the provider session.
 - Clear the partial on stop, error, and cancel; keep copy/auto-copy tied to the final transcript.
 
 Acceptance checks:
 
 - Confirmed words appear while recording, before stop.
 - Dimmed partial updates in place without flickering the final text.
+- With real-time display off, nothing appears until finalization completes.
+- The unconfirmed-words checkbox only appears when real-time display is enabled.
 - Stopping hides the partial immediately; final transcript replaces it.
 - Error or cancel leaves no stale partial on screen.
 - No Soniox protocol details appear in frontend code.

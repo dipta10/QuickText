@@ -600,6 +600,7 @@ pub fn run() {
         .setup(|app| {
             setup_tray(app)?;
 
+            #[cfg(unix)]
             match ipc_server::start(app.handle().clone()) {
                 Ok(ipc_server::ServerStart::Listening) => {}
                 Ok(ipc_server::ServerStart::AlreadyRunning) => {

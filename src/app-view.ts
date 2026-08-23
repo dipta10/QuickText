@@ -11,6 +11,8 @@ export type AppView = {
   copyButton: HTMLButtonElement;
   keybindButton: HTMLButtonElement;
   keybindStatus: HTMLParagraphElement;
+  shortcutFocusOnStartCheckbox: HTMLInputElement;
+  shortcutHideOnStopCheckbox: HTMLInputElement;
   apiKeyInput: HTMLInputElement;
   apiKeySaveButton: HTMLButtonElement;
   apiKeyDeleteButton: HTMLButtonElement;
@@ -76,10 +78,31 @@ const appTemplate = `
 
         <section class="settings-section">
           <h2 class="section-title">Shortcut</h2>
+          <p class="settings-note">
+            The shortcut works from any app: press once to start recording,
+            press again to stop. The transcript appears in Capture, ready to
+            copy.
+          </p>
           <button class="keybind-button" type="button">
             Set shortcut
           </button>
           <p class="keybind-status" role="status"></p>
+          <label class="checkbox-field" for="shortcut-focus-on-start">
+            <input
+              class="shortcut-focus-on-start-checkbox"
+              id="shortcut-focus-on-start"
+              type="checkbox"
+            />
+            <span>Focus window when recording starts</span>
+          </label>
+          <label class="checkbox-field" for="shortcut-hide-on-stop">
+            <input
+              class="shortcut-hide-on-stop-checkbox"
+              id="shortcut-hide-on-stop"
+              type="checkbox"
+            />
+            <span>Hide window when recording stops</span>
+          </label>
         </section>
 
         <section class="settings-section">
@@ -142,6 +165,12 @@ export const createAppView = (root: HTMLElement): AppView => {
     root.querySelector<HTMLButtonElement>(".keybind-button");
   const keybindStatus =
     root.querySelector<HTMLParagraphElement>(".keybind-status");
+  const shortcutFocusOnStartCheckbox = root.querySelector<HTMLInputElement>(
+    ".shortcut-focus-on-start-checkbox",
+  );
+  const shortcutHideOnStopCheckbox = root.querySelector<HTMLInputElement>(
+    ".shortcut-hide-on-stop-checkbox",
+  );
   const apiKeyInput = root.querySelector<HTMLInputElement>(".api-key-input");
   const apiKeySaveButton = root.querySelector<HTMLButtonElement>(
     ".api-key-save-button",
@@ -173,6 +202,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     !copyButton ||
     !keybindButton ||
     !keybindStatus ||
+    !shortcutFocusOnStartCheckbox ||
+    !shortcutHideOnStopCheckbox ||
     !apiKeyInput ||
     !apiKeySaveButton ||
     !apiKeyDeleteButton ||
@@ -197,6 +228,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     copyButton,
     keybindButton,
     keybindStatus,
+    shortcutFocusOnStartCheckbox,
+    shortcutHideOnStopCheckbox,
     apiKeyInput,
     apiKeySaveButton,
     apiKeyDeleteButton,

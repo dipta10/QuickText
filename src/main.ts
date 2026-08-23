@@ -11,6 +11,8 @@ import {
   setApiKeyStatus,
   setAutoCopyTranscript,
   setMaxRecordingSeconds,
+  setShortcutFocusOnStart,
+  setShortcutHideOnStop,
   setStatus,
   showCapture,
   showSettings,
@@ -22,9 +24,13 @@ import {
   getAutoCopyTranscript,
   getGlobalShortcut,
   getMaxRecordingSeconds,
+  getShortcutFocusOnStart,
+  getShortcutHideOnStop,
   saveAutoCopyTranscript,
   saveGlobalShortcut,
   saveMaxRecordingSeconds,
+  saveShortcutFocusOnStart,
+  saveShortcutHideOnStop,
 } from "./settings";
 import {
   copyTextToClipboard,
@@ -34,6 +40,7 @@ import {
   onAppStateChanged,
   saveSonioxApiKey,
   setGlobalShortcut,
+  setShortcutBehavior,
   toggleBackendRecording,
 } from "./tauri";
 
@@ -47,6 +54,8 @@ let state = createAppState(
   getGlobalShortcut(),
   getMaxRecordingSeconds(),
   getAutoCopyTranscript(),
+  getShortcutFocusOnStart(),
+  getShortcutHideOnStop(),
 );
 const view = createAppView(app);
 let lastAutoCopiedTranscript = "";
@@ -113,6 +122,8 @@ const render = () => {
     ? "Press keys"
     : state.selectedShortcut || "Set shortcut";
   view.keybindStatus.textContent = state.status;
+  view.shortcutFocusOnStartCheckbox.checked = state.shortcutFocusOnStart;
+  view.shortcutHideOnStopCheckbox.checked = state.shortcutHideOnStop;
   view.apiKeyDeleteButton.disabled = !state.hasApiKey;
   view.apiKeyStatus.textContent =
     state.apiKeyStatus ||
@@ -168,6 +179,19 @@ const registerShortcut = async (shortcut: string) => {
     await setGlobalShortcut(shortcut);
     saveGlobalShortcut(shortcut);
     updateState(saveShortcut(state, shortcut));
+  } catch (error) {
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
+const pushShortcutBehavior = async () => {
+  try {
+    await setShortcutBehavior(
+      state.shortcutFocusOnStart,
+      state.shortcutHideOnStop,
+    );
   } catch (error) {
     updateState(
       setStatus(state, error instanceof Error ? error.message : String(error)),
@@ -291,6 +315,20 @@ view.keybindButton.addEventListener("click", () => {
   updateState(startShortcutCapture(state));
 });
 
+view.shortcutFocusOnStartCheckbox.addEventListener("change", () => {
+  const focusOnStart = view.shortcutFocusOnStartCheckbox.checked;
+  saveShortcutFocusOnStart(focusOnStart);
+  updateState(setShortcutFocusOnStart(state, focusOnStart));
+  void pushShortcutBehavior();
+});
+
+view.shortcutHideOnStopCheckbox.addEventListener("change", () => {
+  const hideOnStop = view.shortcutHideOnStopCheckbox.checked;
+  saveShortcutHideOnStop(hideOnStop);
+  updateState(setShortcutHideOnStop(state, hideOnStop));
+  void pushShortcutBehavior();
+});
+
 view.apiKeySaveButton.addEventListener("click", () => {
   void saveApiKey();
 });
@@ -336,6 +374,7 @@ render();
 window.setInterval(render, 1000);
 void loadBackendState();
 void loadApiKeyStatus();
+void pushShortcutBehavior();
 
 if (state.selectedShortcut) {
   void registerShortcut(state.selectedShortcut);

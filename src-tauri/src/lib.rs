@@ -23,9 +23,20 @@ const SONIOX_KEY_SERVICE: &str = "com.dipta.stt";
 const SONIOX_KEY_ACCOUNT: &str = "soniox-api-key";
 const DEFAULT_MAX_RECORDING_SECONDS: u64 = 5 * 60;
 
-#[derive(Default)]
 struct ShortcutSettings {
     active_shortcut: Mutex<Option<String>>,
+    focus_on_start: Mutex<bool>,
+    hide_on_stop: Mutex<bool>,
+}
+
+impl Default for ShortcutSettings {
+    fn default() -> Self {
+        Self {
+            active_shortcut: Mutex::new(None),
+            focus_on_start: Mutex::new(true),
+            hide_on_stop: Mutex::new(false),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -349,6 +360,24 @@ async fn toggle_recording(
     toggle_recording_for_app(app, max_recording_seconds, false).await
 }
 
+async fn run_shortcut_toggle(app: tauri::AppHandle) {
+    let settings = app.state::<ShortcutSettings>();
+    let controller = app.state::<AppControllerState>();
+    let was_recording = lock_controller(&controller)
+        .map(|controller| controller.snapshot().status == AppStatus::Recording)
+        .unwrap_or(false);
+
+    if !was_recording && shortcut_focuses_on_start(&settings) {
+        show_main_window(&app);
+    }
+
+    let _ = toggle_recording_for_app(app.clone(), None, false).await;
+
+    if was_recording && shortcut_hides_on_stop(&settings) {
+        hide_main_window(&app);
+    }
+}
+
 pub(crate) async fn toggle_recording_for_app(
     app: tauri::AppHandle,
     max_recording_seconds: Option<u64>,
@@ -546,6 +575,43 @@ fn set_global_shortcut(
 }
 
 #[tauri::command]
+fn set_shortcut_behavior(
+    settings: State<'_, ShortcutSettings>,
+    focus_on_start: bool,
+    hide_on_stop: bool,
+) -> Result<(), String> {
+    let mut focus = settings
+        .focus_on_start
+        .lock()
+        .map_err(|_| "Could not update shortcut state.".to_string())?;
+    *focus = focus_on_start;
+
+    let mut hide = settings
+        .hide_on_stop
+        .lock()
+        .map_err(|_| "Could not update shortcut state.".to_string())?;
+    *hide = hide_on_stop;
+
+    Ok(())
+}
+
+fn shortcut_focuses_on_start(settings: &ShortcutSettings) -> bool {
+    settings
+        .focus_on_start
+        .lock()
+        .map(|focus| *focus)
+        .unwrap_or(true)
+}
+
+fn shortcut_hides_on_stop(settings: &ShortcutSettings) -> bool {
+    settings
+        .hide_on_stop
+        .lock()
+        .map(|hide| *hide)
+        .unwrap_or(false)
+}
+
+#[tauri::command]
 fn has_soniox_api_key(credentials: State<'_, CredentialState>) -> Result<bool, String> {
     has_soniox_api_key_available(&credentials)
 }
@@ -605,8 +671,7 @@ pub fn run() {
                     if event.state() == ShortcutState::Pressed {
                         let app = app.clone();
                         tauri::async_runtime::spawn(async move {
-                            show_main_window(&app);
-                            let _ = toggle_recording_for_app(app, None, false).await;
+                            run_shortcut_toggle(app).await;
                         });
                     }
                 })
@@ -631,6 +696,7 @@ pub fn run() {
             get_app_state,
             toggle_recording,
             set_global_shortcut,
+            set_shortcut_behavior,
             has_soniox_api_key,
             save_soniox_api_key,
             delete_soniox_api_key

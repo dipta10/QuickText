@@ -71,7 +71,7 @@ Settings should be a separate view reached from a gear button or Settings tab in
 Recommended sections:
 
 - Soniox: API key status, save/update key, delete key.
-- Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status.
+- Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
 - Behavior: manual copy default, future auto-copy option, max recording duration display.
 - App: tray/background explanation and explicit quit note.
 
@@ -86,6 +86,14 @@ Settings rules:
 ## Trigger Behavior
 
 The app trigger can come from the global shortcut, tray/menu item, or primary UI button.
+
+Shortcut behavior options (persisted locally, applied by the backend shortcut handler):
+
+- Focus window when recording starts: bring the window to the front when the shortcut starts a recording. Default: on.
+- Hide window when recording stops: hide the window to tray after stopping via the shortcut. Default: off.
+- Both options only apply to global-shortcut triggers; in-window buttons and IPC/CLI toggles keep their own behavior.
+
+Default trigger behavior:
 
 - If the app is hidden and the trigger is pressed, show/focus the window, switch to Capture, and start recording.
 - If Settings is open and the trigger is pressed, switch to Capture and start recording.
@@ -157,6 +165,8 @@ QuickText window
 - Settings contains keybind and Soniox API key controls.
 - Pressing the global shortcut while Settings is open switches to Capture and starts recording.
 - Pressing the global shortcut while hidden shows Capture and starts recording.
+- With "Focus window when recording starts" off, starting via shortcut records without raising or focusing the window.
+- With "Hide window when recording stops" on, stopping via shortcut hides the window while the app stays resident.
 - Transcript is rendered as readable selectable text, not a textarea.
 - Copy action copies the displayed transcript.
 - Missing API key sends the user to Settings with a clear setup message.

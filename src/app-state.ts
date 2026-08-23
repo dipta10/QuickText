@@ -29,6 +29,8 @@ export type AppState = {
   recording: RecordingState;
   shortcutCapture: ShortcutCaptureState;
   selectedShortcut: string;
+  shortcutFocusOnStart: boolean;
+  shortcutHideOnStop: boolean;
   maxRecordingSeconds: number;
   autoCopyTranscript: boolean;
   hasApiKey: boolean;
@@ -42,11 +44,15 @@ export const createAppState = (
   selectedShortcut: string,
   maxRecordingSeconds: number,
   autoCopyTranscript: boolean,
+  shortcutFocusOnStart: boolean,
+  shortcutHideOnStop: boolean,
 ): AppState => ({
   activeView: "capture",
   recording: "idle",
   shortcutCapture: "idle",
   selectedShortcut,
+  shortcutFocusOnStart,
+  shortcutHideOnStop,
   maxRecordingSeconds,
   autoCopyTranscript,
   hasApiKey: false,
@@ -188,6 +194,28 @@ export const setAutoCopyTranscript = (
   status: autoCopyTranscript
     ? "Auto-copy enabled."
     : "Auto-copy disabled.",
+});
+
+export const setShortcutFocusOnStart = (
+  state: AppState,
+  shortcutFocusOnStart: boolean,
+): AppState => ({
+  ...state,
+  shortcutFocusOnStart,
+  status: shortcutFocusOnStart
+    ? "Shortcut will focus the window when recording starts."
+    : "Shortcut will start recording without focusing the window.",
+});
+
+export const setShortcutHideOnStop = (
+  state: AppState,
+  shortcutHideOnStop: boolean,
+): AppState => ({
+  ...state,
+  shortcutHideOnStop,
+  status: shortcutHideOnStop
+    ? "Shortcut will hide the window when recording stops."
+    : "Shortcut will keep the window open when recording stops.",
 });
 
 export const setStatus = (state: AppState, status: string): AppState => ({

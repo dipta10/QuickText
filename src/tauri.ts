@@ -6,6 +6,7 @@ import type { BackendAppSnapshot } from "./app-state";
 const getAppStateCommand = "get_app_state";
 const toggleRecordingCommand = "toggle_recording";
 const setGlobalShortcutCommand = "set_global_shortcut";
+const setShortcutBehaviorCommand = "set_shortcut_behavior";
 const hasSonioxApiKeyCommand = "has_soniox_api_key";
 const saveSonioxApiKeyCommand = "save_soniox_api_key";
 const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
@@ -20,6 +21,14 @@ const assertTauriRuntime = () => {
 export const setGlobalShortcut = async (shortcut: string) => {
   assertTauriRuntime();
   await invoke(setGlobalShortcutCommand, { shortcut });
+};
+
+export const setShortcutBehavior = async (
+  focusOnStart: boolean,
+  hideOnStop: boolean,
+) => {
+  assertTauriRuntime();
+  await invoke(setShortcutBehaviorCommand, { focusOnStart, hideOnStop });
 };
 
 export const getAppState = async (): Promise<BackendAppSnapshot> => {

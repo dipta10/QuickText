@@ -1,6 +1,8 @@
 const shortcutStorageKey = "stt.globalShortcut";
 const maxRecordingSecondsStorageKey = "stt.maxRecordingSeconds";
 const autoCopyTranscriptStorageKey = "stt.autoCopyTranscript";
+const shortcutFocusOnStartStorageKey = "stt.shortcutFocusOnStart";
+const shortcutHideOnStopStorageKey = "stt.shortcutHideOnStop";
 export const defaultMaxRecordingSeconds = 300;
 
 export const getGlobalShortcut = (): string => {
@@ -34,4 +36,20 @@ export const saveAutoCopyTranscript = (autoCopyTranscript: boolean) => {
     autoCopyTranscriptStorageKey,
     autoCopyTranscript.toString(),
   );
+};
+
+export const getShortcutFocusOnStart = (): boolean => {
+  return localStorage.getItem(shortcutFocusOnStartStorageKey) !== "false";
+};
+
+export const saveShortcutFocusOnStart = (focusOnStart: boolean) => {
+  localStorage.setItem(shortcutFocusOnStartStorageKey, focusOnStart.toString());
+};
+
+export const getShortcutHideOnStop = (): boolean => {
+  return localStorage.getItem(shortcutHideOnStopStorageKey) === "true";
+};
+
+export const saveShortcutHideOnStop = (hideOnStop: boolean) => {
+  localStorage.setItem(shortcutHideOnStopStorageKey, hideOnStop.toString());
 };

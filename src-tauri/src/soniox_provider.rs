@@ -35,6 +35,14 @@ pub struct SonioxSession {
 
 impl SonioxSession {
     pub async fn start(api_key: String, audio_format: AudioFormat) -> Result<Self, String> {
+        debug_assert!(!api_key.is_empty());
+        eprintln!(
+            "QuickText: using Soniox API key of {} chars (starts '{}', ends '{}')",
+            api_key.len(),
+            &api_key[..api_key.len().min(4)],
+            &api_key[api_key.len().saturating_sub(4)..]
+        );
+
         let (mut websocket, _) = connect_async(SONIOX_WEBSOCKET_URL)
             .await
             .map_err(|error| format!("Could not connect to Soniox: {error}"))?;

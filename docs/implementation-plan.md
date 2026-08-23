@@ -222,6 +222,27 @@ Acceptance checks:
 - Permission failures have useful recovery text.
 - Logs never contain the Soniox API key.
 
+## Milestone 8: Live Partial Transcripts
+
+Deliverables:
+
+- Expose a partial-update channel from the Soniox session, mirroring `audio_sender`.
+- Emit a dedicated Tauri event with `{ final_text, partial_text }` per provider message, without throttling.
+- Strip stream-boundary markers from partial text.
+- Render finals normally and the hypothesis dimmed in the Capture transcript area.
+- Add Settings checkboxes: real-time transcript (default on) with a nested unconfirmed-words option (default on) shown only when real-time is enabled; frontend gates rendering so settings stay out of the provider session.
+- Clear the partial on stop, error, and cancel; keep copy/auto-copy tied to the final transcript.
+
+Acceptance checks:
+
+- Confirmed words appear while recording, before stop.
+- Dimmed partial updates in place without flickering the final text.
+- With real-time display off, nothing appears until finalization completes.
+- The unconfirmed-words checkbox only appears when real-time display is enabled.
+- Stopping hides the partial immediately; final transcript replaces it.
+- Error or cancel leaves no stale partial on screen.
+- No Soniox protocol details appear in frontend code.
+
 ## Grilling Notes
 
 These are the decisions most likely to break the plan if answered casually.
@@ -229,7 +250,7 @@ These are the decisions most likely to break the plan if answered casually.
 - Trigger model: Is the "button" a global shortcut, a floating button, a tray/menu item, or all three? Current plan starts with global shortcut plus visible UI button.
 - Background model: Does closing the window quit the app? No, the app remains resident in the tray/menu bar until explicit quit.
 - Credential model: Is this for personal local use only, or will it be distributed to users who should not handle raw Soniox keys? Current plan assumes personal/local key storage. A commercial app likely needs a backend that issues temporary Soniox API keys.
-- Streaming complexity: Are partial transcripts required in MVP? Current plan streams audio for fast finalization but does not require partial transcript UI.
+- Streaming complexity: Are partial transcripts required in MVP? Answered: yes, live partials are implemented per [ADR 0006](adrs/0006-streaming-partial-transcripts.md).
 - Window behavior: Should the UI hide after copy, after stop, or never automatically? Current plan keeps it visible after transcription.
 - UI structure: Do keybind and API key controls belong on the recording screen? No, they belong in Settings so Capture stays focused.
 - Recording bounds: What prevents accidental long recordings? Current plan should add a conservative maximum duration before public release.

@@ -69,10 +69,13 @@ interface TranscriptionProvider {
 
 interface TranscriptionSession {
   writeAudio(chunk: AudioChunk): Promise<void>;
+  onPartialUpdate(listener: (update: { finalText: string; partialText: string }) => void): void;
   stop(): Promise<TranscriptResult>;
   cancel(): Promise<void>;
 }
 ```
+
+Partial updates carry provider-agnostic text fields only; token semantics and stream markers stay inside the Soniox client. The decision is recorded in [ADR 0006](adrs/0006-streaming-partial-transcripts.md).
 
 This keeps Soniox isolated and leaves room for later provider changes without rewriting UI and audio capture code.
 
@@ -83,7 +86,7 @@ Two implementation options were considered:
 - Streaming: send microphone audio to Soniox while recording and finalize on stop.
 - Buffered upload: record locally, then send the captured clip after stop.
 
-Use streaming for MVP because it can reduce perceived wait time and may support partial transcripts later. Buffered upload remains the fallback if cross-platform streaming capture becomes unexpectedly expensive.
+Use streaming for MVP because it can reduce perceived wait time and enables live partial transcripts during recording (see [ADR 0006](adrs/0006-streaming-partial-transcripts.md)). Buffered upload remains the fallback if cross-platform streaming capture becomes unexpectedly expensive.
 
 ## Settings
 

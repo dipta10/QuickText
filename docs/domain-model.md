@@ -14,6 +14,7 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 - Transcription session: One provider connection or request that turns audio for a recording session into text.
 - Transcript: The final user-visible text produced from a transcription session.
 - Partial transcript: Non-final text emitted while audio is still being processed.
+- Hypothesis tokens: The provider's revisable non-final tokens for un-finalized audio; rendered dimmed and replaced as more audio arrives.
 - Provider: A service that converts audio into text.
 - Soniox client: The provider implementation that speaks Soniox API/protocol details.
 - Audio chunk: A small unit of captured microphone data sent to the transcription session.
@@ -43,6 +44,7 @@ Responsibilities:
 
 - Start a provider session from app-level transcription options.
 - Accept normalized audio chunks from the audio recorder.
+- Emit provider-agnostic partial updates (`final_text`, `partial_text`) while the session is live.
 - Finalize or cancel the active session.
 - Return app-level transcript results and app-level errors.
 
@@ -113,6 +115,8 @@ Minimum fields:
 - `auto_copy`
 - `language_hints`
 - `max_recording_seconds`
+- `live_transcript` (default on)
+- `show_partial_transcript` (default on, only meaningful when `live_transcript` is on)
 
 ### TrayMenuService
 
@@ -156,6 +160,7 @@ It must not own recording state once backend recording is connected. Recording s
 - Audio capture must not write provider-specific JSON.
 - Soniox client must not own window behavior.
 - Clipboard writes must use the transcript currently displayed by app state.
+- Partial transcripts are ephemeral: they must be cleared on stop, error, and cancel, never persisted.
 - Global shortcuts, UI button presses, and IPC commands must call the same app-controller trigger path.
 - IPC toggles must not show or focus windows unless the request explicitly asks for window management (`focus`).
 - Frontend recording state must be derived from backend app-state events once real recording starts.

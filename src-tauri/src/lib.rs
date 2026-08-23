@@ -219,6 +219,12 @@ fn microphone_unavailable_error(message: String) -> AppError {
 }
 
 fn provider_unavailable_error(message: String) -> AppError {
+    let message = if message.to_lowercase().contains("incorrect api key") {
+        format!("{message} Delete and re-save your key in Settings.")
+    } else {
+        message
+    };
+
     AppError::ProviderUnavailable { message }
 }
 
@@ -286,10 +292,19 @@ fn get_cached_soniox_api_key(
         .cloned())
 }
 
+fn is_invisible(c: char) -> bool {
+    c.is_whitespace() || matches!(c, '\u{200B}'..='\u{200F}' | '\u{00AD}' | '\u{FEFF}')
+}
+
+fn sanitize_api_key(api_key: &str) -> String {
+    api_key.chars().filter(|c| !is_invisible(*c)).collect()
+}
+
 fn read_soniox_api_key_from_store() -> Result<Option<String>, String> {
     match soniox_key_entry()?.get_password() {
         Ok(api_key) => {
-            if api_key.trim().is_empty() {
+            let api_key = sanitize_api_key(&api_key);
+            if api_key.is_empty() {
                 Ok(None)
             } else {
                 Ok(Some(api_key))
@@ -540,17 +555,17 @@ fn save_soniox_api_key(
     credentials: State<'_, CredentialState>,
     api_key: String,
 ) -> Result<bool, String> {
-    let api_key = api_key.trim();
+    let api_key = sanitize_api_key(&api_key);
 
     if api_key.is_empty() {
         return Err("Enter a Soniox API key first.".into());
     }
 
     soniox_key_entry()?
-        .set_password(api_key)
+        .set_password(api_key.as_str())
         .map_err(|error| format!("Could not save Soniox API key: {error}"))?;
 
-    cache_soniox_api_key(&credentials, api_key)?;
+    cache_soniox_api_key(&credentials, api_key.as_str())?;
     Ok(true)
 }
 

@@ -97,15 +97,22 @@ fn update_tray_icon(app: &tauri::AppHandle, status: &AppStatus) {
         return;
     };
 
-    let result = if *status == AppStatus::Recording {
-        tray.set_icon(Some(recording_tray_icon()))
-            .and_then(|()| tray.set_tooltip(Some("QuickText — Recording")))
-    } else {
-        app.default_window_icon()
+    let result = match status {
+        AppStatus::Starting | AppStatus::Recording | AppStatus::Stopping => {
+            let tooltip = if *status == AppStatus::Stopping {
+                "QuickText — Finalizing"
+            } else {
+                "QuickText — Recording"
+            };
+            tray.set_icon(Some(recording_tray_icon()))
+                .and_then(|()| tray.set_tooltip(Some(tooltip)))
+        }
+        AppStatus::Idle | AppStatus::Transcribed | AppStatus::Error => app
+            .default_window_icon()
             .cloned()
             .map(|icon| tray.set_icon(Some(icon)))
             .unwrap_or(Ok(()))
-            .and_then(|()| tray.set_tooltip(Some("QuickText")))
+            .and_then(|()| tray.set_tooltip(Some("QuickText"))),
     };
 
     if let Err(error) = result {

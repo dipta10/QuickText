@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -17,6 +18,8 @@ const SONIOX_WEBSOCKET_URL: &str = "wss://stt-rt.soniox.com/transcribe-websocket
 const SONIOX_MODEL: &str = "stt-rt-v5";
 const FINALIZATION_TIMEOUT_SECONDS: u64 = 12;
 
+type SharedErrorSlot = Arc<Mutex<Option<String>>>;
+
 #[derive(Debug)]
 enum SonioxCommand {
     Finish(oneshot::Sender<Result<TranscriptResult, String>>),
@@ -27,6 +30,7 @@ enum SonioxCommand {
 pub struct SonioxSession {
     audio_tx: UnboundedSender<Vec<u8>>,
     command_tx: UnboundedSender<SonioxCommand>,
+    stream_error: SharedErrorSlot,
 }
 
 impl SonioxSession {
@@ -52,12 +56,19 @@ impl SonioxSession {
 
         let (audio_tx, audio_rx) = mpsc::unbounded_channel();
         let (command_tx, command_rx) = mpsc::unbounded_channel();
+        let stream_error: SharedErrorSlot = Arc::new(Mutex::new(None));
 
-        tauri::async_runtime::spawn(run_soniox_session(websocket, audio_rx, command_rx));
+        tauri::async_runtime::spawn(run_soniox_session(
+            websocket,
+            audio_rx,
+            command_rx,
+            Arc::clone(&stream_error),
+        ));
 
         Ok(Self {
             audio_tx,
             command_tx,
+            stream_error,
         })
     }
 
@@ -69,7 +80,10 @@ impl SonioxSession {
         let (result_tx, result_rx) = oneshot::channel();
         self.command_tx
             .send(SonioxCommand::Finish(result_tx))
-            .map_err(|_| "Could not finalize Soniox stream.".to_string())?;
+            .map_err(|_| {
+                stored_stream_error(&self.stream_error)
+                    .unwrap_or_else(|| "Could not finalize Soniox stream.".to_string())
+            })?;
         drop(self.audio_tx);
 
         let result =
@@ -92,6 +106,7 @@ async fn run_soniox_session(
     >,
     mut audio_rx: mpsc::UnboundedReceiver<Vec<u8>>,
     mut command_rx: mpsc::UnboundedReceiver<SonioxCommand>,
+    stream_error: SharedErrorSlot,
 ) {
     let mut final_text = String::new();
     let mut finish_tx: Option<oneshot::Sender<Result<TranscriptResult, String>>> = None;
@@ -111,15 +126,18 @@ async fn run_soniox_session(
                             .send(Message::Text(r#"{"type":"finalize"}"#.into()))
                             .await
                         {
-                            respond(
-                                &mut finish_tx,
-                                Err(format!("Could not finalize Soniox stream: {error}")),
-                            );
+                            let message =
+                                format!("Could not finalize Soniox stream: {error}");
+                            record_stream_error(&stream_error, &message);
+                            respond(&mut finish_tx, Err(message));
                             return;
                         }
 
                         if let Err(error) = websocket.send(Message::Text("".into())).await {
-                            respond(&mut finish_tx, Err(format!("Could not finalize Soniox stream: {error}")));
+                            let message =
+                                format!("Could not finalize Soniox stream: {error}");
+                            record_stream_error(&stream_error, &message);
+                            respond(&mut finish_tx, Err(message));
                             return;
                         }
                     }
@@ -131,7 +149,9 @@ async fn run_soniox_session(
             }
             Some(audio) = audio_rx.recv(), if finish_tx.is_none() => {
                 if let Err(error) = websocket.send(Message::Binary(audio.into())).await {
-                    respond(&mut finish_tx, Err(format!("Could not send audio to Soniox: {error}")));
+                    let message = format!("Could not send audio to Soniox: {error}");
+                    record_stream_error(&stream_error, &message);
+                    respond(&mut finish_tx, Err(message));
                     break;
                 }
             }
@@ -151,6 +171,7 @@ async fn run_soniox_session(
                             }
                             Ok(false) => {}
                             Err(error) => {
+                                record_stream_error(&stream_error, &error);
                                 respond(&mut finish_tx, Err(error));
                                 break;
                             }
@@ -173,13 +194,27 @@ async fn run_soniox_session(
                     | Some(Ok(Message::Pong(_)))
                     | Some(Ok(Message::Frame(_))) => {}
                     Some(Err(error)) => {
-                        respond(&mut finish_tx, Err(format!("Soniox stream failed: {error}")));
+                        let message = format!("Soniox stream failed: {error}");
+                        record_stream_error(&stream_error, &message);
+                        respond(&mut finish_tx, Err(message));
                         break;
                     }
                 }
             }
         }
     }
+}
+
+fn record_stream_error(stream_error: &SharedErrorSlot, message: &str) {
+    eprintln!("QuickText Soniox session error: {message}");
+
+    if let Ok(mut slot) = stream_error.lock() {
+        *slot = Some(message.to_string());
+    }
+}
+
+fn stored_stream_error(stream_error: &SharedErrorSlot) -> Option<String> {
+    stream_error.lock().ok().and_then(|slot| slot.clone())
 }
 
 fn respond(

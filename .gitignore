@@ -8,6 +8,10 @@ build/
 target/
 out/
 
+# Generated mobile icons (desktop-only app)
+src-tauri/icons/ios/
+src-tauri/icons/android/
+
 # Runtime files
 *.log
 *.tmp

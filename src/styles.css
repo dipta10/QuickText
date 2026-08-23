@@ -48,7 +48,7 @@ button {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 16px;
   width: min(100%, 480px);
-  min-height: min(100%, 560px);
+  height: 100%;
   color: #f5f7fa;
 }
 
@@ -140,6 +140,7 @@ button {
 
 .main-content {
   min-height: 0;
+  overflow-y: auto;
 }
 
 .capture-view,
@@ -147,6 +148,14 @@ button {
   display: grid;
   gap: 16px;
   height: 100%;
+}
+
+.capture-view {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.settings-view {
+  align-content: start;
 }
 
 .capture-view[hidden],

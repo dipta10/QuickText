@@ -18,6 +18,10 @@ const SONIOX_WEBSOCKET_URL: &str = "wss://stt-rt.soniox.com/transcribe-websocket
 const SONIOX_MODEL: &str = "stt-rt-v5";
 const FINALIZATION_TIMEOUT_SECONDS: u64 = 12;
 
+// Stream-boundary control tokens Soniox emits as regular final tokens
+// ("<end>" on endpoint detection, "<fin>" after manual finalization).
+const SONIOX_STREAM_MARKERS: [&str; 2] = ["<end>", "<fin>"];
+
 type SharedErrorSlot = Arc<Mutex<Option<String>>>;
 
 #[derive(Debug)]
@@ -236,11 +240,19 @@ fn handle_soniox_text_response(text: &str, final_text: &mut String) -> Result<bo
 
     for token in response.tokens {
         if token.is_final.unwrap_or(false) {
-            final_text.push_str(&token.text);
+            final_text.push_str(&strip_stream_markers(&token.text));
         }
     }
 
     Ok(response.finished.unwrap_or(false))
+}
+
+fn strip_stream_markers(text: &str) -> String {
+    SONIOX_STREAM_MARKERS
+        .iter()
+        .fold(text.to_string(), |cleaned, marker| {
+            cleaned.replace(marker, "")
+        })
 }
 
 fn soniox_audio_format(audio_format: &AudioFormat) -> &'static str {
@@ -320,5 +332,44 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(error, "Soniox provider error: Bad audio");
+    }
+
+    #[test]
+    fn strips_stream_marker_tokens() {
+        let mut final_text = String::new();
+
+        handle_soniox_text_response(
+            r#"{"tokens":[{"text":"Hello world","is_final":true},{"text":"<end>","is_final":true}],"finished":true}"#,
+            &mut final_text,
+        )
+        .unwrap();
+
+        assert_eq!(final_text, "Hello world");
+    }
+
+    #[test]
+    fn strips_finalization_markers() {
+        let mut final_text = String::new();
+
+        handle_soniox_text_response(
+            r#"{"tokens":[{"text":"done.","is_final":true},{"text":"<fin>","is_final":true},{"text":"more","is_final":true},{"text":"<fin>","is_final":true}],"finished":true}"#,
+            &mut final_text,
+        )
+        .unwrap();
+
+        assert_eq!(final_text, "done.more");
+    }
+
+    #[test]
+    fn strips_markers_embedded_in_token_text() {
+        let mut final_text = String::new();
+
+        handle_soniox_text_response(
+            r#"{"tokens":[{"text":"amén.<end>","is_final":true},{"text":"<fin>","is_final":true}],"finished":true}"#,
+            &mut final_text,
+        )
+        .unwrap();
+
+        assert_eq!(final_text, "amén.");
     }
 }

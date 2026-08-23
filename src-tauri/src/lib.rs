@@ -8,6 +8,9 @@ mod ipc;
 mod ipc_server;
 mod soniox_provider;
 
+#[cfg(test)]
+mod transcription_fixture_tests;
+
 use app_controller::{AppController, AppError, AppSnapshot, AppStatus, TranscriptResult};
 use audio_recorder::{AudioCaptureStats, AudioRecorder};
 use keyring::{Entry, Error as KeyringError};

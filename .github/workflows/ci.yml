@@ -99,4 +99,4 @@ jobs:
         working-directory: src-tauri
         env:
           SONIOX_API_KEY: ${{ secrets.SONIOX_API_KEY }}
-        run: cargo test --locked --test transcription_fixture_tests -- --ignored
+        run: cargo test --locked -- --ignored

@@ -31,6 +31,7 @@ Read the project docs before making architectural changes:
 - `docs/adrs/0008-ci-test-pipeline.md`.
 - `docs/adrs/0009-cd-rolling-pre-release.md`.
 - `docs/adrs/0010-optional-capture-notifications.md`.
+- `docs/adrs/0011-provider-declared-settings.md`.
 
 ## Current Stack
 

@@ -21,6 +21,7 @@ Read the project docs before making architectural changes:
 - `docs/technical-plan.md`.
 - `docs/implementation-plan.md`.
 - `docs/ui-plan.md`.
+- `docs/glossary.md`.
 - `docs/adrs/0001-tauri-desktop-shell.md`.
 - `docs/adrs/0002-streaming-soniox-stt.md`.
 - `docs/adrs/0003-backend-first-soniox-integration.md`.
@@ -29,6 +30,9 @@ Read the project docs before making architectural changes:
 - `docs/adrs/0006-input-device-selection.md`.
 - `docs/adrs/0008-ci-test-pipeline.md`.
 - `docs/adrs/0009-cd-rolling-pre-release.md`.
+- `docs/adrs/0010-optional-capture-notifications.md`.
+- `docs/adrs/0011-provider-declared-settings.md`.
+- `docs/adrs/0012-paste-to-target-dictation.md`.
 
 ## Current Stack
 

@@ -24,6 +24,8 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 - Auto-copy: Optional behavior that copies the transcript immediately when finalization succeeds.
 - Credential store: OS-backed secret storage for the Soniox API key.
 - Settings store: Local non-secret preferences such as shortcut and auto-copy.
+- Input device selection: The user-chosen microphone, persisted as a stable device ID; "System default" tracks the OS default microphone.
+- Device fallback: Behavior when the configured input device is missing at record start; capture uses the OS default instead.
 
 ## Core Entities
 
@@ -36,6 +38,14 @@ It should keep recording/transcription behavior independent from window visibili
 ### AudioRecorder
 
 Owns microphone device selection, permission errors, audio format conversion, and audio chunk emission.
+
+It captures from the configured input device, or the OS default when none is configured. If the configured device is missing at record start, it falls back to the OS default for that session and reports the fallback so the UI can show a notice. Device changes apply to the next recording session; active recordings keep their starting device.
+
+Minimum responsibilities:
+
+- List available input devices (stable ID plus display label) on demand.
+- Resolve the current OS default input device name.
+- Start capture from the selected device with permission handling.
 
 ### TranscriptionProvider
 
@@ -114,6 +124,7 @@ Minimum fields:
 
 - `global_shortcut`
 - `auto_copy`
+- `input_device_id` (stable device ID; absent means system default)
 - `language_hints`
 - `max_recording_seconds`
 - `live_transcript` (default on)
@@ -167,4 +178,5 @@ It must not own recording state once backend recording is connected. Recording s
 - Frontend recording state must be derived from backend app-state events once real recording starts.
 - Window visibility must not be treated as app lifetime; explicit quit is required to stop the resident process.
 - Settings controls must stay out of the Capture view.
+- Input device picking belongs to Settings; Capture may only surface device-fallback notices.
 - Capture should render transcript text as output, not as an editable input.

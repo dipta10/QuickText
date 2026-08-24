@@ -18,6 +18,7 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 - Provider: A service that converts audio into text.
 - Soniox client: The provider implementation that speaks Soniox API/protocol details.
 - Audio chunk: A small unit of captured microphone data sent to the transcription session.
+- Connect buffer: Audio chunks captured before the provider connection completes; held in the transcription session's channel and flushed in order once connected.
 - Finalization: The period after stop where audio capture has ended but the provider is still returning final results.
 - Copy action: User command that writes the latest transcript to the system clipboard.
 - Auto-copy: Optional behavior that copies the transcript immediately when finalization succeeds.

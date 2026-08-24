@@ -4,10 +4,13 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{
-    mpsc::{self, UnboundedSender},
+    mpsc::{self, UnboundedReceiver, UnboundedSender},
     oneshot,
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message};
+
+type SonioxWebsocket =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 use crate::{
     app_controller::TranscriptResult,
@@ -41,49 +44,43 @@ pub struct SonioxSession {
     audio_tx: UnboundedSender<Vec<u8>>,
     command_tx: UnboundedSender<SonioxCommand>,
     partial_rx: Option<mpsc::UnboundedReceiver<PartialTranscript>>,
+    ready_rx: Option<oneshot::Receiver<Result<(), String>>>,
     stream_error: SharedErrorSlot,
 }
 
 impl SonioxSession {
-    pub async fn start(api_key: String, audio_format: AudioFormat) -> Result<Self, String> {
-        let (mut websocket, _) = connect_async(SONIOX_WEBSOCKET_URL)
-            .await
-            .map_err(|error| format!("Could not connect to Soniox: {error}"))?;
+    pub fn start(api_key: String, audio_format: AudioFormat) -> Self {
+        let (audio_tx, audio_rx) = mpsc::unbounded_channel();
+        let (command_tx, command_rx) = mpsc::unbounded_channel();
+        let (partial_tx, partial_rx) = mpsc::unbounded_channel();
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let stream_error: SharedErrorSlot = Arc::new(Mutex::new(None));
 
-        let config = SonioxConfig {
+        let config_message = serde_json::to_string(&SonioxConfig {
             api_key,
             model: SONIOX_MODEL,
             audio_format: soniox_audio_format(&audio_format),
             sample_rate: audio_format.sample_rate,
             num_channels: audio_format.channels,
-        };
-        let config_message = serde_json::to_string(&config)
-            .map_err(|error| format!("Could not create Soniox config: {error}"))?;
+        })
+        .expect("Soniox config fields serialize infallibly");
 
-        websocket
-            .send(Message::Text(config_message.into()))
-            .await
-            .map_err(|error| format!("Could not configure Soniox stream: {error}"))?;
-
-        let (audio_tx, audio_rx) = mpsc::unbounded_channel();
-        let (command_tx, command_rx) = mpsc::unbounded_channel();
-        let (partial_tx, partial_rx) = mpsc::unbounded_channel();
-        let stream_error: SharedErrorSlot = Arc::new(Mutex::new(None));
-
-        tauri::async_runtime::spawn(run_soniox_session(
-            websocket,
+        tauri::async_runtime::spawn(run_configured_session(
+            config_message,
             audio_rx,
             command_rx,
             partial_tx,
             Arc::clone(&stream_error),
+            ready_tx,
         ));
 
-        Ok(Self {
+        Self {
             audio_tx,
             command_tx,
             partial_rx: Some(partial_rx),
+            ready_rx: Some(ready_rx),
             stream_error,
-        })
+        }
     }
 
     pub fn audio_sender(&self) -> UnboundedSender<Vec<u8>> {
@@ -94,6 +91,12 @@ impl SonioxSession {
         self.partial_rx.take()
     }
 
+    pub fn take_ready_receiver(&mut self) -> Option<oneshot::Receiver<Result<(), String>>> {
+        self.ready_rx.take()
+    }
+
+    // Requires that audio capture has already been stopped so the buffered
+    // audio flush in the session task can observe channel closure.
     pub async fn stop(self) -> Result<TranscriptResult, String> {
         let (result_tx, result_rx) = oneshot::channel();
         self.command_tx
@@ -118,10 +121,50 @@ impl SonioxSession {
     }
 }
 
+async fn run_configured_session(
+    config_message: String,
+    audio_rx: UnboundedReceiver<Vec<u8>>,
+    command_rx: UnboundedReceiver<SonioxCommand>,
+    partial_tx: UnboundedSender<PartialTranscript>,
+    stream_error: SharedErrorSlot,
+    ready_tx: oneshot::Sender<Result<(), String>>,
+) {
+    match connect_and_configure(&config_message).await {
+        Ok(websocket) => {
+            let _ = ready_tx.send(Ok(()));
+            run_soniox_session(websocket, audio_rx, command_rx, partial_tx, stream_error).await;
+        }
+        Err(message) => {
+            record_stream_error(&stream_error, &message);
+            let _ = ready_tx.send(Err(message.clone()));
+            fail_queued_finishes(command_rx, message);
+        }
+    }
+}
+
+async fn connect_and_configure(config_message: &str) -> Result<SonioxWebsocket, String> {
+    let (mut websocket, _) = connect_async(SONIOX_WEBSOCKET_URL)
+        .await
+        .map_err(|error| format!("Could not connect to Soniox: {error}"))?;
+
+    websocket
+        .send(Message::Text(config_message.into()))
+        .await
+        .map_err(|error| format!("Could not configure Soniox stream: {error}"))?;
+
+    Ok(websocket)
+}
+
+fn fail_queued_finishes(mut command_rx: UnboundedReceiver<SonioxCommand>, message: String) {
+    while let Ok(command) = command_rx.try_recv() {
+        if let SonioxCommand::Finish(responder) = command {
+            let _ = responder.send(Err(message.clone()));
+        }
+    }
+}
+
 async fn run_soniox_session(
-    mut websocket: tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-    >,
+    mut websocket: SonioxWebsocket,
     mut audio_rx: mpsc::UnboundedReceiver<Vec<u8>>,
     mut command_rx: mpsc::UnboundedReceiver<SonioxCommand>,
     partial_tx: UnboundedSender<PartialTranscript>,
@@ -139,7 +182,20 @@ async fn run_soniox_session(
                     SonioxCommand::Finish(responder) => {
                         finish_tx = Some(responder);
 
-                        while audio_rx.try_recv().is_ok() {}
+                        // Flush audio that buffered while the provider was
+                        // connecting; the producer has been dropped by stop(),
+                        // so this ends when capture ends.
+                        while let Some(audio) = audio_rx.recv().await {
+                            if let Err(error) =
+                                websocket.send(Message::Binary(audio.into())).await
+                            {
+                                let message =
+                                    format!("Could not send audio to Soniox: {error}");
+                                record_stream_error(&stream_error, &message);
+                                respond(&mut finish_tx, Err(message));
+                                return;
+                            }
+                        }
 
                         if let Err(error) = websocket
                             .send(Message::Text(r#"{"type":"finalize"}"#.into()))
@@ -329,6 +385,32 @@ struct SonioxToken {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn responds_to_queued_finish_with_connect_error() {
+        let (command_tx, command_rx) = mpsc::unbounded_channel();
+        let (result_tx, mut result_rx) = oneshot::channel();
+        command_tx
+            .send(SonioxCommand::Finish(result_tx))
+            .expect("command channel stays open");
+
+        fail_queued_finishes(command_rx, "Could not connect to Soniox.".to_string());
+
+        let result = result_rx
+            .try_recv()
+            .expect("queued finish receives a response");
+        assert_eq!(result, Err("Could not connect to Soniox.".to_string()));
+    }
+
+    #[test]
+    fn ignores_cancel_commands_when_failing_queued_finishes() {
+        let (command_tx, command_rx) = mpsc::unbounded_channel();
+        command_tx
+            .send(SonioxCommand::Cancel)
+            .expect("command channel stays open");
+
+        fail_queued_finishes(command_rx, "Could not connect to Soniox.".to_string());
+    }
 
     #[test]
     fn parses_finished_response() {

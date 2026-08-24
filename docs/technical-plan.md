@@ -88,6 +88,8 @@ Two implementation options were considered:
 
 Use streaming for MVP because it can reduce perceived wait time and enables live partial transcripts during recording (see [ADR 0006](adrs/0006-streaming-partial-transcripts.md)). Buffered upload remains the fallback if cross-platform streaming capture becomes unexpectedly expensive.
 
+Microphone capture starts immediately on trigger while the provider connection happens concurrently; audio captured before the connection completes buffers in the session channel and flushes in order once connected (see [ADR 0007](adrs/0007-immediate-capture-with-provider-buffering.md)).
+
 ## Settings
 
 MVP settings should include:

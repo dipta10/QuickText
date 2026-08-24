@@ -144,11 +144,17 @@ async fn transcribes_recorded_fixtures() {
             load_wav_pcm(&fixture.wav_path).expect("readable WAV fixture");
 
         let chunk_duration = chunk_duration(&audio_format);
-        let session = SonioxSession::start(api_key.clone(), audio_format)
+        let mut session = SonioxSession::start(api_key.clone(), audio_format);
+
+        let provider_ready = session
+            .take_ready_receiver()
+            .expect("session exposes a provider readiness signal");
+        provider_ready
             .await
+            .expect("provider readiness channel stays open")
             .unwrap_or_else(|error| {
                 panic!(
-                    "Could not start session for {}: {error}",
+                    "Could not connect session for {}: {error}",
                     fixture.wav_path.display()
                 )
             });

@@ -234,6 +234,49 @@ fn schedule_max_recording_duration(
     });
 }
 
+async fn fail_recording_when_provider_unreachable(
+    app: tauri::AppHandle,
+    session_id: u64,
+    provider_ready_rx: tokio::sync::oneshot::Receiver<Result<(), String>>,
+) {
+    let outcome = provider_ready_rx
+        .await
+        .unwrap_or_else(|_| Err("The Soniox connection ended unexpectedly.".to_string()));
+    if outcome.is_ok() {
+        return;
+    }
+
+    let controller = app.state::<AppControllerState>();
+    let still_recording = lock_controller(&controller)
+        .map(|controller| controller.is_recording_session(session_id))
+        .unwrap_or(false);
+    if !still_recording {
+        // The session was already stopped; the stop path surfaces the error.
+        return;
+    }
+
+    let _ = stop_audio_recorder(&app.state::<AudioRecorderState>());
+    let active_session = {
+        let transcription = app.state::<TranscriptionState>();
+        lock_transcription(&transcription)
+            .ok()
+            .and_then(|mut session| session.take())
+    };
+    if let Some(session) = active_session {
+        session.cancel();
+    }
+
+    let error_message = match outcome {
+        Ok(()) => return,
+        Err(error) => error,
+    };
+    let error_snapshot = match lock_controller(&controller) {
+        Ok(mut controller) => controller.fail_recording(provider_unavailable_error(error_message)),
+        Err(_) => return,
+    };
+    emit_app_snapshot(&app, &error_snapshot);
+}
+
 fn missing_api_key_error() -> AppError {
     AppError::MissingApiKey {
         message: "Add your Soniox API key before recording.".to_string(),
@@ -455,23 +498,15 @@ pub(crate) async fn toggle_recording_for_app(
                 }
             };
 
-            let mut soniox_session = match SonioxSession::start(api_key, audio_format.clone()).await
-            {
-                Ok(session) => session,
-                Err(error) => {
-                    let error_snapshot = {
-                        let mut controller = lock_controller(&controller)?;
-                        controller.fail_start(provider_unavailable_error(error))
-                    };
-                    emit_app_snapshot(&app, &error_snapshot);
-                    return Ok(error_snapshot);
-                }
-            };
+            let mut soniox_session = SonioxSession::start(api_key, audio_format.clone());
+            let provider_ready_rx = soniox_session.take_ready_receiver();
 
             if let Some(partial_rx) = soniox_session.take_partial_receiver() {
                 tauri::async_runtime::spawn(forward_partial_transcripts(app.clone(), partial_rx));
             }
 
+            // Capture starts before the provider connects; chunks buffer in
+            // the session channel until the connection is ready.
             let audio_recorder = match AudioRecorder::start(soniox_session.audio_sender()) {
                 Ok(recorder) => recorder,
                 Err(error) => {
@@ -501,6 +536,13 @@ pub(crate) async fn toggle_recording_for_app(
             emit_app_snapshot(&app, &recording);
             if let Some(session_id) = session_id {
                 schedule_max_recording_duration(app.clone(), session_id, max_recording_seconds);
+                if let Some(provider_ready_rx) = provider_ready_rx {
+                    tauri::async_runtime::spawn(fail_recording_when_provider_unreachable(
+                        app.clone(),
+                        session_id,
+                        provider_ready_rx,
+                    ));
+                }
             }
             Ok(recording)
         }

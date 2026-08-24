@@ -123,6 +123,21 @@ impl AppController {
         self.snapshot()
     }
 
+    pub fn fail_recording(&mut self, error: AppError) -> AppSnapshot {
+        if self.snapshot.status == AppStatus::Recording {
+            self.snapshot = AppSnapshot {
+                status: AppStatus::Error,
+                transcript: None,
+                error: Some(error),
+                audio_format: self.snapshot.audio_format.clone(),
+                audio_stats: None,
+            };
+            self.active_session_id = None;
+        }
+
+        self.snapshot()
+    }
+
     pub fn fail_stop(&mut self, error: AppError) -> AppSnapshot {
         if self.snapshot.status == AppStatus::Stopping {
             self.snapshot = AppSnapshot {
@@ -315,6 +330,38 @@ mod tests {
             snapshot.error,
             Some(AppError::ProviderUnavailable { .. })
         ));
+    }
+
+    #[test]
+    fn provider_error_during_recording_moves_to_error() {
+        let mut controller = AppController::default();
+
+        controller.begin_start();
+        controller.finish_start(test_audio_format());
+        let snapshot = controller.fail_recording(AppError::ProviderUnavailable {
+            message: "Could not connect to Soniox.".to_string(),
+        });
+
+        assert_eq!(snapshot.status, AppStatus::Error);
+        assert_eq!(controller.active_session_id(), None);
+        assert_eq!(snapshot.audio_format, Some(test_audio_format()));
+        assert!(matches!(
+            snapshot.error,
+            Some(AppError::ProviderUnavailable { .. })
+        ));
+    }
+
+    #[test]
+    fn provider_failure_ignores_non_recording_status() {
+        let mut controller = AppController::default();
+
+        controller.begin_start();
+        let snapshot = controller.fail_recording(AppError::ProviderUnavailable {
+            message: "Could not connect to Soniox.".to_string(),
+        });
+
+        assert_eq!(snapshot.status, AppStatus::Starting);
+        assert_ne!(controller.active_session_id(), None);
     }
 
     #[test]

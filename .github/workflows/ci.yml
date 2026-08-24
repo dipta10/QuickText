@@ -57,3 +57,46 @@ jobs:
 
       - name: Typecheck frontend
         run: npx tsc --noEmit
+
+  soniox-integration:
+    name: Soniox integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Soniox API key
+        id: api_key_guard
+        env:
+          SONIOX_API_KEY_PRESENT: ${{ secrets.SONIOX_API_KEY != '' }}
+        run: echo "enabled=$SONIOX_API_KEY_PRESENT" >> "$GITHUB_OUTPUT"
+
+      - name: Install Tauri Linux system dependencies
+        if: steps.api_key_guard.outputs.enabled == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.api_key_guard.outputs.enabled == 'true'
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.api_key_guard.outputs.enabled == 'true'
+        with:
+          workspaces: src-tauri
+
+      - name: Run ignored transcription fixture tests
+        if: steps.api_key_guard.outputs.enabled == 'true'
+        working-directory: src-tauri
+        env:
+          SONIOX_API_KEY: ${{ secrets.SONIOX_API_KEY }}
+        run: cargo test --locked --test transcription_fixture_tests -- --ignored

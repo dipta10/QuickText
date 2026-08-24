@@ -1,0 +1,107 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cd-main
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    name: Prepare rolling pre-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Replace previous pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRE_RELEASE_TAG: v0.1.0-pre
+        run: gh release delete "$PRE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+
+  publish-pre-release:
+    name: Build bundles (${{ matrix.settings.platform }})
+    needs: prepare-release
+    runs-on: ${{ matrix.settings.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - platform: linux
+            os: ubuntu-22.04
+          - platform: macos
+            os: macos-latest
+          - platform: windows
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux system dependencies
+        if: matrix.settings.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build bundles and publish rolling pre-release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: |
+            Dictate, get instant text, copy it anywhere. Press once to record, press again to stop — your words appear as text you can paste into anything.
+
+            ## Which file do I download?
+
+            | Your computer | Download |
+            |---|---|
+            | Windows | `QuickText_0.1.0_x64-setup.exe` (installer) or `.msi` |
+            | Mac (Apple Silicon / M1–M4) | `QuickText_0.1.0_aarch64.dmg` |
+            | Linux | `.AppImage` (just run it) or `.deb` / `.rpm` |
+
+            ## First-time setup
+
+            1. Install and open QuickText.
+            2. Go to **Settings** and paste your [Soniox](https://soniox.com) API key.
+            3. Hit the big button (or your shortcut) and start talking.
+
+            ## Heads-up
+
+            This build is **unsigned**, so your OS will act suspicious:
+
+            - **Windows**: SmartScreen may say "Unknown publisher" → click *More info* → *Run anyway*.
+            - **macOS**: right-click the app → *Open* → *Open* again. Normal Gatekeeper behavior.
+            - **Linux**: no fuss.
+
+            This is an automatically updated development build — it is replaced every time we merge to main. Bug reports welcome!
+        with:
+          tagName: v0.1.0-pre
+          releaseName: "QuickText — Speech-to-Text for Your Desktop"
+          releaseBody: ${{ env.RELEASE_NOTES }}
+          releaseDraft: false
+          prerelease: false

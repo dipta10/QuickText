@@ -1,6 +1,9 @@
 use std::{
     mem,
-    sync::{Arc, Mutex},
+    sync::{
+        mpsc, {Arc, Mutex},
+    },
+    thread::JoinHandle,
     time::Instant,
 };
 
@@ -56,6 +59,7 @@ pub struct StartedRecording {
     pub recorder: AudioRecorder,
     pub fell_back_to_default: bool,
 }
+
 pub fn list_input_devices() -> InputDeviceList {
     let host = cpal::default_host();
     let default_label = host
@@ -84,8 +88,9 @@ pub fn list_input_devices() -> InputDeviceList {
 }
 
 pub struct AudioRecorder {
-    stream: Stream,
     stats: Arc<Mutex<AudioCaptureStats>>,
+    command_tx: mpsc::Sender<()>,
+    worker: Option<JoinHandle<()>>,
     started_at: Instant,
 }
 
@@ -105,45 +110,46 @@ impl AudioRecorder {
         audio_tx: UnboundedSender<Vec<u8>>,
         selected_device: Option<&str>,
     ) -> Result<StartedRecording, String> {
-        let (device, fell_back_to_default) = resolve_input_device(selected_device)?;
-        let (config, sample_format) = input_config(&device)?;
         let stats = Arc::new(Mutex::new(AudioCaptureStats::default()));
-        let stream = match sample_format {
-            SampleFormat::F32 => {
-                build_input_stream::<f32>(&device, &config, Arc::clone(&stats), audio_tx)?
-            }
-            SampleFormat::I16 => {
-                build_input_stream::<i16>(&device, &config, Arc::clone(&stats), audio_tx)?
-            }
-            SampleFormat::U16 => {
-                build_input_stream::<u16>(&device, &config, Arc::clone(&stats), audio_tx)?
-            }
-            sample_format => {
-                return Err(format!(
-                    "Microphone sample format {sample_format:?} is not supported yet."
-                ));
-            }
-        };
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (command_tx, command_rx) = mpsc::channel();
 
-        stream
-            .play()
-            .map_err(|error| format!("Could not start microphone capture: {error}"))?;
+        let worker_stats = Arc::clone(&stats);
+        let worker_device = selected_device.map(str::to_string);
+        let worker = std::thread::Builder::new()
+            .name("audio-capture".to_string())
+            .spawn(move || {
+                run_capture_loop(worker_stats, audio_tx, ready_tx, command_rx, worker_device)
+            })
+            .map_err(|error| format!("Could not spawn microphone capture thread: {error}"))?;
+
+        let fell_back_to_default = ready_rx
+            .recv()
+            .map_err(|_| "Microphone capture thread exited unexpectedly.".to_string())??;
 
         Ok(StartedRecording {
             recorder: Self {
-                stream,
                 stats,
+                command_tx,
+                worker: Some(worker),
                 started_at: Instant::now(),
             },
             fell_back_to_default,
         })
     }
 
-    pub fn stop(self) -> AudioCaptureStats {
+    pub fn stop(mut self) -> AudioCaptureStats {
+        self.shutdown();
         let mut stats = self.stats();
         stats.elapsed_ms = self.started_at.elapsed().as_millis();
-        drop(self.stream);
         stats
+    }
+
+    fn shutdown(&mut self) {
+        let _ = self.command_tx.send(());
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
     }
 
     fn stats(&self) -> AudioCaptureStats {
@@ -152,6 +158,66 @@ impl AudioRecorder {
             .map(|stats| stats.clone())
             .unwrap_or_default()
     }
+}
+
+impl Drop for AudioRecorder {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+fn run_capture_loop(
+    stats: Arc<Mutex<AudioCaptureStats>>,
+    audio_tx: UnboundedSender<Vec<u8>>,
+    ready_tx: mpsc::Sender<Result<bool, String>>,
+    command_rx: mpsc::Receiver<()>,
+    selected_device: Option<String>,
+) {
+    // cpal streams are !Send on some platforms (macOS CoreAudio), so the
+    // device and stream must be created and dropped on this dedicated thread.
+    let stream = match open_input_stream(stats, audio_tx, selected_device.as_deref()) {
+        Ok((stream, fell_back_to_default)) => {
+            if ready_tx.send(Ok(fell_back_to_default)).is_err() {
+                return;
+            }
+            stream
+        }
+        Err(error) => {
+            let _ = ready_tx.send(Err(error));
+            return;
+        }
+    };
+
+    // Blocks until shutdown is requested; an error means every sender was
+    // dropped without a stop signal, which is also a reason to clean up.
+    let _ = command_rx.recv();
+
+    drop(stream);
+}
+
+fn open_input_stream(
+    stats: Arc<Mutex<AudioCaptureStats>>,
+    audio_tx: UnboundedSender<Vec<u8>>,
+    selected_device: Option<&str>,
+) -> Result<(Stream, bool), String> {
+    let (device, fell_back_to_default) = resolve_input_device(selected_device)?;
+    let (config, sample_format) = input_config(&device)?;
+    let stream = match sample_format {
+        SampleFormat::F32 => build_input_stream::<f32>(&device, &config, stats, audio_tx)?,
+        SampleFormat::I16 => build_input_stream::<i16>(&device, &config, stats, audio_tx)?,
+        SampleFormat::U16 => build_input_stream::<u16>(&device, &config, stats, audio_tx)?,
+        sample_format => {
+            return Err(format!(
+                "Microphone sample format {sample_format:?} is not supported yet."
+            ));
+        }
+    };
+
+    stream
+        .play()
+        .map_err(|error| format!("Could not start microphone capture: {error}"))?;
+
+    Ok((stream, fell_back_to_default))
 }
 
 fn default_input_device(host: &cpal::Host) -> Result<cpal::Device, String> {

@@ -73,9 +73,35 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: |
+            Dictate, get instant text, copy it anywhere. Press once to record, press again to stop — your words appear as text you can paste into anything.
+
+            ## Which file do I download?
+
+            | Your computer | Download |
+            |---|---|
+            | Windows | `QuickText_0.1.0_x64-setup.exe` (installer) or `.msi` |
+            | Mac (Apple Silicon / M1–M4) | `QuickText_0.1.0_aarch64.dmg` |
+            | Linux | `.AppImage` (just run it) or `.deb` / `.rpm` |
+
+            ## First-time setup
+
+            1. Install and open QuickText.
+            2. Go to **Settings** and paste your [Soniox](https://soniox.com) API key.
+            3. Hit the big button (or your shortcut) and start talking.
+
+            ## Heads-up
+
+            This build is **unsigned**, so your OS will act suspicious:
+
+            - **Windows**: SmartScreen may say "Unknown publisher" → click *More info* → *Run anyway*.
+            - **macOS**: right-click the app → *Open* → *Open* again. Normal Gatekeeper behavior.
+            - **Linux**: no fuss.
+
+            This is an automatically updated development build — it is replaced every time we merge to main. Bug reports welcome!
         with:
           tagName: v0.1.0-pre
-          releaseName: "QuickText v0.1.0 Pre-release"
-          releaseBody: "Bleeding-edge build from main (commit ${{ github.sha }}). Unsigned; expect OS security warnings."
+          releaseName: "QuickText — Speech-to-Text for Your Desktop"
+          releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: false
-          prerelease: true
+          prerelease: false

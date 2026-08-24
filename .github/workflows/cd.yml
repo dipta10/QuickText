@@ -104,4 +104,4 @@ jobs:
           releaseName: "QuickText — Speech-to-Text for Your Desktop"
           releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: false
-          prerelease: true
+          prerelease: false

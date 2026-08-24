@@ -14,3 +14,6 @@ Terms used across the product and ADR docs. Add entries here when an ADR introdu
 - **Language hints**: Provider setting biasing recognition toward expected languages. Empty selection means none are sent and the provider auto-detects.
 - **Endpoint delay**: How long the provider waits for silence before finalizing transcript tokens (Soniox `max_endpoint_delay_ms`, 500–3000 ms); controls how quickly final text appears after speech stops.
 - **Session-applied settings**: Transcription settings take effect when the next recording session starts; an in-flight recording keeps its prior values.
+- **Paste-to-target**: Opt-in behavior where a finalized transcript is written to the clipboard and pasted into the application focused at trigger time.
+- **Headless take**: A recording started by shortcut or CLI/IPC while paste-to-target is enabled; the main window is never shown or focused, and finalize pastes into the target app.
+- **Paste target**: The application focused when a headless take starts. If QuickText itself is focused at trigger time, the take is not headless and no paste occurs.

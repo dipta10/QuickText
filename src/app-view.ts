@@ -20,6 +20,8 @@ export type AppView = {
   apiKeySaveButton: HTMLButtonElement;
   apiKeyDeleteButton: HTMLButtonElement;
   apiKeyStatus: HTMLParagraphElement;
+  inputDeviceSelect: HTMLSelectElement;
+  inputDeviceStatus: HTMLParagraphElement;
   maxRecordingSecondsInput: HTMLInputElement;
   autoCopyCheckbox: HTMLInputElement;
   liveTranscriptCheckbox: HTMLInputElement;
@@ -112,6 +114,19 @@ const appTemplate = `
             />
             <span>Hide window when recording stops</span>
           </label>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="section-title">Microphone</h2>
+          <label class="settings-field" for="input-device">
+            <span class="settings-field-label">Input device</span>
+            <select class="input-device-select" id="input-device"></select>
+          </label>
+          <p class="input-device-status" role="status"></p>
+          <p class="settings-note">
+            If the selected microphone is missing when recording starts, the
+            system default is used instead.
+          </p>
         </section>
 
         <section class="settings-section">
@@ -215,6 +230,11 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const apiKeyStatus =
     root.querySelector<HTMLParagraphElement>(".api-key-status");
+  const inputDeviceSelect = root.querySelector<HTMLSelectElement>(
+    ".input-device-select",
+  );
+  const inputDeviceStatus =
+    root.querySelector<HTMLParagraphElement>(".input-device-status");
   const maxRecordingSecondsInput = root.querySelector<HTMLInputElement>(
     ".max-recording-seconds-input",
   );
@@ -256,6 +276,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     !apiKeySaveButton ||
     !apiKeyDeleteButton ||
     !apiKeyStatus ||
+    !inputDeviceSelect ||
+    !inputDeviceStatus ||
     !maxRecordingSecondsInput ||
     !autoCopyCheckbox ||
     !liveTranscriptField ||
@@ -289,6 +311,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     apiKeySaveButton,
     apiKeyDeleteButton,
     apiKeyStatus,
+    inputDeviceSelect,
+    inputDeviceStatus,
     maxRecordingSecondsInput,
     autoCopyCheckbox,
     liveTranscriptField,

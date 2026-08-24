@@ -5,6 +5,7 @@ const shortcutFocusOnStartStorageKey = "stt.shortcutFocusOnStart";
 const shortcutHideOnStopStorageKey = "stt.shortcutHideOnStop";
 const liveTranscriptStorageKey = "stt.liveTranscript";
 const showPartialTranscriptStorageKey = "stt.showPartialTranscript";
+const inputDeviceStorageKey = "stt.inputDevice";
 export const defaultMaxRecordingSeconds = 300;
 
 export const getGlobalShortcut = (): string => {
@@ -70,4 +71,12 @@ export const getShowPartialTranscript = (): boolean => {
 
 export const saveShowPartialTranscript = (showPartial: boolean) => {
   localStorage.setItem(showPartialTranscriptStorageKey, showPartial.toString());
+};
+
+export const getInputDeviceId = (): string => {
+  return localStorage.getItem(inputDeviceStorageKey) ?? "";
+};
+
+export const saveInputDeviceId = (deviceId: string) => {
+  localStorage.setItem(inputDeviceStorageKey, deviceId);
 };

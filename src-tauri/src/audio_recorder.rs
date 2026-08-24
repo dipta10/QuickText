@@ -36,6 +36,53 @@ pub struct AudioCaptureStats {
     pub elapsed_ms: u128,
 }
 
+/// cpal exposes no cross-platform stable device IDs, so the device
+/// name doubles as the persisted identifier.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InputDeviceInfo {
+    pub id: String,
+    pub label: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InputDeviceList {
+    pub default_label: Option<String>,
+    pub devices: Vec<InputDeviceInfo>,
+}
+
+pub struct StartedRecording {
+    pub recorder: AudioRecorder,
+    pub fell_back_to_default: bool,
+}
+pub fn list_input_devices() -> InputDeviceList {
+    let host = cpal::default_host();
+    let default_label = host
+        .default_input_device()
+        .and_then(|device| device.name().ok());
+
+    let devices = host
+        .input_devices()
+        .map(|devices| {
+            devices
+                .filter_map(|device| {
+                    let name = device.name().ok()?;
+                    Some(InputDeviceInfo {
+                        id: name.clone(),
+                        label: name,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    InputDeviceList {
+        default_label,
+        devices,
+    }
+}
+
 pub struct AudioRecorder {
     stream: Stream,
     stats: Arc<Mutex<AudioCaptureStats>>,
@@ -43,8 +90,9 @@ pub struct AudioRecorder {
 }
 
 impl AudioRecorder {
-    pub fn input_format() -> Result<AudioFormat, String> {
-        let (_device, config, sample_format) = default_input_config()?;
+    pub fn input_format(selected_device: Option<&str>) -> Result<AudioFormat, String> {
+        let (device, _fell_back) = resolve_input_device(selected_device)?;
+        let (config, sample_format) = input_config(&device)?;
 
         Ok(AudioFormat {
             sample_rate: config.sample_rate.0,
@@ -53,8 +101,12 @@ impl AudioRecorder {
         })
     }
 
-    pub fn start(audio_tx: UnboundedSender<Vec<u8>>) -> Result<Self, String> {
-        let (device, config, sample_format) = default_input_config()?;
+    pub fn start(
+        audio_tx: UnboundedSender<Vec<u8>>,
+        selected_device: Option<&str>,
+    ) -> Result<StartedRecording, String> {
+        let (device, fell_back_to_default) = resolve_input_device(selected_device)?;
+        let (config, sample_format) = input_config(&device)?;
         let stats = Arc::new(Mutex::new(AudioCaptureStats::default()));
         let stream = match sample_format {
             SampleFormat::F32 => {
@@ -77,10 +129,13 @@ impl AudioRecorder {
             .play()
             .map_err(|error| format!("Could not start microphone capture: {error}"))?;
 
-        Ok(Self {
-            stream,
-            stats,
-            started_at: Instant::now(),
+        Ok(StartedRecording {
+            recorder: Self {
+                stream,
+                stats,
+                started_at: Instant::now(),
+            },
+            fell_back_to_default,
         })
     }
 
@@ -99,17 +154,35 @@ impl AudioRecorder {
     }
 }
 
-fn default_input_config() -> Result<(cpal::Device, StreamConfig, SampleFormat), String> {
+fn default_input_device(host: &cpal::Host) -> Result<cpal::Device, String> {
+    host.default_input_device()
+        .ok_or_else(|| "No microphone input device was found.".to_string())
+}
+
+/// Picks the configured device by name, falling back to the OS default
+/// when nothing is configured or the configured device is missing.
+fn resolve_input_device(selected: Option<&str>) -> Result<(cpal::Device, bool), String> {
     let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .ok_or_else(|| "No microphone input device was found.".to_string())?;
+
+    if let Some(name) = selected {
+        let configured = host.input_devices().ok().and_then(|mut devices| {
+            devices.find(|device| device.name().map(|n| n == name).unwrap_or(false))
+        });
+
+        if let Some(device) = configured {
+            return Ok((device, false));
+        }
+    }
+
+    default_input_device(&host).map(|device| (device, selected.is_some()))
+}
+
+fn input_config(device: &cpal::Device) -> Result<(StreamConfig, SampleFormat), String> {
     let supported_config = device
         .default_input_config()
         .map_err(|error| format!("Could not read microphone input config: {error}"))?;
     let sample_format = supported_config.sample_format();
-    let config: StreamConfig = supported_config.into();
-    Ok((device, config, sample_format))
+    Ok((supported_config.into(), sample_format))
 }
 
 fn build_input_stream<T>(

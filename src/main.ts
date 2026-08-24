@@ -11,6 +11,8 @@ import {
   setApiKeyPresence,
   setApiKeyStatus,
   setAutoCopyTranscript,
+  setInputDeviceOptions,
+  setSelectedInputDevice,
   setLiveTranscript,
   setMaxRecordingSeconds,
   setShowPartialTranscript,
@@ -26,6 +28,7 @@ import { formatShortcut } from "./shortcut";
 import {
   getAutoCopyTranscript,
   getGlobalShortcut,
+  getInputDeviceId,
   getLiveTranscript,
   getMaxRecordingSeconds,
   getShowPartialTranscript,
@@ -33,6 +36,7 @@ import {
   getShortcutHideOnStop,
   saveAutoCopyTranscript,
   saveGlobalShortcut,
+  saveInputDeviceId,
   saveLiveTranscript,
   saveMaxRecordingSeconds,
   saveShowPartialTranscript,
@@ -44,10 +48,13 @@ import {
   deleteSonioxApiKey,
   getAppState,
   hasSonioxApiKey,
+  listInputDevices,
   onAppStateChanged,
+  onDeviceFallback,
   onPartialTranscript,
   saveSonioxApiKey,
   setGlobalShortcut,
+  setInputDevice,
   setShortcutBehavior,
   toggleBackendRecording,
 } from "./tauri";
@@ -66,6 +73,7 @@ let state = createAppState(
   getShortcutHideOnStop(),
   getLiveTranscript(),
   getShowPartialTranscript(),
+  getInputDeviceId(),
 );
 const view = createAppView(app);
 let lastAutoCopiedTranscript = "";
@@ -100,6 +108,44 @@ const statusLabel = () => {
     case "error":
       return "Error";
   }
+};
+
+let renderedDeviceSignature: string | null = null;
+
+const renderInputDeviceSelect = () => {
+  const signature = [
+    state.inputDeviceDefaultLabel,
+    ...state.inputDevices.map((device) => device.id),
+  ].join("\u0000");
+
+  if (signature !== renderedDeviceSignature) {
+    view.inputDeviceSelect.innerHTML = "";
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = state.inputDeviceDefaultLabel
+      ? `System default (${state.inputDeviceDefaultLabel})`
+      : "System default";
+    view.inputDeviceSelect.appendChild(defaultOption);
+
+    for (const device of state.inputDevices) {
+      const option = document.createElement("option");
+      option.value = device.id;
+      option.textContent = device.label;
+      view.inputDeviceSelect.appendChild(option);
+    }
+
+    renderedDeviceSignature = signature;
+  }
+
+  view.inputDeviceSelect.value = state.selectedInputDeviceId;
+  const selectedKnown =
+    !state.selectedInputDeviceId ||
+    state.inputDevices.some(
+      (device) => device.id === state.selectedInputDeviceId,
+    );
+  view.inputDeviceStatus.textContent = selectedKnown
+    ? ""
+    : `Saved microphone "${state.selectedInputDeviceId}" is currently unavailable.`;
 };
 
 const render = () => {
@@ -148,6 +194,7 @@ const render = () => {
   view.liveTranscriptCheckbox.checked = state.liveTranscript;
   view.showPartialField.hidden = !state.liveTranscript;
   view.showPartialCheckbox.checked = state.showPartialTranscript;
+  renderInputDeviceSelect();
   view.bottomStatus.textContent =
     state.activeView === "capture"
       ? state.status
@@ -157,8 +204,13 @@ const render = () => {
 };
 
 const updateState = (nextState: typeof state) => {
+  const wasSettings = state.activeView === "settings";
   state = nextState;
   render();
+
+  if (!wasSettings && state.activeView === "settings") {
+    void refreshInputDevices();
+  }
 };
 
 const copyTranscript = async (successMessage = "Transcript copied.") => {
@@ -215,8 +267,33 @@ const pushShortcutBehavior = async () => {
   }
 };
 
-const loadApiKeyStatus = async () => {
+const refreshInputDevices = async () => {
   try {
+    const devices = await listInputDevices();
+    updateState(
+      setInputDeviceOptions(state, devices.devices, devices.defaultLabel ?? ""),
+    );
+  } catch (error) {
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
+const saveInputDeviceSelection = async (deviceId: string) => {
+  try {
+    await setInputDevice(deviceId || null);
+    saveInputDeviceId(deviceId);
+    updateState(setSelectedInputDevice(state, deviceId));
+  } catch (error) {
+    view.inputDeviceSelect.value = state.selectedInputDeviceId;
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
+const loadApiKeyStatus = async () => {  try {
     updateState(setApiKeyPresence(state, await hasSonioxApiKey()));
   } catch (error) {
     updateState(
@@ -365,6 +442,10 @@ view.apiKeyDeleteButton.addEventListener("click", () => {
   void deleteApiKey();
 });
 
+view.inputDeviceSelect.addEventListener("change", () => {
+  void saveInputDeviceSelection(view.inputDeviceSelect.value);
+});
+
 window.addEventListener("keydown", (event) => {
   if (!isCapturingShortcut(state)) {
     return;
@@ -406,11 +487,23 @@ void onPartialTranscript((update) => {
   );
 });
 
+void onDeviceFallback((message) => {
+  updateState(setStatus(state, message));
+}).catch(() => {
+  // Device fallback events run in the desktop app only.
+});
+
 render();
 window.setInterval(render, 1000);
 void loadBackendState();
 void loadApiKeyStatus();
 void pushShortcutBehavior();
+
+if (state.selectedInputDeviceId) {
+  setInputDevice(state.selectedInputDeviceId).catch(() => {
+    // The saved device may be missing; recording falls back to the default.
+  });
+}
 
 if (state.selectedShortcut) {
   void registerShortcut(state.selectedShortcut);

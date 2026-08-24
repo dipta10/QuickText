@@ -29,6 +29,11 @@ export type PartialTranscriptUpdate = {
   partial_text: string;
 };
 
+export type InputDeviceOption = {
+  id: string;
+  label: string;
+};
+
 export type AppState = {
   activeView: ActiveView;
   recording: RecordingState;
@@ -42,6 +47,9 @@ export type AppState = {
   showPartialTranscript: boolean;
   hasApiKey: boolean;
   apiKeyStatus: string;
+  inputDevices: InputDeviceOption[];
+  inputDeviceDefaultLabel: string;
+  selectedInputDeviceId: string;
   status: string;
   transcript: string;
   partialTranscript: string;
@@ -56,6 +64,7 @@ export const createAppState = (
   shortcutHideOnStop: boolean,
   liveTranscript: boolean,
   showPartialTranscript: boolean,
+  selectedInputDeviceId: string,
 ): AppState => ({
   activeView: "capture",
   recording: "idle",
@@ -69,6 +78,9 @@ export const createAppState = (
   showPartialTranscript,
   hasApiKey: false,
   apiKeyStatus: "",
+  inputDevices: [],
+  inputDeviceDefaultLabel: "",
+  selectedInputDeviceId,
   status: "Ready.",
   transcript: "",
   partialTranscript: "",
@@ -207,6 +219,27 @@ export const setApiKeyStatus = (
 ): AppState => ({
   ...state,
   apiKeyStatus,
+});
+
+export const setInputDeviceOptions = (
+  state: AppState,
+  inputDevices: InputDeviceOption[],
+  inputDeviceDefaultLabel: string,
+): AppState => ({
+  ...state,
+  inputDevices,
+  inputDeviceDefaultLabel,
+});
+
+export const setSelectedInputDevice = (
+  state: AppState,
+  selectedInputDeviceId: string,
+): AppState => ({
+  ...state,
+  selectedInputDeviceId,
+  status: selectedInputDeviceId
+    ? `Microphone set to "${selectedInputDeviceId}".`
+    : "Using the system default microphone.",
 });
 
 export const setMaxRecordingSeconds = (

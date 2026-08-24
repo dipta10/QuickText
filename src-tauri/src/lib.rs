@@ -62,6 +62,11 @@ struct TranscriptionState {
     session: Mutex<Option<SonioxSession>>,
 }
 
+#[derive(Default)]
+struct InputDeviceState {
+    selected_device: Mutex<Option<String>>,
+}
+
 fn soniox_key_entry() -> Result<Entry, String> {
     Entry::new(SONIOX_KEY_SERVICE, SONIOX_KEY_ACCOUNT)
         .map_err(|error| format!("Could not open credential store: {error}"))
@@ -328,6 +333,15 @@ fn lock_transcription<'a>(
         .map_err(|_| "Could not update transcription state.".to_string())
 }
 
+fn lock_input_device<'a>(
+    input_device: &'a State<'_, InputDeviceState>,
+) -> Result<std::sync::MutexGuard<'a, Option<String>>, String> {
+    input_device
+        .selected_device
+        .lock()
+        .map_err(|_| "Could not update input device state.".to_string())
+}
+
 fn cache_soniox_api_key(
     credentials: &State<'_, CredentialState>,
     api_key: &str,
@@ -414,6 +428,36 @@ fn get_app_state(controller: State<'_, AppControllerState>) -> Result<AppSnapsho
 }
 
 #[tauri::command]
+fn list_input_devices() -> audio_recorder::InputDeviceList {
+    audio_recorder::list_input_devices()
+}
+
+#[tauri::command]
+fn get_input_device(input_device: State<'_, InputDeviceState>) -> Result<Option<String>, String> {
+    Ok(lock_input_device(&input_device)?.clone())
+}
+
+#[tauri::command]
+fn set_input_device(
+    input_device: State<'_, InputDeviceState>,
+    device_id: Option<String>,
+) -> Result<(), String> {
+    if let Some(device_id) = device_id.as_deref() {
+        let known = audio_recorder::list_input_devices()
+            .devices
+            .iter()
+            .any(|device| device.id == device_id);
+
+        if !known {
+            return Err(format!("Microphone \"{device_id}\" was not found."));
+        }
+    }
+
+    *lock_input_device(&input_device)? = device_id;
+    Ok(())
+}
+
+#[tauri::command]
 async fn toggle_recording(
     app: tauri::AppHandle,
     max_recording_seconds: Option<u64>,
@@ -449,6 +493,7 @@ pub(crate) async fn toggle_recording_for_app(
     let credentials = app.state::<CredentialState>();
     let recorder = app.state::<AudioRecorderState>();
     let transcription = app.state::<TranscriptionState>();
+    let input_device = app.state::<InputDeviceState>();
     let max_recording_seconds = max_recording_seconds
         .filter(|seconds| *seconds > 0)
         .unwrap_or(DEFAULT_MAX_RECORDING_SECONDS);
@@ -486,7 +531,9 @@ pub(crate) async fn toggle_recording_for_app(
                 }
             };
 
-            let audio_format = match AudioRecorder::input_format() {
+            let selected_device = lock_input_device(&input_device)?.clone();
+
+            let audio_format = match AudioRecorder::input_format(selected_device.as_deref()) {
                 Ok(audio_format) => audio_format,
                 Err(error) => {
                     let error_snapshot = {
@@ -507,8 +554,11 @@ pub(crate) async fn toggle_recording_for_app(
 
             // Capture starts before the provider connects; chunks buffer in
             // the session channel until the connection is ready.
-            let audio_recorder = match AudioRecorder::start(soniox_session.audio_sender()) {
-                Ok(recorder) => recorder,
+            let started = match AudioRecorder::start(
+                soniox_session.audio_sender(),
+                selected_device.as_deref(),
+            ) {
+                Ok(started) => started,
                 Err(error) => {
                     soniox_session.cancel();
                     let error_snapshot = {
@@ -519,9 +569,18 @@ pub(crate) async fn toggle_recording_for_app(
                     return Ok(error_snapshot);
                 }
             };
+            if started.fell_back_to_default {
+                let configured = selected_device.unwrap_or_default();
+                let _ = app.emit(
+                    "device-fallback",
+                    format!(
+                        "Microphone \"{configured}\" was unavailable; using the system default."
+                    ),
+                );
+            }
             {
                 let mut active_recorder = lock_recorder(&recorder)?;
-                *active_recorder = Some(audio_recorder);
+                *active_recorder = Some(started.recorder);
             }
             {
                 let mut active_session = lock_transcription(&transcription)?;
@@ -730,6 +789,7 @@ pub fn run() {
         .manage(CredentialState::default())
         .manage(AudioRecorderState::default())
         .manage(TranscriptionState::default())
+        .manage(InputDeviceState::default())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -765,7 +825,10 @@ pub fn run() {
             set_shortcut_behavior,
             has_soniox_api_key,
             save_soniox_api_key,
-            delete_soniox_api_key
+            delete_soniox_api_key,
+            list_input_devices,
+            get_input_device,
+            set_input_device
         ])
         .build(tauri::generate_context!())
         .expect("error while building Tauri application")

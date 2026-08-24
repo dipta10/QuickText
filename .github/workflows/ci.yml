@@ -21,6 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            libasound2-dev \
             libwebkit2gtk-4.1-dev \
             build-essential \
             curl \
@@ -56,3 +57,37 @@ jobs:
 
       - name: Typecheck frontend
         run: npx tsc --noEmit
+
+  soniox-integration:
+    name: Soniox integration tests
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SONIOX_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Run ignored transcription fixture tests
+        working-directory: src-tauri
+        env:
+          SONIOX_API_KEY: ${{ secrets.SONIOX_API_KEY }}
+        run: cargo test --locked --test transcription_fixture_tests -- --ignored

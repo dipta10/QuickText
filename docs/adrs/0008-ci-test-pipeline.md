@@ -14,7 +14,7 @@ Builds and releases are explicitly out of scope for now; the first pipeline slic
 
 ## Decision
 
-Add a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs verification jobs on pushes to `main` and on pull requests targeting `main`. The `ci/ci-pipeline` branch is temporarily included in the push trigger to validate the workflow itself before merging; remove it once CI is confirmed working.
+Add a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs verification jobs on pushes to `main` and on pull requests targeting `main`. During bring-up, the `ci/ci-pipeline` branch was temporarily added to the push trigger to validate the workflow itself; it was removed once the pipeline ran green.
 
 - Two independent jobs:
   - **Rust tests**: install Tauri Linux prerequisites via apt, pin stable Rust with `dtolnay/rust-toolchain`, cache Cargo builds with `Swatinem/rust-cache` scoped to `src-tauri`, run `cargo test --locked`.

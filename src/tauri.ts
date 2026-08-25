@@ -10,6 +10,8 @@ const setShortcutBehaviorCommand = "set_shortcut_behavior";
 const hasSonioxApiKeyCommand = "has_soniox_api_key";
 const saveSonioxApiKeyCommand = "save_soniox_api_key";
 const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
+const getLaunchOnStartupCommand = "get_launch_on_startup";
+const setLaunchOnStartupCommand = "set_launch_on_startup";
 const appStateChangedEvent = "app-state-changed";
 const partialTranscriptEvent = "partial-transcript";
 
@@ -59,6 +61,18 @@ export const saveSonioxApiKey = async (apiKey: string): Promise<boolean> => {
 export const deleteSonioxApiKey = async () => {
   assertTauriRuntime();
   await invoke(deleteSonioxApiKeyCommand);
+};
+
+export const getLaunchOnStartup = async (): Promise<boolean> => {
+  assertTauriRuntime();
+  return await invoke<boolean>(getLaunchOnStartupCommand);
+};
+
+export const setLaunchOnStartup = async (
+  enabled: boolean,
+): Promise<boolean> => {
+  assertTauriRuntime();
+  return await invoke<boolean>(setLaunchOnStartupCommand, { enabled });
 };
 
 export const copyTextToClipboard = async (text: string) => {

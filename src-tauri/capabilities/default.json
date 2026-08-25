@@ -3,5 +3,9 @@
   "identifier": "default",
   "description": "Default desktop capability",
   "windows": ["main"],
-  "permissions": ["core:default", "clipboard-manager:allow-write-text"]
+  "permissions": [
+    "core:default",
+    "clipboard-manager:allow-write-text",
+    "autostart:default"
+  ]
 }

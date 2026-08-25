@@ -129,6 +129,7 @@ Minimum fields:
 - `max_recording_seconds`
 - `live_transcript` (default on)
 - `show_partial_transcript` (default on, only meaningful when `live_transcript` is on)
+- `launch_on_startup` (default off; registered with the operating system by the backend)
 
 ### TrayMenuService
 

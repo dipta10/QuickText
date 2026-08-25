@@ -26,6 +26,8 @@ export type AppView = {
   liveTranscriptField: HTMLLabelElement;
   showPartialCheckbox: HTMLInputElement;
   showPartialField: HTMLLabelElement;
+  launchOnStartupCheckbox: HTMLInputElement;
+  launchOnStartupStatus: HTMLParagraphElement;
   bottomStatus: HTMLParagraphElement;
 };
 
@@ -68,6 +70,21 @@ const appTemplate = `
       </section>
 
       <section class="settings-view" aria-label="Settings" hidden>
+        <section class="settings-section">
+          <h2 class="section-title">General</h2>
+          <label class="checkbox-field" for="launch-on-startup">
+            <input
+              class="launch-on-startup-checkbox"
+              id="launch-on-startup"
+              type="checkbox"
+            />
+            <span>Launch on startup</span>
+          </label>
+          <p class="launch-on-startup-status settings-note" role="status">
+            Starts hidden in the tray when you sign in.
+          </p>
+        </section>
+
         <section class="settings-section">
           <h2 class="section-title">Soniox</h2>
           <label class="api-key-label" for="soniox-api-key">API key</label>
@@ -231,6 +248,12 @@ export const createAppView = (root: HTMLElement): AppView => {
   const showPartialCheckbox = root.querySelector<HTMLInputElement>(
     ".show-partial-transcript-checkbox",
   );
+  const launchOnStartupCheckbox = root.querySelector<HTMLInputElement>(
+    ".launch-on-startup-checkbox",
+  );
+  const launchOnStartupStatus = root.querySelector<HTMLParagraphElement>(
+    ".launch-on-startup-status",
+  );
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
 
@@ -262,6 +285,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     !liveTranscriptCheckbox ||
     !showPartialField ||
     !showPartialCheckbox ||
+    !launchOnStartupCheckbox ||
+    !launchOnStartupStatus ||
     !bottomStatus
   ) {
     throw new Error("App controls were not found");
@@ -295,6 +320,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     liveTranscriptCheckbox,
     showPartialField,
     showPartialCheckbox,
+    launchOnStartupCheckbox,
+    launchOnStartupStatus,
     bottomStatus,
   };
 };

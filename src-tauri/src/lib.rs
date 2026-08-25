@@ -433,11 +433,6 @@ fn list_input_devices() -> audio_recorder::InputDeviceList {
 }
 
 #[tauri::command]
-fn get_input_device(input_device: State<'_, InputDeviceState>) -> Result<Option<String>, String> {
-    Ok(lock_input_device(&input_device)?.clone())
-}
-
-#[tauri::command]
 fn set_input_device(
     input_device: State<'_, InputDeviceState>,
     device_id: Option<String>,
@@ -827,7 +822,6 @@ pub fn run() {
             save_soniox_api_key,
             delete_soniox_api_key,
             list_input_devices,
-            get_input_device,
             set_input_device
         ])
         .build(tauri::generate_context!())

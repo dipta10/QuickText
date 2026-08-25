@@ -224,6 +224,16 @@ button {
   font-weight: 700;
 }
 
+.device-notice {
+  margin: 6px 0 0;
+  color: #e8b45a;
+  font-size: 0.82rem;
+}
+
+.device-notice:empty {
+  display: none;
+}
+
 .recording-timer {
   min-width: 44px;
   color: #f5f7fa;

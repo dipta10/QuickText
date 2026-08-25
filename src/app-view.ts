@@ -5,6 +5,7 @@ export type AppView = {
   settingsView: HTMLElement;
   recordButton: HTMLButtonElement;
   recordStatus: HTMLParagraphElement;
+  deviceNotice: HTMLParagraphElement;
   recordingTimer: HTMLSpanElement;
   activityIndicator: HTMLSpanElement;
   transcriptText: HTMLDivElement;
@@ -55,6 +56,7 @@ const appTemplate = `
             <span class="activity-indicator" aria-hidden="true"></span>
           </div>
         </div>
+        <p class="device-notice" role="status"></p>
 
         <section class="transcript-panel" aria-label="Transcript">
           <div class="transcript-toolbar">
@@ -197,6 +199,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     root.querySelector<HTMLButtonElement>(".record-button");
   const recordStatus =
     root.querySelector<HTMLParagraphElement>(".record-status");
+  const deviceNotice =
+    root.querySelector<HTMLParagraphElement>(".device-notice");
   const recordingTimer =
     root.querySelector<HTMLSpanElement>(".recording-timer");
   const activityIndicator =
@@ -261,6 +265,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     !settingsView ||
     !recordButton ||
     !recordStatus ||
+    !deviceNotice ||
     !recordingTimer ||
     !activityIndicator ||
     !transcriptText ||
@@ -296,6 +301,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     settingsView,
     recordButton,
     recordStatus,
+    deviceNotice,
     recordingTimer,
     activityIndicator,
     transcriptText,

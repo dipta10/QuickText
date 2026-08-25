@@ -11,6 +11,7 @@ import {
   setApiKeyPresence,
   setApiKeyStatus,
   setAutoCopyTranscript,
+  setDeviceNotice,
   setInputDeviceOptions,
   setSelectedInputDevice,
   setLiveTranscript,
@@ -137,7 +138,12 @@ const renderInputDeviceSelect = () => {
     renderedDeviceSignature = signature;
   }
 
-  view.inputDeviceSelect.value = state.selectedInputDeviceId;
+  const knownIds = ["", ...state.inputDevices.map((device) => device.id)];
+  view.inputDeviceSelect.value = knownIds.includes(
+    state.selectedInputDeviceId,
+  )
+    ? state.selectedInputDeviceId
+    : "";
   const selectedKnown =
     !state.selectedInputDeviceId ||
     state.inputDevices.some(
@@ -167,6 +173,7 @@ const render = () => {
   );
   view.recordButton.disabled = isBusy(state);
   view.recordStatus.textContent = statusLabel();
+  view.deviceNotice.textContent = state.deviceNotice;
   view.recordingTimer.textContent = formatElapsedTime(state.recordingStartedAt);
   view.activityIndicator.hidden = !isRecording(state);
   view.copyButton.disabled = !state.transcript;
@@ -293,7 +300,8 @@ const saveInputDeviceSelection = async (deviceId: string) => {
   }
 };
 
-const loadApiKeyStatus = async () => {  try {
+const loadApiKeyStatus = async () => {
+  try {
     updateState(setApiKeyPresence(state, await hasSonioxApiKey()));
   } catch (error) {
     updateState(
@@ -488,7 +496,7 @@ void onPartialTranscript((update) => {
 });
 
 void onDeviceFallback((message) => {
-  updateState(setStatus(state, message));
+  updateState(setDeviceNotice(state, message));
 }).catch(() => {
   // Device fallback events run in the desktop app only.
 });

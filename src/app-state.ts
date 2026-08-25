@@ -50,6 +50,7 @@ export type AppState = {
   inputDevices: InputDeviceOption[];
   inputDeviceDefaultLabel: string;
   selectedInputDeviceId: string;
+  deviceNotice: string;
   status: string;
   transcript: string;
   partialTranscript: string;
@@ -81,6 +82,7 @@ export const createAppState = (
   inputDevices: [],
   inputDeviceDefaultLabel: "",
   selectedInputDeviceId,
+  deviceNotice: "",
   status: "Ready.",
   transcript: "",
   partialTranscript: "",
@@ -162,8 +164,18 @@ export const applyBackendSnapshot = (
     apiKeyStatus: isMissingApiKey
       ? snapshot.error?.message ?? state.apiKeyStatus
       : state.apiKeyStatus,
+    deviceNotice:
+      snapshot.status === "starting" ? "" : state.deviceNotice,
   };
 };
+
+export const setDeviceNotice = (
+  state: AppState,
+  deviceNotice: string,
+): AppState => ({
+  ...state,
+  deviceNotice,
+});
 
 export const applyPartialTranscript = (
   state: AppState,

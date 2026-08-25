@@ -11,7 +11,6 @@ const hasSonioxApiKeyCommand = "has_soniox_api_key";
 const saveSonioxApiKeyCommand = "save_soniox_api_key";
 const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
 const listInputDevicesCommand = "list_input_devices";
-const getInputDeviceCommand = "get_input_device";
 const setInputDeviceCommand = "set_input_device";
 const appStateChangedEvent = "app-state-changed";
 const partialTranscriptEvent = "partial-transcript";
@@ -78,11 +77,6 @@ export const deleteSonioxApiKey = async () => {
 export const listInputDevices = async (): Promise<BackendInputDeviceList> => {
   assertTauriRuntime();
   return await invoke<BackendInputDeviceList>(listInputDevicesCommand);
-};
-
-export const getInputDevice = async (): Promise<string | null> => {
-  assertTauriRuntime();
-  return await invoke<string | null>(getInputDeviceCommand);
 };
 
 export const setInputDevice = async (deviceId: string | null) => {

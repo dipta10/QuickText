@@ -34,6 +34,7 @@ Read the project docs before making architectural changes:
 - `docs/adrs/0011-provider-declared-settings.md`.
 - `docs/adrs/0012-paste-to-target-dictation.md`.
 - `docs/adrs/0013-persist-release-history.md`.
+- `docs/adrs/0014-launch-on-startup.md`.
 
 ## Current Stack
 

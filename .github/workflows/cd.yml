@@ -15,20 +15,13 @@ concurrency:
   group: cd-main
   cancel-in-progress: false
 
-jobs:
-  prepare-release:
-    name: Prepare rolling pre-release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Replace previous pre-release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PRE_RELEASE_TAG: v0.1.0-pre
-        run: gh release delete "$PRE_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+env:
+  RELEASE_TAG: v0.1.0-pre.${{ github.run_number }}
+  KEEP_RELEASES: "10"
 
-  publish-pre-release:
+jobs:
+  publish-release:
     name: Build bundles (${{ matrix.settings.platform }})
-    needs: prepare-release
     runs-on: ${{ matrix.settings.os }}
     strategy:
       fail-fast: false
@@ -72,7 +65,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Build bundles and publish rolling pre-release
+      - name: Build bundles and publish release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -101,10 +94,32 @@ jobs:
             - **macOS**: right-click the app → *Open* → *Open* again. Normal Gatekeeper behavior.
             - **Linux**: no fuss.
 
-            This is an automatically updated development build — it is replaced every time we merge to main. Bug reports welcome!
+            A build like this is published on every merge to main; older builds stay available on the [releases page](../../releases). Bug reports welcome!
         with:
-          tagName: v0.1.0-pre
-          releaseName: "QuickText — Speech-to-Text for Your Desktop"
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: "QuickText — Speech-to-Text for Your Desktop (${{ env.RELEASE_TAG }})"
           releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: false
           prerelease: false
+
+  cleanup-old-releases:
+    name: Prune releases beyond the newest 10
+    needs: publish-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete releases older than the newest 10
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tags=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 \
+            --json tagName --jq '.[${{ env.KEEP_RELEASES }}:][]?.tagName')
+
+          if [ -z "$tags" ]; then
+            echo "Nothing to prune."
+            exit 0
+          fi
+
+          while read -r tag; do
+            echo "Deleting old release $tag"
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          done <<< "$tags"

@@ -166,8 +166,8 @@ const appTemplate = `
           </label>
           <p class="settings-note paste-to-target-note" hidden>
             Shortcut and CLI recordings run without opening the window; the
-            transcript is pasted into the app you were using. Wayland sessions
-            may only copy to the clipboard.
+            transcript is pasted into the app you were using. On Wayland this
+            needs the wtype utility and currently only works on Hyprland.
           </p>
         </section>
 

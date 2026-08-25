@@ -16,6 +16,15 @@ pub fn foreign_app_has_focus() -> Result<bool, String> {
 }
 
 pub fn send_paste_keystroke() -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    if imp::is_hyprland_session() {
+        return imp::send_wtype_paste_keystroke();
+    }
+
+    send_enigo_paste_keystroke()
+}
+
+fn send_enigo_paste_keystroke() -> Result<(), String> {
     let mut synthesizer = Enigo::new(&Settings::default())
         .map_err(|error| format!("Could not initialize input synthesis: {error}"))?;
 
@@ -28,13 +37,69 @@ pub fn send_paste_keystroke() -> Result<(), String> {
 
 #[cfg(target_os = "linux")]
 mod imp {
+    use std::process::Command;
+
     use x11rb::connection::Connection;
     use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
     use x11rb::rust_connection::RustConnection;
 
     const NO_FOCUSED_APP: &str = "No application currently has keyboard focus.";
 
+    pub fn is_hyprland_session() -> bool {
+        std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
+    }
+
     pub fn foreign_app_has_focus() -> Result<bool, String> {
+        if is_hyprland_session() {
+            hyprland_foreign_app_has_focus()
+        } else {
+            x11_foreign_app_has_focus()
+        }
+    }
+
+    fn hyprland_foreign_app_has_focus() -> Result<bool, String> {
+        let output = Command::new("hyprctl")
+            .args(["activewindow", "-j"])
+            .output()
+            .map_err(|error| format!("Could not query Hyprland for the focused window: {error}"))?;
+
+        let owner_pid = parse_active_window_pid(String::from_utf8_lossy(&output.stdout).trim())?;
+        Ok(owner_pid.is_none_or(|pid| pid != std::process::id()))
+    }
+
+    fn parse_active_window_pid(hyprctl_output: &str) -> Result<Option<u32>, String> {
+        let active_window: serde_json::Value =
+            serde_json::from_str(hyprctl_output).map_err(|_| NO_FOCUSED_APP.to_string())?;
+        let Some(pid) = active_window.get("pid").and_then(serde_json::Value::as_u64) else {
+            return Err(NO_FOCUSED_APP.to_string());
+        };
+
+        Ok(u32::try_from(pid).ok())
+    }
+
+    pub fn send_wtype_paste_keystroke() -> Result<(), String> {
+        let output = Command::new("wtype")
+            .args(["-M", "ctrl", "v", "-m", "ctrl"])
+            .output()
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    "The wtype utility is required for paste-to-target on Wayland.".to_string()
+                } else {
+                    format!("Could not run wtype: {error}")
+                }
+            })?;
+
+        if !output.status.success() {
+            return Err(format!(
+                "Could not synthesize the paste keystroke: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn x11_foreign_app_has_focus() -> Result<bool, String> {
         let (connection, screen_number) = x11rb::connect(None)
             .map_err(|error| format!("Could not reach the display server: {error}"))?;
         let root = connection
@@ -85,6 +150,24 @@ mod imp {
             .reply()
             .map(|reply| reply.atom)
             .map_err(|error| format!("Could not query the display server: {error}"))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn parses_active_window_pid() {
+            let output = r#"{"address":"0x55f0","mapped":true,"hidden":false,"at":[11,11],"size":[100,100],"class":"foot","pid":4242,"title":"term"}"#;
+
+            assert_eq!(parse_active_window_pid(output).unwrap(), Some(4242));
+        }
+
+        #[test]
+        fn reports_no_focus_for_invalid_output() {
+            assert!(parse_active_window_pid("Invalid").is_err());
+            assert!(parse_active_window_pid("").is_err());
+        }
     }
 }
 

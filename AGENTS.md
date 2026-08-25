@@ -33,6 +33,7 @@ Read the project docs before making architectural changes:
 - `docs/adrs/0010-optional-capture-notifications.md`.
 - `docs/adrs/0011-provider-declared-settings.md`.
 - `docs/adrs/0012-paste-to-target-dictation.md`.
+- `docs/adrs/0013-persist-release-history.md`.
 
 ## Current Stack
 
@@ -44,7 +45,7 @@ Read the project docs before making architectural changes:
 - Planned audio capture: Rust backend, likely `cpal`.
 - Planned transcription: Soniox real-time WebSocket STT.
 - CI: GitHub Actions runs Rust tests and a frontend typecheck on pushes to `main` and PRs targeting `main`.
-- CD: every push to `main` publishes unsigned installers for Linux, macOS, and Windows as one rolling pre-release (`v0.1.0-pre`); see ADR 0009.
+- CD: every push to `main` publishes unsigned installers for Linux, macOS, and Windows as its own release (`v0.1.0-pre.<run-number>`); the newest 10 releases are kept for rollback; see ADR 0013.
 
 ## Local Commands
 

@@ -26,6 +26,8 @@ export type AppView = {
   liveTranscriptField: HTMLLabelElement;
   showPartialCheckbox: HTMLInputElement;
   showPartialField: HTMLLabelElement;
+  pasteToTargetCheckbox: HTMLInputElement;
+  pasteToTargetNote: HTMLParagraphElement;
   bottomStatus: HTMLParagraphElement;
 };
 
@@ -154,6 +156,19 @@ const appTemplate = `
             />
             <span>Show unconfirmed words as they form</span>
           </label>
+          <label class="checkbox-field" for="paste-to-target">
+            <input
+              class="paste-to-target-checkbox"
+              id="paste-to-target"
+              type="checkbox"
+            />
+            <span>Paste transcript into the previous app</span>
+          </label>
+          <p class="settings-note paste-to-target-note" hidden>
+            Shortcut and CLI recordings run without opening the window; the
+            transcript is pasted into the app you were using. Wayland sessions
+            may only copy to the clipboard.
+          </p>
         </section>
 
         <section class="settings-section">
@@ -231,6 +246,12 @@ export const createAppView = (root: HTMLElement): AppView => {
   const showPartialCheckbox = root.querySelector<HTMLInputElement>(
     ".show-partial-transcript-checkbox",
   );
+  const pasteToTargetCheckbox = root.querySelector<HTMLInputElement>(
+    ".paste-to-target-checkbox",
+  );
+  const pasteToTargetNote = root.querySelector<HTMLParagraphElement>(
+    ".paste-to-target-note",
+  );
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
 
@@ -262,6 +283,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     !liveTranscriptCheckbox ||
     !showPartialField ||
     !showPartialCheckbox ||
+    !pasteToTargetCheckbox ||
+    !pasteToTargetNote ||
     !bottomStatus
   ) {
     throw new Error("App controls were not found");
@@ -295,6 +318,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     liveTranscriptCheckbox,
     showPartialField,
     showPartialCheckbox,
+    pasteToTargetCheckbox,
+    pasteToTargetNote,
     bottomStatus,
   };
 };

@@ -40,6 +40,7 @@ export type AppState = {
   autoCopyTranscript: boolean;
   liveTranscript: boolean;
   showPartialTranscript: boolean;
+  pasteToTarget: boolean;
   hasApiKey: boolean;
   apiKeyStatus: string;
   status: string;
@@ -56,6 +57,7 @@ export const createAppState = (
   shortcutHideOnStop: boolean,
   liveTranscript: boolean,
   showPartialTranscript: boolean,
+  pasteToTarget: boolean,
 ): AppState => ({
   activeView: "capture",
   recording: "idle",
@@ -67,6 +69,7 @@ export const createAppState = (
   autoCopyTranscript,
   liveTranscript,
   showPartialTranscript,
+  pasteToTarget,
   hasApiKey: false,
   apiKeyStatus: "",
   status: "Ready.",
@@ -271,6 +274,17 @@ export const setShortcutHideOnStop = (
   status: shortcutHideOnStop
     ? "Shortcut will hide the window when recording stops."
     : "Shortcut will keep the window open when recording stops.",
+});
+
+export const setPasteToTarget = (
+  state: AppState,
+  pasteToTarget: boolean,
+): AppState => ({
+  ...state,
+  pasteToTarget,
+  status: pasteToTarget
+    ? "Transcripts will paste into the previous app."
+    : "Paste-to-target disabled.",
 });
 
 export const setStatus = (state: AppState, status: string): AppState => ({

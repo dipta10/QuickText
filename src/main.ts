@@ -16,6 +16,7 @@ import {
   setShowPartialTranscript,
   setShortcutFocusOnStart,
   setShortcutHideOnStop,
+  setPasteToTarget,
   setStatus,
   showCapture,
   showSettings,
@@ -28,6 +29,7 @@ import {
   getGlobalShortcut,
   getLiveTranscript,
   getMaxRecordingSeconds,
+  getPasteToTarget,
   getShowPartialTranscript,
   getShortcutFocusOnStart,
   getShortcutHideOnStop,
@@ -38,6 +40,7 @@ import {
   saveShowPartialTranscript,
   saveShortcutFocusOnStart,
   saveShortcutHideOnStop,
+  savePasteToTarget,
 } from "./settings";
 import {
   copyTextToClipboard,
@@ -48,6 +51,7 @@ import {
   onPartialTranscript,
   saveSonioxApiKey,
   setGlobalShortcut,
+  setPasteToTargetBackend,
   setShortcutBehavior,
   toggleBackendRecording,
 } from "./tauri";
@@ -66,6 +70,7 @@ let state = createAppState(
   getShortcutHideOnStop(),
   getLiveTranscript(),
   getShowPartialTranscript(),
+  getPasteToTarget(),
 );
 const view = createAppView(app);
 let lastAutoCopiedTranscript = "";
@@ -148,6 +153,8 @@ const render = () => {
   view.liveTranscriptCheckbox.checked = state.liveTranscript;
   view.showPartialField.hidden = !state.liveTranscript;
   view.showPartialCheckbox.checked = state.showPartialTranscript;
+  view.pasteToTargetCheckbox.checked = state.pasteToTarget;
+  view.pasteToTargetNote.hidden = !state.pasteToTarget;
   view.bottomStatus.textContent =
     state.activeView === "capture"
       ? state.status
@@ -339,6 +346,23 @@ view.showPartialCheckbox.addEventListener("change", () => {
   updateState(setShowPartialTranscript(state, showPartialTranscript));
 });
 
+const pushPasteToTarget = async (pasteToTarget: boolean) => {
+  try {
+    await setPasteToTargetBackend(pasteToTarget);
+  } catch (error) {
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
+view.pasteToTargetCheckbox.addEventListener("change", () => {
+  const pasteToTarget = view.pasteToTargetCheckbox.checked;
+  savePasteToTarget(pasteToTarget);
+  updateState(setPasteToTarget(state, pasteToTarget));
+  void pushPasteToTarget(pasteToTarget);
+});
+
 view.keybindButton.addEventListener("click", () => {
   updateState(startShortcutCapture(state));
 });
@@ -411,6 +435,7 @@ window.setInterval(render, 1000);
 void loadBackendState();
 void loadApiKeyStatus();
 void pushShortcutBehavior();
+void pushPasteToTarget(state.pasteToTarget);
 
 if (state.selectedShortcut) {
   void registerShortcut(state.selectedShortcut);

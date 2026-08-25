@@ -117,10 +117,14 @@ async fn handle_connection(app: tauri::AppHandle, stream: tokio::net::UnixStream
 async fn dispatch(app: &tauri::AppHandle, request: &IpcRequest) -> IpcResponse {
     match request.command() {
         IpcCommand::Toggle => {
-            let focus_window = request.wants_window_focus();
+            let wants_focus = request.wants_window_focus();
             let toggle = timeout(
                 Duration::from_secs(super::ipc::RESPONSE_TIMEOUT_SECONDS),
-                crate::toggle_recording_for_app(app.clone(), None, focus_window),
+                crate::toggle_recording_for_app(
+                    app.clone(),
+                    None,
+                    crate::RecordingTrigger::CompanionIpc { wants_focus },
+                ),
             )
             .await;
 

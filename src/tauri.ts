@@ -7,6 +7,7 @@ const getAppStateCommand = "get_app_state";
 const toggleRecordingCommand = "toggle_recording";
 const setGlobalShortcutCommand = "set_global_shortcut";
 const setShortcutBehaviorCommand = "set_shortcut_behavior";
+const setPasteToTargetCommand = "set_paste_to_target";
 const hasSonioxApiKeyCommand = "has_soniox_api_key";
 const saveSonioxApiKeyCommand = "save_soniox_api_key";
 const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
@@ -30,6 +31,11 @@ export const setShortcutBehavior = async (
 ) => {
   assertTauriRuntime();
   await invoke(setShortcutBehaviorCommand, { focusOnStart, hideOnStop });
+};
+
+export const setPasteToTargetBackend = async (enabled: boolean) => {
+  assertTauriRuntime();
+  await invoke(setPasteToTargetCommand, { enabled });
 };
 
 export const getAppState = async (): Promise<BackendAppSnapshot> => {

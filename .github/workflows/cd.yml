@@ -103,11 +103,11 @@ jobs:
           prerelease: false
 
   cleanup-old-releases:
-    name: Prune releases beyond newest ${{ env.KEEP_RELEASES }}
+    name: Prune releases beyond the newest 10
     needs: publish-release
     runs-on: ubuntu-latest
     steps:
-      - name: Delete releases older than the newest ${{ env.KEEP_RELEASES }}
+      - name: Delete releases older than the newest 10
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

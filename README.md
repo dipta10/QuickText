@@ -16,7 +16,13 @@ QuickText is a lightweight desktop app that turns your voice into text in second
 
 ## Installation
 
-> Prebuilt packages are not published yet. Build from source below.
+Download an unsigned prebuilt package from the rolling [pre-release](https://github.com/dipta10/QuickText/releases/tag/v0.1.0-pre), which is rebuilt on every merge to `main`:
+
+| Your computer | Download |
+|---|---|
+| Windows | `QuickText_0.1.0_x64-setup.exe` (installer) or `.msi` |
+| Mac (Apple Silicon) | `QuickText_0.1.0_aarch64.dmg` |
+| Linux | `.AppImage` (just run it) or `.deb` / `.rpm` |
 
 ### Prerequisites
 

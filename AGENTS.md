@@ -21,6 +21,7 @@ Read the project docs before making architectural changes:
 - `docs/technical-plan.md`.
 - `docs/implementation-plan.md`.
 - `docs/ui-plan.md`.
+- `docs/glossary.md`.
 - `docs/adrs/0001-tauri-desktop-shell.md`.
 - `docs/adrs/0002-streaming-soniox-stt.md`.
 - `docs/adrs/0003-backend-first-soniox-integration.md`.
@@ -29,6 +30,10 @@ Read the project docs before making architectural changes:
 - `docs/adrs/0006-input-device-selection.md`.
 - `docs/adrs/0008-ci-test-pipeline.md`.
 - `docs/adrs/0009-cd-rolling-pre-release.md`.
+- `docs/adrs/0010-optional-capture-notifications.md`.
+- `docs/adrs/0011-provider-declared-settings.md`.
+- `docs/adrs/0012-paste-to-target-dictation.md`.
+- `docs/adrs/0013-persist-release-history.md`.
 
 ## Current Stack
 
@@ -40,7 +45,7 @@ Read the project docs before making architectural changes:
 - Planned audio capture: Rust backend, likely `cpal`.
 - Planned transcription: Soniox real-time WebSocket STT.
 - CI: GitHub Actions runs Rust tests and a frontend typecheck on pushes to `main` and PRs targeting `main`.
-- CD: every push to `main` publishes unsigned installers for Linux, macOS, and Windows as one rolling pre-release (`v0.1.0-pre`); see ADR 0009.
+- CD: every push to `main` publishes unsigned installers for Linux, macOS, and Windows as its own release (`v0.1.0-pre.<run-number>`); the newest 10 releases are kept for rollback; see ADR 0013.
 
 ## Local Commands
 
@@ -110,6 +115,7 @@ The UI should expose separate Capture and Settings regions. `src/main.ts` may ow
 
 ## Git And Generated Files
 
+- Create git worktrees inside `worktrees/` (e.g. `git worktree add worktrees/<branch-name> <branch>`); this folder is gitignored so agents can edit within the workspace without permission prompts.
 - `node_modules/`, `dist/`, and Rust `target/` output are ignored and should not be committed.
 - `package-lock.json` and `src-tauri/Cargo.lock` are committed for reproducible app builds.
 - Tauri may update files under `src-tauri/gen/schemas/` when plugins or permissions change; include those updates when they are caused by the change.

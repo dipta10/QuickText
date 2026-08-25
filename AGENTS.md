@@ -43,6 +43,7 @@ Read the project docs before making architectural changes:
 - Backend: Rust Tauri commands and events.
 - Global shortcuts: `tauri-plugin-global-shortcut`.
 - Tray/background mode: app remains resident after launch; window close hides to tray/menu bar.
+- Launch on startup: opt-in through `tauri-plugin-autostart`; autostart launches hidden.
 - Planned audio capture: Rust backend, likely `cpal`.
 - Planned transcription: Soniox real-time WebSocket STT.
 - CI: GitHub Actions runs Rust tests and a frontend typecheck on pushes to `main` and PRs targeting `main`.

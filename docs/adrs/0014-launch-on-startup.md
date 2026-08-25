@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (documentation only; implementation is not scheduled by this ADR).
+Accepted and implemented.
 
 ## Context
 

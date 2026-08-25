@@ -115,6 +115,7 @@ The UI should expose separate Capture and Settings regions. `src/main.ts` may ow
 
 ## Git And Generated Files
 
+- Create git worktrees inside `worktrees/` (e.g. `git worktree add worktrees/<branch-name> <branch>`); this folder is gitignored so agents can edit within the workspace without permission prompts.
 - `node_modules/`, `dist/`, and Rust `target/` output are ignored and should not be committed.
 - `package-lock.json` and `src-tauri/Cargo.lock` are committed for reproducible app builds.
 - Tauri may update files under `src-tauri/gen/schemas/` when plugins or permissions change; include those updates when they are caused by the change.

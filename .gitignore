@@ -21,6 +21,9 @@ src-tauri/icons/android/
 .env.*
 !.env.example
 
+# Git worktrees
+worktrees/
+
 # OS/editor noise
 .DS_Store
 Thumbs.db

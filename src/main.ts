@@ -12,6 +12,8 @@ import {
   setApiKeyStatus,
   setAutoCopyTranscript,
   setLiveTranscript,
+  setLaunchOnStartup,
+  setLaunchOnStartupStatus,
   setMaxRecordingSeconds,
   setShowPartialTranscript,
   setShortcutFocusOnStart,
@@ -28,6 +30,7 @@ import {
   getAutoCopyTranscript,
   getGlobalShortcut,
   getLiveTranscript,
+  getLaunchOnStartup,
   getMaxRecordingSeconds,
   getPasteToTarget,
   getShowPartialTranscript,
@@ -36,6 +39,7 @@ import {
   saveAutoCopyTranscript,
   saveGlobalShortcut,
   saveLiveTranscript,
+  saveLaunchOnStartup,
   saveMaxRecordingSeconds,
   saveShowPartialTranscript,
   saveShortcutFocusOnStart,
@@ -46,12 +50,14 @@ import {
   copyTextToClipboard,
   deleteSonioxApiKey,
   getAppState,
+  getLaunchOnStartup as getBackendLaunchOnStartup,
   hasSonioxApiKey,
   onAppStateChanged,
   onPartialTranscript,
   saveSonioxApiKey,
   setGlobalShortcut,
   setPasteToTargetBackend,
+  setLaunchOnStartup as setBackendLaunchOnStartup,
   setShortcutBehavior,
   toggleBackendRecording,
 } from "./tauri";
@@ -71,6 +77,7 @@ let state = createAppState(
   getLiveTranscript(),
   getShowPartialTranscript(),
   getPasteToTarget(),
+  getLaunchOnStartup(),
 );
 const view = createAppView(app);
 let lastAutoCopiedTranscript = "";
@@ -155,6 +162,10 @@ const render = () => {
   view.showPartialCheckbox.checked = state.showPartialTranscript;
   view.pasteToTargetCheckbox.checked = state.pasteToTarget;
   view.pasteToTargetNote.hidden = !state.pasteToTarget;
+  view.launchOnStartupCheckbox.checked = state.launchOnStartup;
+  view.launchOnStartupStatus.textContent =
+    state.launchOnStartupStatus ||
+    "Starts hidden in the tray when you sign in.";
   view.bottomStatus.textContent =
     state.activeView === "capture"
       ? state.status
@@ -242,6 +253,49 @@ const loadBackendState = async () => {
     updateState(
       setStatus(state, error instanceof Error ? error.message : String(error)),
     );
+  }
+};
+
+const loadLaunchOnStartup = async () => {
+  try {
+    const enabled = await getBackendLaunchOnStartup();
+    saveLaunchOnStartup(enabled);
+    updateState(setLaunchOnStartup(state, enabled));
+  } catch (error) {
+    updateState(
+      setLaunchOnStartupStatus(
+        state,
+        error instanceof Error ? error.message : String(error),
+      ),
+    );
+  }
+};
+
+const updateLaunchOnStartup = async (enabled: boolean) => {
+  view.launchOnStartupCheckbox.disabled = true;
+  updateState(setLaunchOnStartupStatus(state, "Updating startup setting..."));
+
+  try {
+    const actualState = await setBackendLaunchOnStartup(enabled);
+    saveLaunchOnStartup(actualState);
+    updateState(
+      setLaunchOnStartup(
+        state,
+        actualState,
+        actualState
+          ? "QuickText will start hidden in the tray when you sign in."
+          : "QuickText will not launch when you sign in.",
+      ),
+    );
+  } catch (error) {
+    updateState(
+      setLaunchOnStartupStatus(
+        state,
+        error instanceof Error ? error.message : String(error),
+      ),
+    );
+  } finally {
+    view.launchOnStartupCheckbox.disabled = false;
   }
 };
 
@@ -363,6 +417,10 @@ view.pasteToTargetCheckbox.addEventListener("change", () => {
   void pushPasteToTarget(pasteToTarget);
 });
 
+view.launchOnStartupCheckbox.addEventListener("change", () => {
+  void updateLaunchOnStartup(view.launchOnStartupCheckbox.checked);
+});
+
 view.keybindButton.addEventListener("click", () => {
   updateState(startShortcutCapture(state));
 });
@@ -434,6 +492,7 @@ render();
 window.setInterval(render, 1000);
 void loadBackendState();
 void loadApiKeyStatus();
+void loadLaunchOnStartup();
 void pushShortcutBehavior();
 void pushPasteToTarget(state.pasteToTarget);
 

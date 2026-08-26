@@ -41,6 +41,8 @@ export type AppState = {
   liveTranscript: boolean;
   showPartialTranscript: boolean;
   pasteToTarget: boolean;
+  launchOnStartup: boolean;
+  launchOnStartupStatus: string;
   hasApiKey: boolean;
   apiKeyStatus: string;
   status: string;
@@ -58,6 +60,7 @@ export const createAppState = (
   liveTranscript: boolean,
   showPartialTranscript: boolean,
   pasteToTarget: boolean,
+  launchOnStartup: boolean,
 ): AppState => ({
   activeView: "capture",
   recording: "idle",
@@ -70,6 +73,8 @@ export const createAppState = (
   liveTranscript,
   showPartialTranscript,
   pasteToTarget,
+  launchOnStartup,
+  launchOnStartupStatus: "",
   hasApiKey: false,
   apiKeyStatus: "",
   status: "Ready.",
@@ -285,6 +290,24 @@ export const setPasteToTarget = (
   status: pasteToTarget
     ? "Transcripts will paste into the previous app."
     : "Paste-to-target disabled.",
+});
+
+export const setLaunchOnStartup = (
+  state: AppState,
+  launchOnStartup: boolean,
+  launchOnStartupStatus = "",
+): AppState => ({
+  ...state,
+  launchOnStartup,
+  launchOnStartupStatus,
+});
+
+export const setLaunchOnStartupStatus = (
+  state: AppState,
+  launchOnStartupStatus: string,
+): AppState => ({
+  ...state,
+  launchOnStartupStatus,
 });
 
 export const setStatus = (state: AppState, status: string): AppState => ({

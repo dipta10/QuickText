@@ -97,6 +97,7 @@ MVP settings should include:
 - Soniox API key.
 - Optional auto-copy after transcription.
 - Optional global shortcut.
+- Optional launch on system startup (starts hidden in the tray/menu bar).
 
 The API key should be stored using the operating system's secure credential storage if the chosen desktop framework supports it cleanly.
 

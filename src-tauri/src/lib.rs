@@ -2,6 +2,7 @@ use std::{sync::Mutex, time::Duration};
 
 mod app_controller;
 mod audio_recorder;
+mod autostart;
 mod companion_cli;
 mod ipc;
 #[cfg(unix)]
@@ -72,7 +73,7 @@ fn window_flow(
     match trigger {
         RecordingTrigger::MainWindowButton => WindowFlow {
             show_on_start: true,
-            hide_on_stop: true,
+            hide_on_stop: false,
         },
         RecordingTrigger::GlobalShortcut => WindowFlow {
             show_on_start: shortcut_focuses_on_start(settings),
@@ -85,10 +86,39 @@ fn window_flow(
     }
 }
 
-/// Paste target captured at trigger time; consumed on successful finalize.
+#[cfg(test)]
+mod window_flow_tests {
+    use super::*;
+
+    #[test]
+    fn main_window_button_keeps_transcript_visible_after_stop() {
+        let flow = window_flow(
+            RecordingTrigger::MainWindowButton,
+            false,
+            &ShortcutSettings::default(),
+        );
+
+        assert!(flow.show_on_start);
+        assert!(!flow.hide_on_stop);
+    }
+
+    #[test]
+    fn headless_take_bypasses_requested_window_changes() {
+        let flow = window_flow(
+            RecordingTrigger::CompanionIpc { wants_focus: true },
+            true,
+            &ShortcutSettings::default(),
+        );
+
+        assert!(!flow.show_on_start);
+        assert!(!flow.hide_on_stop);
+    }
+}
+
+/// Paste target captured at trigger time; consumed when the recording finalizes.
 #[derive(Default)]
 struct PendingPasteState {
-    armed: Mutex<bool>,
+    target: Mutex<Option<paste_target::PasteTarget>>,
 }
 
 #[derive(Default)]
@@ -292,6 +322,7 @@ async fn fail_recording_when_provider_unreachable(
         Ok(()) => return,
         Err(error) => error,
     };
+    clear_pending_paste(&app);
     let error_snapshot = match lock_controller(&controller) {
         Ok(mut controller) => controller.fail_recording(provider_unavailable_error(error_message)),
         Err(_) => return,
@@ -300,9 +331,7 @@ async fn fail_recording_when_provider_unreachable(
 }
 
 fn paste_failed_error(message: String) -> AppError {
-    AppError::PasteFailed {
-        message: format!("{message} The transcript remains in the clipboard."),
-    }
+    AppError::PasteFailed { message }
 }
 
 fn missing_api_key_error() -> AppError {
@@ -475,7 +504,9 @@ pub(crate) async fn toggle_recording_for_app(
 
     match current_status {
         AppStatus::Idle | AppStatus::Transcribed | AppStatus::Error => {
-            let headless_paste = headless_paste_armed(&app, trigger, &settings);
+            clear_pending_paste(&app);
+            let paste_target = capture_paste_target(&app, trigger, &settings);
+            let headless_paste = paste_target.is_some();
             let start_flow = window_flow(trigger, headless_paste, &settings);
             let starting = {
                 let mut controller = lock_controller(&controller)?;
@@ -553,7 +584,7 @@ pub(crate) async fn toggle_recording_for_app(
                 let mut controller = lock_controller(&controller)?;
                 controller.finish_start(audio_format)
             };
-            arm_pending_paste(&app, headless_paste);
+            set_pending_paste(&app, paste_target);
             let session_id = lock_controller(&controller)?.active_session_id();
             emit_app_snapshot(&app, &recording);
             if let Some(session_id) = session_id {
@@ -569,7 +600,7 @@ pub(crate) async fn toggle_recording_for_app(
             Ok(recording)
         }
         AppStatus::Recording => {
-            let stop_flow = window_flow(trigger, false, &settings);
+            let stop_flow = window_flow(trigger, pending_paste_is_armed(&app), &settings);
             let transcribed = finalize_recording(&app).await?;
 
             if stop_flow.hide_on_stop {
@@ -585,27 +616,26 @@ pub(crate) async fn toggle_recording_for_app(
     }
 }
 
-fn headless_paste_armed(
+fn capture_paste_target(
     app: &tauri::AppHandle,
     trigger: RecordingTrigger,
     settings: &ShortcutSettings,
-) -> bool {
+) -> Option<paste_target::PasteTarget> {
     if !paste_to_target_enabled(settings) || matches!(trigger, RecordingTrigger::MainWindowButton) {
-        return false;
+        return None;
     }
 
     // QuickText's own window being focused means a normal take; never paste
     // into ourselves (ADR 0012).
     if main_window_is_focused(app) {
-        return false;
+        return None;
     }
 
-    match paste_target::foreign_app_has_focus() {
-        Ok(true) => true,
-        Ok(false) => false,
+    match paste_target::capture_focused_target() {
+        Ok(target) => target,
         Err(error) => {
             eprintln!("Paste-to-target unavailable, using the regular window flow: {error}");
-            false
+            None
         }
     }
 }
@@ -616,10 +646,22 @@ fn main_window_is_focused(app: &tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-fn arm_pending_paste(app: &tauri::AppHandle, armed: bool) {
-    if let Ok(mut pending) = app.state::<PendingPasteState>().armed.lock() {
-        *pending = armed;
+fn set_pending_paste(app: &tauri::AppHandle, target: Option<paste_target::PasteTarget>) {
+    if let Ok(mut pending) = app.state::<PendingPasteState>().target.lock() {
+        *pending = target;
     }
+}
+
+fn clear_pending_paste(app: &tauri::AppHandle) {
+    set_pending_paste(app, None);
+}
+
+fn pending_paste_is_armed(app: &tauri::AppHandle) -> bool {
+    app.state::<PendingPasteState>()
+        .target
+        .lock()
+        .map(|target| target.is_some())
+        .unwrap_or(false)
 }
 
 async fn finalize_recording(app: &tauri::AppHandle) -> Result<AppSnapshot, String> {
@@ -631,10 +673,22 @@ async fn finalize_recording(app: &tauri::AppHandle) -> Result<AppSnapshot, Strin
     };
     emit_app_snapshot(app, &stopping);
 
-    let audio_stats = stop_audio_recorder(&app.state::<AudioRecorderState>())?;
+    let audio_stats = match stop_audio_recorder(&app.state::<AudioRecorderState>()) {
+        Ok(audio_stats) => audio_stats,
+        Err(error) => {
+            clear_pending_paste(app);
+            let error_snapshot = {
+                let mut controller = lock_controller(&controller)?;
+                controller.fail_stop(microphone_unavailable_error(error))
+            };
+            emit_app_snapshot(app, &error_snapshot);
+            return Ok(error_snapshot);
+        }
+    };
     let transcript = match stop_transcription_session(&app.state::<TranscriptionState>()).await {
         Ok(transcript) => transcript,
         Err(error) => {
+            clear_pending_paste(app);
             let error_snapshot = {
                 let mut controller = lock_controller(&controller)?;
                 controller.fail_stop(provider_unavailable_error(error))
@@ -660,24 +714,29 @@ fn deliver_pending_paste(app: &tauri::AppHandle, transcript_text: &str) {
     use tauri_plugin_clipboard_manager::ClipboardExt;
 
     let pending = app.state::<PendingPasteState>();
-    let armed = match pending.armed.lock() {
-        Ok(mut armed) => std::mem::take(&mut *armed),
+    let target = match pending.target.lock() {
+        Ok(mut target) => target.take(),
         Err(_) => return,
     };
-    if !armed {
+    let Some(target) = target else {
         return;
-    }
+    };
 
     if let Err(error) = app.clipboard().write_text(transcript_text.to_string()) {
         report_paste_failure(
             app,
-            format!("Could not write the transcript to the clipboard: {error}"),
+            format!(
+                "Could not write the transcript to the clipboard: {error} The transcript remains available in QuickText."
+            ),
         );
         return;
     }
 
-    if let Err(error) = paste_target::send_paste_keystroke() {
-        report_paste_failure(app, error);
+    if let Err(error) = paste_target::send_paste_keystroke(&target) {
+        report_paste_failure(
+            app,
+            format!("{error} The transcript remains in the clipboard."),
+        );
     }
 }
 
@@ -838,19 +897,34 @@ fn delete_soniox_api_key(credentials: State<'_, CredentialState>) -> Result<(), 
     }
 }
 
+#[tauri::command]
+fn get_launch_on_startup(app: tauri::AppHandle) -> Result<bool, String> {
+    autostart::is_enabled(&app)
+}
+
+#[tauri::command]
+fn set_launch_on_startup(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
+    autostart::set_enabled(&app, enabled)
+}
+
 pub fn entry() -> i32 {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let start_hidden = autostart::is_autostart_launch(&args);
 
-    if !args.is_empty() {
+    if !args.is_empty() && !start_hidden {
         return companion_cli::run(&args);
     }
 
-    run();
+    run_with_options(start_hidden);
     0
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    run_with_options(false);
+}
+
+fn run_with_options(start_hidden: bool) {
     tauri::Builder::default()
         .manage(ShortcutSettings::default())
         .manage(AppControllerState::default())
@@ -859,6 +933,7 @@ pub fn run() {
         .manage(TranscriptionState::default())
         .manage(PendingPasteState::default())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(autostart::plugin())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -871,8 +946,12 @@ pub fn run() {
                 })
                 .build(),
         )
-        .setup(|app| {
+        .setup(move |app| {
             setup_tray(app)?;
+
+            if start_hidden {
+                hide_main_window(app.handle());
+            }
 
             #[cfg(unix)]
             match ipc_server::start(app.handle().clone()) {
@@ -894,7 +973,9 @@ pub fn run() {
             set_paste_to_target,
             has_soniox_api_key,
             save_soniox_api_key,
-            delete_soniox_api_key
+            delete_soniox_api_key,
+            get_launch_on_startup,
+            set_launch_on_startup
         ])
         .build(tauri::generate_context!())
         .expect("error while building Tauri application")

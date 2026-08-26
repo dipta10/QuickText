@@ -28,6 +28,8 @@ export type AppView = {
   showPartialField: HTMLLabelElement;
   pasteToTargetCheckbox: HTMLInputElement;
   pasteToTargetNote: HTMLParagraphElement;
+  launchOnStartupCheckbox: HTMLInputElement;
+  launchOnStartupStatus: HTMLParagraphElement;
   bottomStatus: HTMLParagraphElement;
 };
 
@@ -70,6 +72,21 @@ const appTemplate = `
       </section>
 
       <section class="settings-view" aria-label="Settings" hidden>
+        <section class="settings-section">
+          <h2 class="section-title">General</h2>
+          <label class="checkbox-field" for="launch-on-startup">
+            <input
+              class="launch-on-startup-checkbox"
+              id="launch-on-startup"
+              type="checkbox"
+            />
+            <span>Launch on startup</span>
+          </label>
+          <p class="launch-on-startup-status settings-note" role="status">
+            Starts hidden in the tray when you sign in.
+          </p>
+        </section>
+
         <section class="settings-section">
           <h2 class="section-title">Soniox</h2>
           <label class="api-key-label" for="soniox-api-key">API key</label>
@@ -166,8 +183,9 @@ const appTemplate = `
           </label>
           <p class="settings-note paste-to-target-note" hidden>
             Shortcut and CLI recordings run without opening the window; the
-            transcript is pasted into the app you were using. On Wayland this
-            needs the wtype utility and currently only works on Hyprland.
+            transcript is pasted into the app you were using. macOS requires
+            Accessibility permission. On Wayland this needs the wtype utility
+            and currently only works on Hyprland.
           </p>
         </section>
 
@@ -252,6 +270,12 @@ export const createAppView = (root: HTMLElement): AppView => {
   const pasteToTargetNote = root.querySelector<HTMLParagraphElement>(
     ".paste-to-target-note",
   );
+  const launchOnStartupCheckbox = root.querySelector<HTMLInputElement>(
+    ".launch-on-startup-checkbox",
+  );
+  const launchOnStartupStatus = root.querySelector<HTMLParagraphElement>(
+    ".launch-on-startup-status",
+  );
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
 
@@ -285,6 +309,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     !showPartialCheckbox ||
     !pasteToTargetCheckbox ||
     !pasteToTargetNote ||
+    !launchOnStartupCheckbox ||
+    !launchOnStartupStatus ||
     !bottomStatus
   ) {
     throw new Error("App controls were not found");
@@ -320,6 +346,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     showPartialCheckbox,
     pasteToTargetCheckbox,
     pasteToTargetNote,
+    launchOnStartupCheckbox,
+    launchOnStartupStatus,
     bottomStatus,
   };
 };

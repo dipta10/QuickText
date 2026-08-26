@@ -70,6 +70,7 @@ Settings should be a separate view reached from a gear button or Settings tab in
 
 Recommended sections:
 
+- General: launch-on-startup preference.
 - Soniox: API key status, save/update key, delete key.
 - Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
 - Behavior: manual copy default, future auto-copy option, max recording duration display.
@@ -182,4 +183,3 @@ QuickText window
 - **Should missing API key fail silently?** No. It should route to Settings and explain the required setup.
 - **Should the app use a full navigation sidebar?** No for MVP. A compact top-bar toggle is enough.
 - **Should there be a visible tray/background control?** Settings should mention that closing hides to tray and quitting is explicit.
-

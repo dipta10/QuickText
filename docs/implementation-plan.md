@@ -54,6 +54,7 @@ App controller/state machine
   +-- Clipboard service
   +-- Tray/menu service
   +-- Shortcut service
+  +-- Diagnostics service
 ```
 
 ## App State Machine
@@ -213,7 +214,13 @@ Deliverables:
 - Test microphone permissions on Linux, macOS, and Windows.
 - Test shortcut registration conflicts.
 - Test packaging basics.
-- Add app logs with sensitive values redacted.
+- Add backend-owned JSON Lines diagnostics with run, recording-session, provider-session, and error identifiers.
+- Add typed event variants and reject free-form external messages and arbitrary metadata; never persist credentials, audio, transcripts, clipboard contents, raw provider payloads, identifying paths, network identifiers, or microphone names/IDs.
+- Add one diagnostics writer task that serializes writes, rotation, consistent export snapshots, and close/delete/reopen operations.
+- Rotate at 2 MiB per file, retain at most five files for at most 14 days, and verify oldest-first cleanup on Linux, macOS, and Windows.
+- Add a Settings Support section for confirmed diagnostics export, local diagnostics deletion, and temporary debug logging.
+- Export current and rotated logs with a safe technical manifest; keep export local and user-controlled.
+- Embed separate immutable `build_id` and `source_revision` values so diagnostics distinguish rolling pre-releases that share an app version and rebuilds of the same revision.
 - Document platform-specific setup issues.
 
 Acceptance checks:
@@ -221,6 +228,15 @@ Acceptance checks:
 - App starts, records, transcribes, and copies on each target OS.
 - Permission failures have useful recovery text.
 - Logs never contain the Soniox API key.
+- Normal and debug logs never contain audio, transcript text, partial transcript text, clipboard contents, raw provider payloads, identifying paths, network identifiers, or microphone names/IDs.
+- One recording ID remains stable across its lifecycle and each provider retry receives a new provider-session ID.
+- User-visible failures include a support reference that maps to one full error event when exported before that event leaves the bounded retained set.
+- Retained logs remain within the five-file, approximately 10 MiB and 14-day caps after startup cleanup.
+- Export requires confirmation, creates a readable bundle with a manifest, and performs no upload.
+- Export produces complete JSON records from one stable snapshot while concurrent event writes wait.
+- Startup events and the bundle manifest include both the exact distributed build ID and its source revision, not only the app version.
+- Delete local diagnostics removes retained files without affecting previously exported bundles.
+- Deletion closes the active file before removal and opens a fresh file before event writes resume on every supported OS.
 
 ## Milestone 8: Live Partial Transcripts
 

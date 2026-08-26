@@ -213,14 +213,16 @@ Deliverables:
 - Test microphone permissions on Linux, macOS, and Windows.
 - Test shortcut registration conflicts.
 - Test packaging basics.
-- Add app logs with sensitive values redacted.
+- Add privacy-safe persistent app logs per [ADR 0015](adrs/0015-persistent-local-diagnostic-logging.md): UTC timestamps, stable event names, run/session correlation, OS-standard paths, bounded rotation, and manual log-folder access.
 - Document platform-specific setup issues.
 
 Acceptance checks:
 
 - App starts, records, transcribes, and copies on each target OS.
 - Permission failures have useful recovery text.
-- Logs never contain the Soniox API key.
+- Logs stay within the documented size/retention bound and logging failures do not block capture.
+- Logs never contain the Soniox API key, transcripts, partials, audio, clipboard text, raw provider frames, device identifiers, or target-window details.
+- Users can open the log folder and copy its path from Settings; QuickText never uploads logs automatically.
 
 ## Milestone 8: Live Partial Transcripts
 

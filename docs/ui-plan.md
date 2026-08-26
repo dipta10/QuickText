@@ -75,6 +75,7 @@ Recommended sections:
 - Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
 - Behavior: manual copy default, future auto-copy option, max recording duration display.
 - App: tray/background explanation and explicit quit note.
+- Diagnostics (when [ADR 0015](adrs/0015-persistent-local-diagnostic-logging.md) is implemented): open the logs folder, copy its path, and explain that logs remain local until the user shares them.
 
 Settings rules:
 
@@ -83,6 +84,7 @@ Settings rules:
 - Do not store API keys in frontend persistence.
 - Keep settings controls visually quieter than the Capture record button.
 - Use short labels and direct status text.
+- Keep log sharing manual and transparent; do not add automatic upload or render log contents inside Capture.
 
 ## Trigger Behavior
 

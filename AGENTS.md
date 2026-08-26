@@ -35,6 +35,7 @@ Read the project docs before making architectural changes:
 - `docs/adrs/0012-paste-to-target-dictation.md`.
 - `docs/adrs/0013-persist-release-history.md`.
 - `docs/adrs/0014-launch-on-startup.md`.
+- `docs/adrs/0015-persistent-local-diagnostic-logging.md`.
 
 ## Current Stack
 
@@ -44,6 +45,7 @@ Read the project docs before making architectural changes:
 - Global shortcuts: `tauri-plugin-global-shortcut`.
 - Tray/background mode: app remains resident after launch; window close hides to tray/menu bar.
 - Launch on startup: opt-in through `tauri-plugin-autostart`; autostart launches hidden.
+- Planned diagnostics: privacy-safe local logs in the platform app-log directory with UTC timestamps, bounded rotation, and manual sharing; see ADR 0015.
 - Planned audio capture: Rust backend, likely `cpal`.
 - Planned transcription: Soniox real-time WebSocket STT.
 - CI: GitHub Actions runs Rust tests and a frontend typecheck on pushes to `main` and PRs targeting `main`.
@@ -86,6 +88,7 @@ npm run tauri dev
 - Use Tauri commands/events for frontend-to-backend communication.
 - Add or update Tauri capability permissions when adding new commands or plugins.
 - Keep provider integration behind a narrow provider boundary so Soniox can be changed later.
+- Never log API keys, transcripts, partial transcripts, raw audio, clipboard content, provider frames, device identifiers, or target-window details.
 
 ## Architecture Rules
 

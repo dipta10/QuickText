@@ -15,6 +15,7 @@ The architecture should keep the app responsive even while audio capture, networ
 - Soniox client: Soniox-specific authentication, streaming or upload protocol, response parsing, and error mapping.
 - Settings store: saves non-secret user preferences locally.
 - Credential store: saves the Soniox API key in OS-backed secret storage.
+- Diagnostic log service: records privacy-safe operational events to bounded, rotated files in the platform app-log directory and exposes that directory for manual support sharing.
 - IPC listener: local socket/named pipe inside the resident app that dispatches external `toggle`/`status` commands to the app controller and enforces single instance.
 
 ## State Model
@@ -112,6 +113,8 @@ Handle these explicitly:
 - Network unavailable.
 - Provider timeout or rate limit.
 - Empty or unintelligible audio.
+
+Operational failures should also be written to privacy-safe local diagnostic logs without including API keys, transcripts, audio, clipboard content, or raw provider frames. Persistent logging is best-effort and must not prevent capture when its file sink is unavailable. The proposed policy is recorded in [ADR 0015](adrs/0015-persistent-local-diagnostic-logging.md).
 
 ## Framework Decision
 

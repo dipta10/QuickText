@@ -135,6 +135,12 @@ Minimum fields:
 
 Owns the tray/menu bar item, show/hide actions, explicit quit action, and window-close-to-hide behavior.
 
+### DiagnosticLogService
+
+Owns persistent operational logging policy: initialization, platform log-directory resolution, formatting, rotation, retention, run correlation, safe value sanitization, and best-effort failure behavior.
+
+Feature modules emit low-volume events through the shared logging facade. The service must never persist API keys, transcripts, partial transcripts, raw audio, clipboard content, provider frames, target-window details, or blanket-serialized app state. Logs remain local until the user explicitly shares them. See [ADR 0015](adrs/0015-persistent-local-diagnostic-logging.md).
+
 ### IpcListener
 
 Owns the local socket/named pipe inside the resident app process.
@@ -181,3 +187,5 @@ It must not own recording state once backend recording is connected. Recording s
 - Settings controls must stay out of the Capture view.
 - Input device picking belongs to Settings; Capture may only surface device-fallback notices.
 - Capture should render transcript text as output, not as an editable input.
+- Operational logs must describe outcomes with safe metadata rather than persisting user content or secrets.
+- Failure of the local diagnostic file sink must not change recording or transcription state.

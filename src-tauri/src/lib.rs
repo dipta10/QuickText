@@ -115,10 +115,10 @@ mod window_flow_tests {
     }
 }
 
-/// Paste target captured at trigger time; consumed when the recording finalizes.
+/// Whether the active recording should paste when transcription finishes.
 #[derive(Default)]
 struct PendingPasteState {
-    target: Mutex<Option<paste_target::PasteTarget>>,
+    armed: Mutex<bool>,
 }
 
 #[derive(Default)]
@@ -505,8 +505,7 @@ pub(crate) async fn toggle_recording_for_app(
     match current_status {
         AppStatus::Idle | AppStatus::Transcribed | AppStatus::Error => {
             clear_pending_paste(&app);
-            let paste_target = capture_paste_target(&app, trigger, &settings);
-            let headless_paste = paste_target.is_some();
+            let headless_paste = headless_paste_armed(&app, trigger, &settings);
             let start_flow = window_flow(trigger, headless_paste, &settings);
             let starting = {
                 let mut controller = lock_controller(&controller)?;
@@ -584,7 +583,7 @@ pub(crate) async fn toggle_recording_for_app(
                 let mut controller = lock_controller(&controller)?;
                 controller.finish_start(audio_format)
             };
-            set_pending_paste(&app, paste_target);
+            set_pending_paste(&app, headless_paste);
             let session_id = lock_controller(&controller)?.active_session_id();
             emit_app_snapshot(&app, &recording);
             if let Some(session_id) = session_id {
@@ -616,28 +615,18 @@ pub(crate) async fn toggle_recording_for_app(
     }
 }
 
-fn capture_paste_target(
+fn headless_paste_armed(
     app: &tauri::AppHandle,
     trigger: RecordingTrigger,
     settings: &ShortcutSettings,
-) -> Option<paste_target::PasteTarget> {
+) -> bool {
     if !paste_to_target_enabled(settings) || matches!(trigger, RecordingTrigger::MainWindowButton) {
-        return None;
+        return false;
     }
 
-    // QuickText's own window being focused means a normal take; never paste
-    // into ourselves (ADR 0012).
-    if main_window_is_focused(app) {
-        return None;
-    }
-
-    match paste_target::capture_focused_target() {
-        Ok(target) => target,
-        Err(error) => {
-            eprintln!("Paste-to-target unavailable, using the regular window flow: {error}");
-            None
-        }
-    }
+    // QuickText being focused when the shortcut fires means a normal take.
+    // Otherwise, delivery follows whichever destination is focused at finalize.
+    !main_window_is_focused(app)
 }
 
 fn main_window_is_focused(app: &tauri::AppHandle) -> bool {
@@ -646,21 +635,21 @@ fn main_window_is_focused(app: &tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-fn set_pending_paste(app: &tauri::AppHandle, target: Option<paste_target::PasteTarget>) {
-    if let Ok(mut pending) = app.state::<PendingPasteState>().target.lock() {
-        *pending = target;
+fn set_pending_paste(app: &tauri::AppHandle, armed: bool) {
+    if let Ok(mut pending) = app.state::<PendingPasteState>().armed.lock() {
+        *pending = armed;
     }
 }
 
 fn clear_pending_paste(app: &tauri::AppHandle) {
-    set_pending_paste(app, None);
+    set_pending_paste(app, false);
 }
 
 fn pending_paste_is_armed(app: &tauri::AppHandle) -> bool {
     app.state::<PendingPasteState>()
-        .target
+        .armed
         .lock()
-        .map(|target| target.is_some())
+        .map(|armed| *armed)
         .unwrap_or(false)
 }
 
@@ -714,13 +703,13 @@ fn deliver_pending_paste(app: &tauri::AppHandle, transcript_text: &str) {
     use tauri_plugin_clipboard_manager::ClipboardExt;
 
     let pending = app.state::<PendingPasteState>();
-    let target = match pending.target.lock() {
-        Ok(mut target) => target.take(),
+    let armed = match pending.armed.lock() {
+        Ok(mut armed) => std::mem::take(&mut *armed),
         Err(_) => return,
     };
-    let Some(target) = target else {
+    if !armed {
         return;
-    };
+    }
 
     if let Err(error) = app.clipboard().write_text(transcript_text.to_string()) {
         report_paste_failure(
@@ -732,7 +721,7 @@ fn deliver_pending_paste(app: &tauri::AppHandle, transcript_text: &str) {
         return;
     }
 
-    if let Err(error) = paste_target::send_paste_keystroke(&target) {
+    if let Err(error) = paste_target::send_paste_keystroke() {
         report_paste_failure(
             app,
             format!("{error} The transcript remains in the clipboard."),

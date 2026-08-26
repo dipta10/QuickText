@@ -288,7 +288,7 @@ export const setPasteToTarget = (
   ...state,
   pasteToTarget,
   status: pasteToTarget
-    ? "Transcripts will paste into the previous app."
+    ? "Transcripts will paste into the focused app."
     : "Paste-to-target disabled.",
 });
 

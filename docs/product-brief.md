@@ -53,7 +53,7 @@ The app should keep running in the background after launch. Closing the main win
 ## Nice-to-Have Later
 
 - Auto-copy transcript after completion.
-- Paste transcript into the previously focused app.
+- Paste transcript into the currently focused app.
 - Local transcript history.
 - Custom vocabulary or context hints if supported by the provider.
 - Streaming partial transcript display while speaking.

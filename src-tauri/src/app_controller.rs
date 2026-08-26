@@ -403,7 +403,7 @@ mod tests {
         controller.finish_stop(fake_transcript(&audio_stats), audio_stats.clone());
 
         let snapshot = controller.report_paste_failure(AppError::PasteFailed {
-            message: "Could not paste into the previous app.".to_string(),
+            message: "Could not paste into the focused app.".to_string(),
         });
 
         assert_eq!(snapshot.status, AppStatus::Error);

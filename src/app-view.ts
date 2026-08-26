@@ -179,13 +179,14 @@ const appTemplate = `
               id="paste-to-target"
               type="checkbox"
             />
-            <span>Paste transcript into the previous app</span>
+            <span>Paste transcript into the focused app</span>
           </label>
           <p class="settings-note paste-to-target-note" hidden>
             Shortcut and CLI recordings run without opening the window; the
-            transcript is pasted into the app you were using. macOS requires
-            Accessibility permission. On Wayland this needs the wtype utility
-            and currently only works on Hyprland.
+            transcript is pasted wherever focus is when transcription finishes.
+            QuickText never changes focus. macOS requires Accessibility
+            permission. On Wayland this needs the wtype utility and currently
+            only works on Hyprland.
           </p>
         </section>
 

@@ -28,6 +28,10 @@ export type AppView = {
   showPartialField: HTMLLabelElement;
   launchOnStartupCheckbox: HTMLInputElement;
   launchOnStartupStatus: HTMLParagraphElement;
+  enableDebugLoggingButton: HTMLButtonElement;
+  exportLogsButton: HTMLButtonElement;
+  deleteLogsButton: HTMLButtonElement;
+  loggingStatus: HTMLParagraphElement;
   bottomStatus: HTMLParagraphElement;
 };
 
@@ -179,6 +183,27 @@ const appTemplate = `
             Closing the window will hide QuickText when tray mode is connected.
           </p>
         </section>
+
+        <section class="settings-section">
+          <h2 class="section-title">Support</h2>
+          <p class="settings-note">
+            Logs contain app lifecycle, timing, audio-format counts, build and
+            platform details, and anonymous session identifiers. They never
+            contain audio, transcripts, API keys, clipboard contents, device
+            names, network addresses, or identifying file paths. QuickText
+            never uploads logs.
+          </p>
+          <button class="enable-debug-logging-button" type="button">
+            Enable debug logging for 30 minutes
+          </button>
+          <button class="export-logs-button" type="button">
+            Export logs
+          </button>
+          <button class="delete-logs-button" type="button">
+            Delete local logs
+          </button>
+          <p class="logging-status settings-note" role="status"></p>
+        </section>
       </section>
     </main>
 
@@ -254,6 +279,18 @@ export const createAppView = (root: HTMLElement): AppView => {
   const launchOnStartupStatus = root.querySelector<HTMLParagraphElement>(
     ".launch-on-startup-status",
   );
+  const enableDebugLoggingButton = root.querySelector<HTMLButtonElement>(
+    ".enable-debug-logging-button",
+  );
+  const exportLogsButton = root.querySelector<HTMLButtonElement>(
+    ".export-logs-button",
+  );
+  const deleteLogsButton = root.querySelector<HTMLButtonElement>(
+    ".delete-logs-button",
+  );
+  const loggingStatus = root.querySelector<HTMLParagraphElement>(
+    ".logging-status",
+  );
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
 
@@ -287,6 +324,10 @@ export const createAppView = (root: HTMLElement): AppView => {
     !showPartialCheckbox ||
     !launchOnStartupCheckbox ||
     !launchOnStartupStatus ||
+    !enableDebugLoggingButton ||
+    !exportLogsButton ||
+    !deleteLogsButton ||
+    !loggingStatus ||
     !bottomStatus
   ) {
     throw new Error("App controls were not found");
@@ -322,6 +363,10 @@ export const createAppView = (root: HTMLElement): AppView => {
     showPartialCheckbox,
     launchOnStartupCheckbox,
     launchOnStartupStatus,
+    enableDebugLoggingButton,
+    exportLogsButton,
+    deleteLogsButton,
+    loggingStatus,
     bottomStatus,
   };
 };

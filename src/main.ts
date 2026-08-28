@@ -46,7 +46,11 @@ import {
 import {
   copyTextToClipboard,
   deleteSonioxApiKey,
+  deleteLocalLogs,
+  enableTemporaryDebugLogging,
+  exportLogs,
   getAppState,
+  getLoggingStatus,
   getLaunchOnStartup as getBackendLaunchOnStartup,
   hasSonioxApiKey,
   onAppStateChanged,
@@ -76,6 +80,8 @@ let state = createAppState(
 );
 const view = createAppView(app);
 let lastAutoCopiedTranscript = "";
+let loggingMessage = "";
+let debugLoggingUntil = 0;
 
 const formatElapsedTime = (startedAt: number | null): string => {
   if (!startedAt) {
@@ -159,6 +165,15 @@ const render = () => {
   view.launchOnStartupStatus.textContent =
     state.launchOnStartupStatus ||
     "Starts hidden in the tray when you sign in.";
+  const debugSecondsRemaining = Math.max(
+    0,
+    Math.ceil((debugLoggingUntil - Date.now()) / 1000),
+  );
+  view.enableDebugLoggingButton.textContent = debugSecondsRemaining
+    ? `Debug logging enabled (${Math.ceil(debugSecondsRemaining / 60)} min left)`
+    : "Enable debug logging for 30 minutes";
+  view.enableDebugLoggingButton.disabled = debugSecondsRemaining > 0;
+  view.loggingStatus.textContent = loggingMessage;
   view.bottomStatus.textContent =
     state.activeView === "capture"
       ? state.status
@@ -292,6 +307,69 @@ const updateLaunchOnStartup = async (enabled: boolean) => {
   }
 };
 
+const applyLoggingStatus = (debugSecondsRemaining: number) => {
+  debugLoggingUntil = Date.now() + debugSecondsRemaining * 1000;
+  render();
+};
+
+const loadLoggingStatus = async () => {
+  try {
+    const status = await getLoggingStatus();
+    applyLoggingStatus(status.debugSecondsRemaining);
+  } catch (error) {
+    loggingMessage = error instanceof Error ? error.message : String(error);
+    render();
+  }
+};
+
+const enableDebugLogging = async () => {
+  const confirmed = window.confirm(
+    "Enable more detailed lifecycle and timing logs for 30 minutes? The same privacy exclusions continue to apply, and debug logging stops when QuickText exits.",
+  );
+  if (!confirmed) return;
+
+  try {
+    const status = await enableTemporaryDebugLogging();
+    loggingMessage = "Temporary debug logging is enabled.";
+    applyLoggingStatus(status.debugSecondsRemaining);
+  } catch (error) {
+    loggingMessage = error instanceof Error ? error.message : String(error);
+    render();
+  }
+};
+
+const exportSupportLogs = async () => {
+  const confirmed = window.confirm(
+    "Export local support logs? The ZIP includes build/platform details, timestamps, anonymous session IDs, lifecycle/timing data, audio format/counts, and stable error categories. It excludes audio, transcripts, API keys, clipboard contents, provider payloads, device names, network addresses, and identifying paths. QuickText will not upload it.",
+  );
+  if (!confirmed) return;
+
+  try {
+    if (await exportLogs()) {
+      loggingMessage = "Support logs exported. You choose whether to share the ZIP.";
+      render();
+    }
+  } catch (error) {
+    loggingMessage = error instanceof Error ? error.message : String(error);
+    render();
+  }
+};
+
+const deleteSupportLogs = async () => {
+  const confirmed = window.confirm(
+    "Delete all logs retained by QuickText? Previously exported ZIP archives will not be deleted.",
+  );
+  if (!confirmed) return;
+
+  try {
+    await deleteLocalLogs();
+    loggingMessage = "Local logs deleted. QuickText started a fresh log.";
+  } catch (error) {
+    loggingMessage = error instanceof Error ? error.message : String(error);
+  }
+  render();
+};
+
 const toggleRecording = async () => {
   try {
     const nextState = showCapture(state);
@@ -397,6 +475,18 @@ view.launchOnStartupCheckbox.addEventListener("change", () => {
   void updateLaunchOnStartup(view.launchOnStartupCheckbox.checked);
 });
 
+view.enableDebugLoggingButton.addEventListener("click", () => {
+  void enableDebugLogging();
+});
+
+view.exportLogsButton.addEventListener("click", () => {
+  void exportSupportLogs();
+});
+
+view.deleteLogsButton.addEventListener("click", () => {
+  void deleteSupportLogs();
+});
+
 view.keybindButton.addEventListener("click", () => {
   updateState(startShortcutCapture(state));
 });
@@ -469,6 +559,7 @@ window.setInterval(render, 1000);
 void loadBackendState();
 void loadApiKeyStatus();
 void loadLaunchOnStartup();
+void loadLoggingStatus();
 void pushShortcutBehavior();
 
 if (state.selectedShortcut) {

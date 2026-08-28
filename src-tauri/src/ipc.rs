@@ -108,12 +108,19 @@ pub fn format_status_text(response_snapshot: &serde_json::Value) -> String {
         .unwrap_or("unknown");
     let label = status_label(status);
 
-    match response_snapshot
+    let message = response_snapshot
         .pointer("/error/message")
-        .and_then(serde_json::Value::as_str)
-    {
-        Some(message) => format!("{label}: {message}"),
-        None => label.to_string(),
+        .and_then(serde_json::Value::as_str);
+    let support_reference = response_snapshot
+        .pointer("/error/supportReference")
+        .and_then(serde_json::Value::as_str);
+
+    match (message, support_reference) {
+        (Some(message), Some(reference)) => {
+            format!("{label}: {message} Support reference: {reference}")
+        }
+        (Some(message), None) => format!("{label}: {message}"),
+        (None, _) => label.to_string(),
     }
 }
 
@@ -196,14 +203,18 @@ mod tests {
         let with_error: serde_json::Value = serde_json::from_str(
             r#"{
                 "status": "error",
-                "error": {"type": "missing_api_key", "message": "Add your Soniox API key before recording."}
+                "error": {
+                    "type": "missing_api_key",
+                    "message": "Add your Soniox API key before recording.",
+                    "supportReference": "QT-7F3A91C2D4E8"
+                }
             }"#,
         )
         .unwrap();
 
         assert_eq!(
             format_status_text(&with_error),
-            "Error: Add your Soniox API key before recording."
+            "Error: Add your Soniox API key before recording. Support reference: QT-7F3A91C2D4E8"
         );
 
         let without_error: serde_json::Value =

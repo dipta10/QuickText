@@ -69,6 +69,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QUICKTEXT_BUILD_ID: ${{ env.RELEASE_TAG }}
+          QUICKTEXT_SOURCE_REVISION: ${{ github.sha }}
           RELEASE_NOTES: |
             Dictate, get instant text, copy it anywhere. Press once to record, press again to stop — your words appear as text you can paste into anything.
 

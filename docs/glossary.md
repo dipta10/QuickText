@@ -18,6 +18,8 @@ Terms used across the product and ADR docs. Add entries here when an ADR introdu
 - **Headless take**: A recording started by shortcut or CLI/IPC while paste-to-target is enabled; the main window is never shown or focused, and finalize pastes into the target app.
 - **Paste target**: The application focused when a headless take starts. If QuickText itself is focused at trigger time, the take is not headless and no paste occurs.
 - **App run**: One lifetime of the resident QuickText process, from process start until exit; all events in that lifetime share one UUID v4 `run_id`.
+- **Logger**: Backend application-facing abstraction with typed `debug`, `info`, `warn`, and `error` methods; it writes privacy-safe structured events and never accepts arbitrary messages.
+- **Support-log manager**: Backend operations around retained log files: rotation, expiry, temporary debug mode, export, and deletion.
 - **Recording session ID**: UUID v4 correlating one accepted dictation take from the `starting` transition through setup, capture, finalization, cancellation, or failure.
 - **Provider session ID**: UUID v4 correlating one provider connection attempt; a retry gets a new provider-session ID while retaining its recording-session ID.
 - **Support reference**: Compact `QT-` reference shown with a user-visible error and mapped to a full `error_id` in exported diagnostics.

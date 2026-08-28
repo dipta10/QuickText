@@ -284,8 +284,6 @@ async fn run_soniox_session(
 }
 
 fn record_stream_error(stream_error: &SharedErrorSlot, message: &str) {
-    eprintln!("QuickText Soniox session error: {message}");
-
     if let Ok(mut slot) = stream_error.lock() {
         *slot = Some(message.to_string());
     }

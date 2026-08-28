@@ -16,6 +16,7 @@ export type TranscriptResult = {
 export type BackendAppError = {
   type: string;
   message: string;
+  supportReference: string;
 };
 
 export type BackendAppSnapshot = {
@@ -101,7 +102,7 @@ export const cancelShortcutCapture = (state: AppState): AppState => ({
 
 const statusText = (snapshot: BackendAppSnapshot): string => {
   if (snapshot.error) {
-    return snapshot.error.message;
+    return `${snapshot.error.message} Support reference: ${snapshot.error.supportReference}`;
   }
 
   switch (snapshot.status) {
@@ -153,7 +154,7 @@ export const applyBackendSnapshot = (
       snapshot.status === "recording" ? state.partialTranscript : "",
     recordingStartedAt: recordingStartedAt(state, snapshot),
     apiKeyStatus: isMissingApiKey
-      ? snapshot.error?.message ?? state.apiKeyStatus
+      ? statusText(snapshot)
       : state.apiKeyStatus,
   };
 };

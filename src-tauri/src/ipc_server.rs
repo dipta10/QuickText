@@ -7,7 +7,10 @@ use tokio::time::timeout;
 use tokio::time::Duration;
 
 use super::ipc::{IpcCommand, IpcRequest, IpcResponse};
-use crate::AppControllerState;
+use crate::{
+    logger::{AppLogger, LogContext, Logger, Operation, WarnEvent},
+    AppControllerState,
+};
 use tauri::Manager;
 
 pub enum ServerStart {
@@ -24,7 +27,12 @@ pub fn start(app: tauri::AppHandle) -> Result<ServerStart, String> {
     tauri::async_runtime::spawn(async move {
         match UnixListener::from_std(std_listener) {
             Ok(listener) => accept_loop(app, listener).await,
-            Err(error) => eprintln!("Could not start IPC listener: {error}"),
+            Err(_) => app.state::<AppLogger>().warn(
+                LogContext::default(),
+                WarnEvent::OperationFailed {
+                    operation: Operation::IpcListener,
+                },
+            ),
         }
     });
 
@@ -54,7 +62,6 @@ fn bind_socket() -> Result<SocketBind, String> {
             let listener = StdUnixListener::bind(&path)
                 .map_err(|error| format!("Could not rebind IPC socket: {error}"))?;
             restrict_socket_permissions(&path)?;
-            eprintln!("Removed a stale QuickText IPC socket and rebound it.");
             finish_bind(listener)
         }
         Err(error) => Err(format!("Could not bind IPC socket: {error}")),
@@ -86,8 +93,13 @@ async fn accept_loop(app: tauri::AppHandle, listener: UnixListener) {
                 let app = app.clone();
                 tauri::async_runtime::spawn(handle_connection(app, stream));
             }
-            Err(error) => {
-                eprintln!("IPC listener accept failed: {error}");
+            Err(_) => {
+                app.state::<AppLogger>().warn(
+                    LogContext::default(),
+                    WarnEvent::OperationFailed {
+                        operation: Operation::IpcListener,
+                    },
+                );
                 return;
             }
         }
@@ -120,7 +132,12 @@ async fn dispatch(app: &tauri::AppHandle, request: &IpcRequest) -> IpcResponse {
             let focus_window = request.wants_window_focus();
             let toggle = timeout(
                 Duration::from_secs(super::ipc::RESPONSE_TIMEOUT_SECONDS),
-                crate::toggle_recording_for_app(app.clone(), None, focus_window),
+                crate::toggle_recording_for_app(
+                    app.clone(),
+                    None,
+                    focus_window,
+                    crate::logger::TriggerSource::Ipc,
+                ),
             )
             .await;
 

@@ -1,4 +1,7 @@
-use std::{sync::Mutex, time::Duration};
+use std::{
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
 mod app_controller;
 mod audio_recorder;
@@ -7,6 +10,7 @@ mod companion_cli;
 mod ipc;
 #[cfg(unix)]
 mod ipc_server;
+mod logger;
 mod soniox_provider;
 
 #[cfg(test)]
@@ -15,12 +19,18 @@ mod transcription_fixture_tests;
 use app_controller::{AppController, AppError, AppSnapshot, AppStatus, TranscriptResult};
 use audio_recorder::{AudioCaptureStats, AudioRecorder};
 use keyring::{Entry, Error as KeyringError};
+use logger::{
+    AppLogger, BuildInfo, DebugEvent, DebugPhase, ErrorEvent, FailureCategory, InfoEvent,
+    LogContext, LoggedAppState, Logger, Operation, TriggerSource, WarnEvent,
+};
 use soniox_provider::{PartialTranscript, SonioxSession};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State, WindowEvent,
 };
+use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const SONIOX_KEY_SERVICE: &str = "com.dipta.stt";
@@ -61,6 +71,11 @@ struct AudioRecorderState {
 #[derive(Default)]
 struct TranscriptionState {
     session: Mutex<Option<SonioxSession>>,
+}
+
+#[derive(Default)]
+struct LoggingContextState {
+    active: Mutex<Option<LogContext>>,
 }
 
 fn soniox_key_entry() -> Result<Entry, String> {
@@ -116,8 +131,13 @@ fn update_tray_icon(app: &tauri::AppHandle, status: &AppStatus) {
             .and_then(|()| tray.set_tooltip(Some("QuickText"))),
     };
 
-    if let Err(error) = result {
-        eprintln!("Could not update tray icon: {error}");
+    if result.is_err() {
+        app.state::<AppLogger>().warn(
+            active_log_context(app),
+            WarnEvent::OperationFailed {
+                operation: Operation::TrayUpdate,
+            },
+        );
     }
 }
 
@@ -202,10 +222,25 @@ fn schedule_max_recording_duration(
             return;
         }
 
+        let log_context = active_log_context(&app);
+        app.state::<AppLogger>().info(
+            log_context,
+            InfoEvent::TriggerReceived {
+                source: TriggerSource::DurationLimit,
+            },
+        );
+
         let stopping = match lock_controller(&controller) {
             Ok(mut controller) => controller.begin_stop(),
             Err(_) => return,
         };
+        app.state::<AppLogger>().info(
+            log_context,
+            InfoEvent::StateChanged {
+                from: LoggedAppState::Recording,
+                to: LoggedAppState::Stopping,
+            },
+        );
         emit_app_snapshot(&app, &stopping);
 
         let recorder = app.state::<AudioRecorderState>();
@@ -213,24 +248,61 @@ fn schedule_max_recording_duration(
             Ok(audio_stats) => audio_stats,
             Err(_) => return,
         };
+        app.state::<AppLogger>().info(
+            log_context,
+            InfoEvent::RecordingStopped {
+                duration_ms: u64::try_from(audio_stats.elapsed_ms).unwrap_or(u64::MAX),
+                chunk_count: audio_stats.chunk_count,
+                sample_count: audio_stats.sample_count,
+                byte_count: audio_stats.byte_count,
+            },
+        );
+        app.state::<AppLogger>()
+            .info(log_context, InfoEvent::ProviderFinalizing);
 
         let transcription = app.state::<TranscriptionState>();
+        let finalize_started = Instant::now();
         let transcript = match stop_transcription_session(&transcription).await {
             Ok(transcript) => transcript,
             Err(error) => {
+                let reference = record_failure(
+                    &app,
+                    FailureCategory::ProviderUnavailable,
+                    "provider_finalize_failed",
+                );
                 let error_snapshot = match lock_controller(&controller) {
-                    Ok(mut controller) => controller.fail_stop(provider_unavailable_error(error)),
+                    Ok(mut controller) => {
+                        controller.fail_stop(provider_unavailable_error(&error, reference))
+                    }
                     Err(_) => return,
                 };
                 emit_app_snapshot(&app, &error_snapshot);
                 return;
             }
         };
+        app.state::<AppLogger>().debug(
+            log_context,
+            DebugEvent::Timing {
+                phase: DebugPhase::ProviderFinalize,
+                elapsed_ms: u64::try_from(finalize_started.elapsed().as_millis())
+                    .unwrap_or(u64::MAX),
+            },
+        );
 
         let transcribed = match lock_controller(&controller) {
             Ok(mut controller) => controller.finish_stop(transcript, audio_stats),
             Err(_) => return,
         };
+        app.state::<AppLogger>()
+            .info(log_context, InfoEvent::ProviderCompleted);
+        app.state::<AppLogger>().info(
+            log_context,
+            InfoEvent::StateChanged {
+                from: LoggedAppState::Stopping,
+                to: LoggedAppState::Transcribed,
+            },
+        );
+        clear_log_context(&app);
         emit_app_snapshot(&app, &transcribed);
     });
 }
@@ -238,12 +310,22 @@ fn schedule_max_recording_duration(
 async fn fail_recording_when_provider_unreachable(
     app: tauri::AppHandle,
     session_id: u64,
+    provider_started: Instant,
     provider_ready_rx: tokio::sync::oneshot::Receiver<Result<(), String>>,
 ) {
     let outcome = provider_ready_rx
         .await
         .unwrap_or_else(|_| Err("The Soniox connection ended unexpectedly.".to_string()));
+    app.state::<AppLogger>().debug(
+        active_log_context(&app),
+        DebugEvent::Timing {
+            phase: DebugPhase::ProviderConnect,
+            elapsed_ms: u64::try_from(provider_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        },
+    );
     if outcome.is_ok() {
+        app.state::<AppLogger>()
+            .info(active_log_context(&app), InfoEvent::ProviderConnected);
         return;
     }
 
@@ -271,35 +353,103 @@ async fn fail_recording_when_provider_unreachable(
         Ok(()) => return,
         Err(error) => error,
     };
+    let reference = record_failure(
+        &app,
+        FailureCategory::ProviderUnavailable,
+        "provider_connection_failed",
+    );
     let error_snapshot = match lock_controller(&controller) {
-        Ok(mut controller) => controller.fail_recording(provider_unavailable_error(error_message)),
+        Ok(mut controller) => {
+            controller.fail_recording(provider_unavailable_error(&error_message, reference))
+        }
         Err(_) => return,
     };
     emit_app_snapshot(&app, &error_snapshot);
 }
 
-fn missing_api_key_error() -> AppError {
-    AppError::MissingApiKey {
-        message: "Add your Soniox API key before recording.".to_string(),
+fn app_status_for_log(status: &AppStatus) -> LoggedAppState {
+    match status {
+        AppStatus::Idle => LoggedAppState::Idle,
+        AppStatus::Starting => LoggedAppState::Starting,
+        AppStatus::Recording => LoggedAppState::Recording,
+        AppStatus::Stopping => LoggedAppState::Stopping,
+        AppStatus::Transcribed => LoggedAppState::Transcribed,
+        AppStatus::Error => LoggedAppState::Error,
     }
 }
 
-fn credential_store_error(message: String) -> AppError {
-    AppError::CredentialStore { message }
+fn active_log_context(app: &tauri::AppHandle) -> LogContext {
+    app.state::<LoggingContextState>()
+        .active
+        .lock()
+        .ok()
+        .and_then(|context| *context)
+        .unwrap_or_default()
 }
 
-fn microphone_unavailable_error(message: String) -> AppError {
-    AppError::MicrophoneUnavailable { message }
+fn begin_log_context(app: &tauri::AppHandle) -> LogContext {
+    let context = LogContext::recording();
+    set_log_context(app, context);
+    context
 }
 
-fn provider_unavailable_error(message: String) -> AppError {
-    let message = if message.to_lowercase().contains("incorrect api key") {
-        format!("{message} Delete and re-save your key in Settings.")
+fn set_log_context(app: &tauri::AppHandle, context: LogContext) {
+    if let Ok(mut active) = app.state::<LoggingContextState>().active.lock() {
+        *active = Some(context);
+    }
+}
+
+fn clear_log_context(app: &tauri::AppHandle) {
+    if let Ok(mut active) = app.state::<LoggingContextState>().active.lock() {
+        *active = None;
+    }
+}
+
+fn record_failure(app: &tauri::AppHandle, category: FailureCategory, code: &'static str) -> String {
+    let context = active_log_context(app).with_error();
+    app.state::<AppLogger>()
+        .error(context, ErrorEvent::Failure { category, code });
+    let reference = context
+        .support_reference()
+        .unwrap_or_else(|| "QT-UNKNOWN".to_string());
+    clear_log_context(app);
+    reference
+}
+
+fn missing_api_key_error(support_reference: String) -> AppError {
+    AppError::MissingApiKey {
+        message: "Add your Soniox API key before recording.".to_string(),
+        support_reference,
+    }
+}
+
+fn credential_store_error(support_reference: String) -> AppError {
+    AppError::CredentialStore {
+        message: "QuickText could not access the credential store.".to_string(),
+        support_reference,
+    }
+}
+
+fn microphone_unavailable_error(support_reference: String) -> AppError {
+    AppError::MicrophoneUnavailable {
+        message: "QuickText could not start the microphone. Check microphone access and try again."
+            .to_string(),
+        support_reference,
+    }
+}
+
+fn provider_unavailable_error(raw_error: &str, support_reference: String) -> AppError {
+    let message = if raw_error.to_lowercase().contains("incorrect api key") {
+        "Soniox rejected the saved API key. Delete and re-save it in Settings.".to_string()
     } else {
-        message
+        "QuickText could not complete transcription. Check your connection and try again."
+            .to_string()
     };
 
-    AppError::ProviderUnavailable { message }
+    AppError::ProviderUnavailable {
+        message,
+        support_reference,
+    }
 }
 
 pub(crate) fn lock_controller<'a>(
@@ -420,7 +570,7 @@ async fn toggle_recording(
     max_recording_seconds: Option<u64>,
 ) -> Result<AppSnapshot, String> {
     show_main_window(&app);
-    toggle_recording_for_app(app, max_recording_seconds, false).await
+    toggle_recording_for_app(app, max_recording_seconds, false, TriggerSource::Ui).await
 }
 
 async fn run_shortcut_toggle(app: tauri::AppHandle) {
@@ -434,7 +584,7 @@ async fn run_shortcut_toggle(app: tauri::AppHandle) {
         show_main_window(&app);
     }
 
-    let _ = toggle_recording_for_app(app.clone(), None, false).await;
+    let _ = toggle_recording_for_app(app.clone(), None, false, TriggerSource::Shortcut).await;
 
     if was_recording && shortcut_hides_on_stop(&settings) {
         hide_main_window(&app);
@@ -445,6 +595,7 @@ pub(crate) async fn toggle_recording_for_app(
     app: tauri::AppHandle,
     max_recording_seconds: Option<u64>,
     focus_window: bool,
+    trigger_source: TriggerSource,
 ) -> Result<AppSnapshot, String> {
     let controller = app.state::<AppControllerState>();
     let credentials = app.state::<CredentialState>();
@@ -454,13 +605,28 @@ pub(crate) async fn toggle_recording_for_app(
         .filter(|seconds| *seconds > 0)
         .unwrap_or(DEFAULT_MAX_RECORDING_SECONDS);
     let current_status = lock_controller(&controller)?.snapshot().status;
+    app.state::<AppLogger>().info(
+        active_log_context(&app),
+        InfoEvent::TriggerReceived {
+            source: trigger_source,
+        },
+    );
 
     match current_status {
         AppStatus::Idle | AppStatus::Transcribed | AppStatus::Error => {
+            let mut log_context = begin_log_context(&app);
+            let microphone_setup_started = Instant::now();
             let starting = {
                 let mut controller = lock_controller(&controller)?;
                 controller.begin_start()
             };
+            app.state::<AppLogger>().info(
+                log_context,
+                InfoEvent::StateChanged {
+                    from: app_status_for_log(&current_status),
+                    to: LoggedAppState::Starting,
+                },
+            );
             emit_app_snapshot(&app, &starting);
 
             if focus_window {
@@ -468,19 +634,34 @@ pub(crate) async fn toggle_recording_for_app(
             }
 
             let api_key = match get_soniox_api_key_available(&credentials) {
-                Ok(Some(api_key)) => api_key,
+                Ok(Some(api_key)) => {
+                    app.state::<AppLogger>().info(
+                        log_context,
+                        InfoEvent::OperationSucceeded {
+                            operation: Operation::CredentialRead,
+                        },
+                    );
+                    api_key
+                }
                 Ok(None) => {
+                    let reference =
+                        record_failure(&app, FailureCategory::MissingApiKey, "missing_api_key");
                     let error_snapshot = {
                         let mut controller = lock_controller(&controller)?;
-                        controller.fail_start(missing_api_key_error())
+                        controller.fail_start(missing_api_key_error(reference))
                     };
                     emit_app_snapshot(&app, &error_snapshot);
                     return Ok(error_snapshot);
                 }
-                Err(error) => {
+                Err(_) => {
+                    let reference = record_failure(
+                        &app,
+                        FailureCategory::CredentialStore,
+                        "credential_read_failed",
+                    );
                     let error_snapshot = {
                         let mut controller = lock_controller(&controller)?;
-                        controller.fail_start(credential_store_error(error))
+                        controller.fail_start(credential_store_error(reference))
                     };
                     emit_app_snapshot(&app, &error_snapshot);
                     return Ok(error_snapshot);
@@ -489,17 +670,27 @@ pub(crate) async fn toggle_recording_for_app(
 
             let audio_format = match AudioRecorder::input_format() {
                 Ok(audio_format) => audio_format,
-                Err(error) => {
+                Err(_) => {
+                    let reference = record_failure(
+                        &app,
+                        FailureCategory::NoMicrophoneDevice,
+                        "microphone_format_unavailable",
+                    );
                     let error_snapshot = {
                         let mut controller = lock_controller(&controller)?;
-                        controller.fail_start(microphone_unavailable_error(error))
+                        controller.fail_start(microphone_unavailable_error(reference))
                     };
                     emit_app_snapshot(&app, &error_snapshot);
                     return Ok(error_snapshot);
                 }
             };
 
+            log_context = log_context.with_provider_session();
+            set_log_context(&app, log_context);
+            let provider_started = Instant::now();
             let mut soniox_session = SonioxSession::start(api_key, audio_format.clone());
+            app.state::<AppLogger>()
+                .info(log_context, InfoEvent::ProviderConnectionAttempt);
             let provider_ready_rx = soniox_session.take_ready_receiver();
 
             if let Some(partial_rx) = soniox_session.take_partial_receiver() {
@@ -510,16 +701,29 @@ pub(crate) async fn toggle_recording_for_app(
             // the session channel until the connection is ready.
             let audio_recorder = match AudioRecorder::start(soniox_session.audio_sender()) {
                 Ok(recorder) => recorder,
-                Err(error) => {
+                Err(_) => {
                     soniox_session.cancel();
+                    let reference = record_failure(
+                        &app,
+                        FailureCategory::NoMicrophoneDevice,
+                        "microphone_start_failed",
+                    );
                     let error_snapshot = {
                         let mut controller = lock_controller(&controller)?;
-                        controller.fail_start(microphone_unavailable_error(error))
+                        controller.fail_start(microphone_unavailable_error(reference))
                     };
                     emit_app_snapshot(&app, &error_snapshot);
                     return Ok(error_snapshot);
                 }
             };
+            app.state::<AppLogger>().debug(
+                log_context,
+                DebugEvent::Timing {
+                    phase: DebugPhase::MicrophoneSetup,
+                    elapsed_ms: u64::try_from(microphone_setup_started.elapsed().as_millis())
+                        .unwrap_or(u64::MAX),
+                },
+            );
             {
                 let mut active_recorder = lock_recorder(&recorder)?;
                 *active_recorder = Some(audio_recorder);
@@ -533,6 +737,40 @@ pub(crate) async fn toggle_recording_for_app(
                 let mut controller = lock_controller(&controller)?;
                 controller.finish_start(audio_format)
             };
+            let encoding = match recording
+                .audio_format
+                .as_ref()
+                .map(|format| &format.encoding)
+            {
+                Some(audio_recorder::AudioEncoding::F32) => "f32",
+                Some(audio_recorder::AudioEncoding::I16) => "i16",
+                Some(audio_recorder::AudioEncoding::U16) => "u16",
+                None => "unknown",
+            };
+            app.state::<AppLogger>().info(
+                log_context,
+                InfoEvent::RecordingStarted {
+                    sample_rate: recording
+                        .audio_format
+                        .as_ref()
+                        .map(|format| format.sample_rate)
+                        .unwrap_or_default(),
+                    channels: recording
+                        .audio_format
+                        .as_ref()
+                        .map(|format| format.channels)
+                        .unwrap_or_default(),
+                    encoding,
+                    device_fallback: false,
+                },
+            );
+            app.state::<AppLogger>().info(
+                log_context,
+                InfoEvent::StateChanged {
+                    from: LoggedAppState::Starting,
+                    to: LoggedAppState::Recording,
+                },
+            );
             let session_id = lock_controller(&controller)?.active_session_id();
             emit_app_snapshot(&app, &recording);
             if let Some(session_id) = session_id {
@@ -541,6 +779,7 @@ pub(crate) async fn toggle_recording_for_app(
                     tauri::async_runtime::spawn(fail_recording_when_provider_unreachable(
                         app.clone(),
                         session_id,
+                        provider_started,
                         provider_ready_rx,
                     ));
                 }
@@ -548,24 +787,67 @@ pub(crate) async fn toggle_recording_for_app(
             Ok(recording)
         }
         AppStatus::Recording => {
+            let log_context = active_log_context(&app);
             let stopping = {
                 let mut controller = lock_controller(&controller)?;
                 controller.begin_stop()
             };
+            app.state::<AppLogger>().info(
+                log_context,
+                InfoEvent::StateChanged {
+                    from: LoggedAppState::Recording,
+                    to: LoggedAppState::Stopping,
+                },
+            );
             emit_app_snapshot(&app, &stopping);
 
             let audio_stats = stop_audio_recorder(&recorder)?;
+            app.state::<AppLogger>().info(
+                log_context,
+                InfoEvent::RecordingStopped {
+                    duration_ms: u64::try_from(audio_stats.elapsed_ms).unwrap_or(u64::MAX),
+                    chunk_count: audio_stats.chunk_count,
+                    sample_count: audio_stats.sample_count,
+                    byte_count: audio_stats.byte_count,
+                },
+            );
+            app.state::<AppLogger>()
+                .info(log_context, InfoEvent::ProviderFinalizing);
+            let finalize_started = Instant::now();
             let transcript = match stop_transcription_session(&transcription).await {
                 Ok(transcript) => transcript,
                 Err(error) => {
+                    let reference = record_failure(
+                        &app,
+                        FailureCategory::ProviderUnavailable,
+                        "provider_finalize_failed",
+                    );
                     let error_snapshot = {
                         let mut controller = lock_controller(&controller)?;
-                        controller.fail_stop(provider_unavailable_error(error))
+                        controller.fail_stop(provider_unavailable_error(&error, reference))
                     };
                     emit_app_snapshot(&app, &error_snapshot);
                     return Ok(error_snapshot);
                 }
             };
+            app.state::<AppLogger>().debug(
+                log_context,
+                DebugEvent::Timing {
+                    phase: DebugPhase::ProviderFinalize,
+                    elapsed_ms: u64::try_from(finalize_started.elapsed().as_millis())
+                        .unwrap_or(u64::MAX),
+                },
+            );
+            app.state::<AppLogger>()
+                .info(log_context, InfoEvent::ProviderCompleted);
+            app.state::<AppLogger>().info(
+                log_context,
+                InfoEvent::StateChanged {
+                    from: LoggedAppState::Stopping,
+                    to: LoggedAppState::Transcribed,
+                },
+            );
+            clear_log_context(&app);
 
             let transcribed = {
                 let mut controller = lock_controller(&controller)?;
@@ -615,6 +897,7 @@ fn stop_audio_recorder(
 fn set_global_shortcut(
     app: tauri::AppHandle,
     settings: State<'_, ShortcutSettings>,
+    logger: State<'_, AppLogger>,
     shortcut: String,
 ) -> Result<String, String> {
     let shortcut = shortcut.trim();
@@ -623,13 +906,25 @@ fn set_global_shortcut(
         return Err("Choose a shortcut first.".into());
     }
 
-    app.global_shortcut()
-        .unregister_all()
-        .map_err(|error| format!("Could not clear the previous shortcut: {error}"))?;
+    if let Err(error) = app.global_shortcut().unregister_all() {
+        logger.warn(
+            LogContext::default(),
+            WarnEvent::OperationFailed {
+                operation: Operation::ShortcutRegistration,
+            },
+        );
+        return Err(format!("Could not clear the previous shortcut: {error}"));
+    }
 
-    app.global_shortcut()
-        .register(shortcut)
-        .map_err(|error| format!("Could not register shortcut: {error}"))?;
+    if let Err(error) = app.global_shortcut().register(shortcut) {
+        logger.warn(
+            LogContext::default(),
+            WarnEvent::OperationFailed {
+                operation: Operation::ShortcutRegistration,
+            },
+        );
+        return Err(format!("Could not register shortcut: {error}"));
+    }
 
     let mut active_shortcut = settings
         .active_shortcut
@@ -637,6 +932,12 @@ fn set_global_shortcut(
         .map_err(|_| "Could not update shortcut state.".to_string())?;
 
     *active_shortcut = Some(shortcut.to_string());
+    logger.info(
+        LogContext::default(),
+        InfoEvent::OperationSucceeded {
+            operation: Operation::ShortcutRegistration,
+        },
+    );
 
     Ok(shortcut.to_string())
 }
@@ -644,6 +945,7 @@ fn set_global_shortcut(
 #[tauri::command]
 fn set_shortcut_behavior(
     settings: State<'_, ShortcutSettings>,
+    logger: State<'_, AppLogger>,
     focus_on_start: bool,
     hide_on_stop: bool,
 ) -> Result<(), String> {
@@ -658,6 +960,13 @@ fn set_shortcut_behavior(
         .lock()
         .map_err(|_| "Could not update shortcut state.".to_string())?;
     *hide = hide_on_stop;
+
+    logger.info(
+        LogContext::default(),
+        InfoEvent::OperationSucceeded {
+            operation: Operation::SettingsUpdate,
+        },
+    );
 
     Ok(())
 }
@@ -679,13 +988,32 @@ fn shortcut_hides_on_stop(settings: &ShortcutSettings) -> bool {
 }
 
 #[tauri::command]
-fn has_soniox_api_key(credentials: State<'_, CredentialState>) -> Result<bool, String> {
-    has_soniox_api_key_available(&credentials)
+fn has_soniox_api_key(
+    credentials: State<'_, CredentialState>,
+    logger: State<'_, AppLogger>,
+) -> Result<bool, String> {
+    let result = has_soniox_api_key_available(&credentials);
+    match &result {
+        Ok(_) => logger.info(
+            LogContext::default(),
+            InfoEvent::OperationSucceeded {
+                operation: Operation::CredentialRead,
+            },
+        ),
+        Err(_) => logger.warn(
+            LogContext::default(),
+            WarnEvent::OperationFailed {
+                operation: Operation::CredentialRead,
+            },
+        ),
+    }
+    result
 }
 
 #[tauri::command]
 fn save_soniox_api_key(
     credentials: State<'_, CredentialState>,
+    logger: State<'_, AppLogger>,
     api_key: String,
 ) -> Result<bool, String> {
     let api_key = sanitize_api_key(&api_key);
@@ -694,21 +1022,98 @@ fn save_soniox_api_key(
         return Err("Enter a Soniox API key first.".into());
     }
 
-    soniox_key_entry()?
-        .set_password(api_key.as_str())
-        .map_err(|error| format!("Could not save Soniox API key: {error}"))?;
+    let result = soniox_key_entry().and_then(|entry| {
+        entry
+            .set_password(api_key.as_str())
+            .map_err(|error| format!("Could not save Soniox API key: {error}"))
+    });
+    if let Err(error) = result {
+        logger.warn(
+            LogContext::default(),
+            WarnEvent::OperationFailed {
+                operation: Operation::CredentialSave,
+            },
+        );
+        return Err(error);
+    }
 
     cache_soniox_api_key(&credentials, api_key.as_str())?;
+    logger.info(
+        LogContext::default(),
+        InfoEvent::OperationSucceeded {
+            operation: Operation::CredentialSave,
+        },
+    );
     Ok(true)
 }
 
 #[tauri::command]
-fn delete_soniox_api_key(credentials: State<'_, CredentialState>) -> Result<(), String> {
+fn delete_soniox_api_key(
+    credentials: State<'_, CredentialState>,
+    logger: State<'_, AppLogger>,
+) -> Result<(), String> {
     clear_cached_soniox_api_key(&credentials)?;
 
-    match soniox_key_entry()?.delete_credential() {
-        Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
-        Err(error) => Err(format!("Could not delete Soniox API key: {error}")),
+    let entry = match soniox_key_entry() {
+        Ok(entry) => entry,
+        Err(error) => {
+            logger.warn(
+                LogContext::default(),
+                WarnEvent::OperationFailed {
+                    operation: Operation::CredentialDelete,
+                },
+            );
+            return Err(error);
+        }
+    };
+
+    match entry.delete_credential() {
+        Ok(()) | Err(KeyringError::NoEntry) => {
+            logger.info(
+                LogContext::default(),
+                InfoEvent::OperationSucceeded {
+                    operation: Operation::CredentialDelete,
+                },
+            );
+            Ok(())
+        }
+        Err(error) => {
+            logger.warn(
+                LogContext::default(),
+                WarnEvent::OperationFailed {
+                    operation: Operation::CredentialDelete,
+                },
+            );
+            Err(format!("Could not delete Soniox API key: {error}"))
+        }
+    }
+}
+
+#[tauri::command]
+fn copy_text_to_clipboard(
+    app: tauri::AppHandle,
+    logger: State<'_, AppLogger>,
+    text: String,
+) -> Result<(), String> {
+    match app.clipboard().write_text(text) {
+        Ok(()) => {
+            logger.info(
+                LogContext::default(),
+                InfoEvent::OperationSucceeded {
+                    operation: Operation::ClipboardWrite,
+                },
+            );
+            Ok(())
+        }
+        Err(_) => {
+            logger.warn(
+                LogContext::default(),
+                WarnEvent::OperationFailed {
+                    operation: Operation::ClipboardWrite,
+                },
+            );
+            Err("QuickText could not write to the clipboard.".to_string())
+        }
     }
 }
 
@@ -718,8 +1123,133 @@ fn get_launch_on_startup(app: tauri::AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn set_launch_on_startup(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
-    autostart::set_enabled(&app, enabled)
+fn set_launch_on_startup(
+    app: tauri::AppHandle,
+    logger: State<'_, AppLogger>,
+    enabled: bool,
+) -> Result<bool, String> {
+    let result = autostart::set_enabled(&app, enabled);
+    match &result {
+        Ok(_) => logger.info(
+            LogContext::default(),
+            InfoEvent::OperationSucceeded {
+                operation: Operation::AutostartUpdate,
+            },
+        ),
+        Err(_) => logger.warn(
+            LogContext::default(),
+            WarnEvent::OperationFailed {
+                operation: Operation::AutostartUpdate,
+            },
+        ),
+    }
+    result
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LoggingStatus {
+    debug_seconds_remaining: u64,
+}
+
+#[tauri::command]
+fn get_logging_status(logger: State<'_, AppLogger>) -> Result<LoggingStatus, String> {
+    Ok(LoggingStatus {
+        debug_seconds_remaining: logger.debug_seconds_remaining()?,
+    })
+}
+
+#[tauri::command]
+fn enable_temporary_debug_logging(logger: State<'_, AppLogger>) -> Result<LoggingStatus, String> {
+    let seconds = logger.enable_debug()?;
+    logger.info(
+        LogContext::default(),
+        InfoEvent::OperationSucceeded {
+            operation: Operation::DebugLogging,
+        },
+    );
+    Ok(LoggingStatus {
+        debug_seconds_remaining: seconds,
+    })
+}
+
+#[tauri::command]
+async fn export_logs(app: tauri::AppHandle, logger: State<'_, AppLogger>) -> Result<bool, String> {
+    let dialog_app = app.clone();
+    let selected = tauri::async_runtime::spawn_blocking(move || {
+        dialog_app
+            .dialog()
+            .file()
+            .add_filter("ZIP archive", &["zip"])
+            .set_file_name("quicktext-diagnostics.zip")
+            .blocking_save_file()
+    })
+    .await
+    .map_err(|_| "The diagnostics save dialog stopped unexpectedly.".to_string())?;
+    let Some(selected) = selected else {
+        return Ok(false);
+    };
+    let mut destination = selected
+        .into_path()
+        .map_err(|_| "The selected diagnostics destination is not a local file.".to_string())?;
+    if destination.extension().is_none() {
+        destination.set_extension("zip");
+    }
+
+    let logger = logger.inner().clone();
+    let export_logger = logger.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || export_logger.export(destination))
+        .await
+        .map_err(|_| "The diagnostics export task stopped unexpectedly.".to_string())?;
+    match result {
+        Ok(()) => {
+            logger.info(
+                LogContext::default(),
+                InfoEvent::OperationSucceeded {
+                    operation: Operation::Export,
+                },
+            );
+            Ok(true)
+        }
+        Err(error) => {
+            logger.warn(
+                LogContext::default(),
+                WarnEvent::OperationFailed {
+                    operation: Operation::Export,
+                },
+            );
+            Err(error)
+        }
+    }
+}
+
+#[tauri::command]
+async fn delete_local_logs(logger: State<'_, AppLogger>) -> Result<(), String> {
+    let logger = logger.inner().clone();
+    let delete_logger = logger.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || delete_logger.delete_local_logs())
+        .await
+        .map_err(|_| "The local log deletion task stopped unexpectedly.".to_string())?;
+    match result {
+        Ok(()) => {
+            logger.info(
+                LogContext::default(),
+                InfoEvent::OperationSucceeded {
+                    operation: Operation::DeleteLogs,
+                },
+            );
+            Ok(())
+        }
+        Err(error) => {
+            logger.warn(
+                LogContext::default(),
+                WarnEvent::OperationFailed {
+                    operation: Operation::DeleteLogs,
+                },
+            );
+            Err(error)
+        }
+    }
 }
 
 pub fn entry() -> i32 {
@@ -746,7 +1276,9 @@ fn run_with_options(start_hidden: bool) {
         .manage(CredentialState::default())
         .manage(AudioRecorderState::default())
         .manage(TranscriptionState::default())
+        .manage(LoggingContextState::default())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(autostart::plugin())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -761,7 +1293,31 @@ fn run_with_options(start_hidden: bool) {
                 .build(),
         )
         .setup(move |app| {
+            let log_dir = app.path().app_log_dir()?;
+            let locale = std::env::var("LANG").unwrap_or_else(|_| "unknown".to_string());
+            let build_info = BuildInfo::current(app.package_info().version.to_string(), locale);
+            let logger =
+                AppLogger::start(log_dir, build_info.clone()).map_err(std::io::Error::other)?;
+            logger.info(
+                LogContext::default(),
+                InfoEvent::AppStarted {
+                    app_version: build_info.app_version,
+                    build_id: build_info.build_id,
+                    source_revision: build_info.source_revision,
+                    os_family: build_info.os_family,
+                    os_version: build_info.os_version,
+                    architecture: build_info.architecture,
+                },
+            );
+            app.manage(logger);
+
             setup_tray(app)?;
+            app.state::<AppLogger>().info(
+                LogContext::default(),
+                InfoEvent::OperationSucceeded {
+                    operation: Operation::TrayUpdate,
+                },
+            );
 
             if start_hidden {
                 hide_main_window(app.handle());
@@ -769,9 +1325,21 @@ fn run_with_options(start_hidden: bool) {
 
             #[cfg(unix)]
             match ipc_server::start(app.handle().clone()) {
-                Ok(ipc_server::ServerStart::Listening) => {}
+                Ok(ipc_server::ServerStart::Listening) => {
+                    app.state::<AppLogger>().info(
+                        LogContext::default(),
+                        InfoEvent::OperationSucceeded {
+                            operation: Operation::IpcListener,
+                        },
+                    );
+                }
                 Ok(ipc_server::ServerStart::AlreadyRunning) => {
-                    eprintln!("Another QuickText instance is already running.");
+                    app.state::<AppLogger>().warn(
+                        LogContext::default(),
+                        WarnEvent::OperationFailed {
+                            operation: Operation::IpcListener,
+                        },
+                    );
                     app.handle().exit(1);
                 }
                 Err(error) => return Err(error.into()),
@@ -787,12 +1355,23 @@ fn run_with_options(start_hidden: bool) {
             has_soniox_api_key,
             save_soniox_api_key,
             delete_soniox_api_key,
+            copy_text_to_clipboard,
             get_launch_on_startup,
-            set_launch_on_startup
+            set_launch_on_startup,
+            get_logging_status,
+            enable_temporary_debug_logging,
+            export_logs,
+            delete_local_logs
         ])
         .build(tauri::generate_context!())
         .expect("error while building Tauri application")
         .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                if let Some(logger) = app.try_state::<AppLogger>() {
+                    logger.info(LogContext::default(), InfoEvent::AppShutdown);
+                    let _ = logger.shutdown();
+                }
+            }
             if let tauri::RunEvent::WindowEvent {
                 label,
                 event: WindowEvent::CloseRequested { api, .. },

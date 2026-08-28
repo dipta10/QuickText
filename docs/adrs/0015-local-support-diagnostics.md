@@ -47,7 +47,7 @@ Events should describe lifecycle and outcomes rather than arbitrary prose. Initi
 - Provider connection attempt, connected, finalizing, completed, retry, timeout, and sanitized failure category.
 - Settings, credential-store, clipboard, tray, shortcut, IPC, and export operation success or failure without logging their sensitive values.
 
-The backend diagnostics service owns the schema and writes. It accepts typed event variants with bounded fields rather than arbitrary messages or metadata maps. Frontend events, where needed, go through a narrow allowlisted interface. The app must not automatically forward arbitrary browser `console` output into persisted logs.
+The backend `Logger` owns the schema and writes. Application code uses its familiar `debug`, `info`, `warn`, and `error` methods, which accept typed event variants with bounded fields rather than arbitrary messages or metadata maps. The support-log management surface owns export, deletion, retention, and temporary debug mode. Frontend events, where needed, go through a narrow allowlisted interface. The app must not automatically forward arbitrary browser `console` output into persisted logs.
 
 ### Privacy Boundary
 
@@ -98,7 +98,7 @@ The user sends the archive voluntarily through a channel of their choice. Export
 
 ### Implementation Boundary
 
-Use a diagnostics-owned writer rather than a process-global logging sink. Process-global sinks can capture dependency records that bypass QuickText's typed allowlist, and plugin-owned file handles do not provide the snapshot/reset lifecycle required by export and deletion. Rust application code logs through typed diagnostics methods. Frontend code does not receive logging permissions, filesystem paths, or direct file access.
+Use a logger-owned writer rather than a process-global logging sink. Process-global sinks can capture dependency records that bypass QuickText's typed allowlist, and plugin-owned file handles do not provide the snapshot/reset lifecycle required by export and deletion. Rust application code logs through the typed `Logger` abstraction. Frontend code does not receive logging permissions, filesystem paths, or direct file access; it receives only support-management commands.
 
 Existing `eprintln!` calls that represent backend diagnostics should move to this boundary when implemented. CLI stdout/stderr intended as command output remains CLI output and must not be conflated with persisted diagnostics.
 

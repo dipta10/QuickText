@@ -164,7 +164,11 @@ jobs:
       - name: Upload Arch package to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$RELEASE_TAG" packaging/arch/quicktext-*.pkg.tar.zst --clobber
+        run: >-
+          gh release upload "$RELEASE_TAG"
+          packaging/arch/quicktext-*.pkg.tar.zst
+          --repo "$GITHUB_REPOSITORY"
+          --clobber
 
   cleanup-old-releases:
     name: Prune releases beyond the newest 10

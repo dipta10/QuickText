@@ -123,8 +123,6 @@ jobs:
     runs-on: ubuntu-22.04
     container: archlinux:base-devel
     steps:
-      - uses: actions/checkout@v4
-
       - name: Install Arch build and runtime dependencies
         run: |
           pacman -Syu --noconfirm --needed \
@@ -141,6 +139,8 @@ jobs:
             webkit2gtk-4.1 \
             wtype \
             xdotool
+
+      - uses: actions/checkout@v4
 
       - name: Prepare unprivileged package builder
         run: |

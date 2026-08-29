@@ -39,6 +39,7 @@ The app should keep running in the background after launch. Closing the main win
 - Global shortcut for start/stop.
 - Tray/menu bar background mode after launch.
 - Basic error handling for missing API key, microphone permission failure, network failure, and provider failure.
+- Local privacy-safe support diagnostics with bounded retention, correlated run/session identifiers, and explicit user export.
 
 ## Non-Goals for MVP
 
@@ -49,6 +50,7 @@ The app should keep running in the background after launch. Closing the main win
 - Rich text formatting.
 - Team or cloud account features.
 - Mobile support.
+- Automatic telemetry, remote log upload, and crash-reporting infrastructure.
 
 ## Nice-to-Have Later
 

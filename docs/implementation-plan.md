@@ -27,6 +27,7 @@ The core product promise is a fast toggle loop:
 - Background mode: app stays resident in tray/menu bar after launch.
 - Global shortcut: Tauri global-shortcut plugin.
 - Settings: local app settings plus OS credential storage for the Soniox API key.
+- Linux distribution: native Debian, RPM, and Arch x86_64 packages, with AppImage retained as a qualified compatibility fallback.
 - Maximum recording duration: 5 minutes for MVP, with configurability deferred.
 - Transcript history: out of MVP.
 
@@ -258,6 +259,32 @@ Acceptance checks:
 - Stopping hides the partial immediately; final transcript replaces it.
 - Error or cancel leaves no stale partial on screen.
 - No Soniox protocol details appear in frontend code.
+
+## Milestone 9: Linux Distribution Hardening
+
+Deliverables:
+
+- Add a version-controlled Arch packaging definition for an x86_64 `.pkg.tar.zst` artifact.
+- Extend CD with a pinned Arch Linux build environment and attach the Arch package to the same release tag as the Debian, RPM, AppImage, macOS, and Windows artifacts.
+- Build the Arch binary against Arch system libraries and declare the required GTK, WebKitGTK, Wayland, audio, tray, and input runtime dependencies explicitly.
+- Install the binary, desktop entry, and icons in standard system locations without packaging user settings, credentials, diagnostics, or transcripts.
+- Propagate the same immutable `build_id` and `source_revision` used by the rest of the CD run.
+- Update the release download table to direct Arch and Manjaro x86_64 users to the pacman package and provide its `pacman -U` installation command.
+- Keep the AppImage blank-window recovery command under a clearly temporary compatibility note.
+- Track the upstream Tauri AppImage bundler issue and upgrade to a released fix when available.
+- Remove the AppImage experimental warning only after the unmodified rebuilt artifact passes the compatibility matrix in [ADR 0016](adrs/0016-linux-distribution-packaging.md).
+- Defer AUR publication and Linux ARM64/aarch64 artifacts to separately tested distribution slices.
+
+Acceptance checks:
+
+- A clean Arch environment installs the generated package with all declared runtime dependencies resolved.
+- Package inspection shows only the expected executable, desktop integration, icons, and package metadata.
+- The installed app launches on current Manjaro or Arch under Hyprland without `LD_PRELOAD`, `WEBKIT_DISABLE_DMABUF_RENDERER`, or other renderer overrides.
+- Window rendering, tray residency, close-to-hide, autostart-hidden launch, microphone enumeration, recording, transcription, clipboard copy, and companion CLI behavior work from the installed package.
+- The Arch artifact appears on the same GitHub Release and reports the same build and source identities as the other platform artifacts.
+- The AppImage continues to run on the oldest supported glibc baseline.
+- Before its warning is removed, the AppImage also launches on current Arch-family and Fedora-family Wayland systems with no environment workaround.
+- Release notes distinguish Arch Linux from ARM64/aarch64 and do not claim Linux ARM support.
 
 ## Grilling Notes
 

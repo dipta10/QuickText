@@ -36,6 +36,7 @@ Read the project docs before making architectural changes:
 - `docs/adrs/0013-persist-release-history.md`.
 - `docs/adrs/0014-launch-on-startup.md`.
 - `docs/adrs/0015-local-support-diagnostics.md`.
+- `docs/adrs/0016-linux-distribution-packaging.md`.
 
 ## Current Stack
 

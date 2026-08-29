@@ -136,6 +136,14 @@ Candidate directions considered:
 
 Tauri is the initial choice because the app needs a fast desktop shell, global shortcuts, clipboard integration, local settings, and a native backend that can own microphone capture and WebSocket streaming. The framework decision is recorded in [ADR 0001](adrs/0001-tauri-desktop-shell.md).
 
+## Linux Distribution Strategy
+
+Treat Linux packaging as a matrix of native package families plus a compatibility fallback. CD should publish x86_64 Debian, RPM, and Arch packages. Each native package uses its distribution family's system GTK, WebKitGTK, Wayland, audio, tray, and input libraries. The AppImage remains available for other distributions, but it is not the preferred Arch/Manjaro artifact while Tauri's bundled Wayland libraries can conflict with current Mesa.
+
+Do not add AppImage-specific `LD_PRELOAD` paths or renderer flags to the application binary. Existing AppImage users may use the documented launch workaround, but the durable Arch-family path is a `.pkg.tar.zst` built in a pinned Arch environment and installed through pacman. The generic AppImage returns to normal support only after an upstream bundler fix is adopted and the unmodified result is exercised on the oldest supported glibc baseline plus current Arch-family and Fedora-family Wayland systems.
+
+Linux ARM64/aarch64 is outside the current build matrix. See [ADR 0016](adrs/0016-linux-distribution-packaging.md).
+
 ## Soniox Integration Decision
 
 Use Soniox real-time STT over WebSocket for MVP.

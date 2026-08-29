@@ -10,26 +10,26 @@ QuickText currently ends every dictation loop inside its own window: recording s
 
 There is no universal cross-platform API for inserting text into another application's focused field. The pragmatic mechanism is writing the transcript to the clipboard and synthesizing a paste keystroke (Ctrl+V / Cmd+V) — the approach used by comparable dictation tools. Synthetic input has platform constraints: Windows SendInput works out of the box, macOS requires Accessibility permission, Linux works on X11 but may be refused by some Wayland compositors.
 
-A naive implementation conflicts with existing behavior: triggering currently steals focus, so "the previously focused app" would be lost.
+A naive implementation conflicts with existing behavior because showing QuickText would steal focus before the paste can be delivered.
 
 ## Decision
 
-Add an opt-in Settings checkbox, "paste transcript into the previous app". When enabled:
+Add an opt-in Settings checkbox, "paste transcript into the focused app". When enabled:
 
-1. Shortcut-triggered and CLI/IPC-triggered recordings run **headless**: the main window is never shown or focused, regardless of `focus_on_start` / `hide_on_stop` (those settings are bypassed at runtime for headless takes and remain untouched in Settings).
-2. The paste target is the application focused **at trigger time**.
+1. Global-shortcut and plain CLI/IPC recordings run **headless**: the main window is never shown or focused, regardless of `focus_on_start` / `hide_on_stop` (those settings are bypassed at runtime for headless takes and remain untouched in Settings). An explicit `quicktext toggle focus` keeps its existing window contract: show and focus QuickText on start, then hide it after the transcript is ready on stop.
+2. The paste target is whichever application or field is focused **when the paste is delivered**. Headless takes paste directly into the current destination. A focused CLI take hides QuickText, allows the operating system to transfer focus, and then pastes into the destination selected by the operating system. QuickText never captures or restores the application that was focused when recording began.
 3. If QuickText's own window is focused at trigger time, the take behaves normally (no self-paste).
-4. On finalize, the transcript is written to the clipboard and a paste keystroke is synthesized into the target.
+4. On finalize, the transcript is written to the clipboard and a paste keystroke is synthesized into the currently focused destination. Focused CLI takes hide QuickText and briefly wait for focus transfer before synthesizing the keystroke.
 5. The clipboard keeps the transcript after pasting (no restore); the user can paste again elsewhere. Clipboard-manager interference is accepted.
-6. In-window button and tray-initiated recordings keep current behavior; only headless-capable triggers paste.
+6. In-window button and tray-initiated recordings keep current behavior; global-shortcut and CLI/IPC triggers can paste.
 7. There is no cancel gesture for headless takes in this slice; a misfired take pastes on finalize.
-8. If the paste fails (target gone, missing permission, compositor refusal), the transcript stays in the clipboard and an error message appears in the app UI; an OS error notification is planned once notification surfaces are wired (see ADR 0010).
+8. If the paste fails (missing permission, compositor refusal, or input-synthesis failure), the transcript stays in the clipboard and an error message appears in the app UI; an OS error notification is planned once notification surfaces are wired (see ADR 0010).
 9. Failed finalization produces no paste, as today.
 
 ## Consequences
 
 - Recording becomes usable without any visual interruption — the core "dictate anywhere" loop.
-- The backend needs a platform abstraction for capturing the focused app and synthesizing paste, with per-platform implementations behind one seam.
+- The backend needs a platform abstraction for synthesizing paste, with per-platform implementations behind one seam.
 - macOS builds need an Accessibility-permission check with recovery guidance in Settings.
 - Wayland sessions may be unable to synthesize input; the fallback path is the documented behavior there.
 - The same shortcut gains behavior conditional on a setting — documentation and UI copy must make the mode explicit.
@@ -38,10 +38,11 @@ Add an opt-in Settings checkbox, "paste transcript into the previous app". When 
 ## Grilled Decisions
 
 - **Is the feature opt-in?** Yes; off by default, gated by a single Settings checkbox.
-- **Does triggering still steal focus when the feature is on?** No; headless takes never show or focus the window.
+- **Does triggering still steal focus when the feature is on?** Plain shortcut and CLI/IPC takes do not. `quicktext toggle focus` explicitly shows and focuses QuickText while recording, then hides it before delivery.
 - **Which triggers paste?** Global shortcut and companion CLI/IPC toggles. Button and tray takes keep current behavior.
+- **What does `quicktext toggle focus` do?** It preserves its original show-on-start and hide-on-stop contract. With paste-to-target enabled, delivery happens after QuickText hides and the operating system transfers focus.
 - **How is text delivered?** Clipboard plus synthesized paste keystroke; direct insertion APIs rejected as non-universal.
 - **What happens to the user's prior clipboard content?** It is overwritten and not restored; the transcript remains available for re-pasting.
 - **What happens on paste failure?** Transcript stays in clipboard; error shown in app UI now, OS notification later.
 - **Can a headless take be cancelled?** Not in this slice; no cancel gesture.
-- **When is the paste target determined?** At trigger time, not finalize time.
+- **When is the paste target determined?** At delivery time. QuickText pastes into whatever destination is focused when transcription finishes and never changes focus itself.

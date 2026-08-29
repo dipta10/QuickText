@@ -26,6 +26,8 @@ export type AppView = {
   liveTranscriptField: HTMLLabelElement;
   showPartialCheckbox: HTMLInputElement;
   showPartialField: HTMLLabelElement;
+  pasteToTargetCheckbox: HTMLInputElement;
+  pasteToTargetNote: HTMLParagraphElement;
   launchOnStartupCheckbox: HTMLInputElement;
   launchOnStartupStatus: HTMLParagraphElement;
   bottomStatus: HTMLParagraphElement;
@@ -171,6 +173,21 @@ const appTemplate = `
             />
             <span>Show unconfirmed words as they form</span>
           </label>
+          <label class="checkbox-field" for="paste-to-target">
+            <input
+              class="paste-to-target-checkbox"
+              id="paste-to-target"
+              type="checkbox"
+            />
+            <span>Paste transcript into the focused app</span>
+          </label>
+          <p class="settings-note paste-to-target-note" hidden>
+            Shortcut and plain CLI recordings stay hidden. A
+            <code>quicktext toggle focus</code> recording shows QuickText, then
+            hides it before pasting. Delivery goes wherever focus is at that
+            moment. macOS requires Accessibility permission. On Wayland this
+            needs the wtype utility and currently only works on Hyprland.
+          </p>
         </section>
 
         <section class="settings-section">
@@ -248,6 +265,12 @@ export const createAppView = (root: HTMLElement): AppView => {
   const showPartialCheckbox = root.querySelector<HTMLInputElement>(
     ".show-partial-transcript-checkbox",
   );
+  const pasteToTargetCheckbox = root.querySelector<HTMLInputElement>(
+    ".paste-to-target-checkbox",
+  );
+  const pasteToTargetNote = root.querySelector<HTMLParagraphElement>(
+    ".paste-to-target-note",
+  );
   const launchOnStartupCheckbox = root.querySelector<HTMLInputElement>(
     ".launch-on-startup-checkbox",
   );
@@ -285,6 +308,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     !liveTranscriptCheckbox ||
     !showPartialField ||
     !showPartialCheckbox ||
+    !pasteToTargetCheckbox ||
+    !pasteToTargetNote ||
     !launchOnStartupCheckbox ||
     !launchOnStartupStatus ||
     !bottomStatus
@@ -320,6 +345,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     liveTranscriptCheckbox,
     showPartialField,
     showPartialCheckbox,
+    pasteToTargetCheckbox,
+    pasteToTargetNote,
     launchOnStartupCheckbox,
     launchOnStartupStatus,
     bottomStatus,

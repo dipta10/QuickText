@@ -26,6 +26,7 @@ pub enum AppError {
     CredentialStore { message: String },
     MicrophoneUnavailable { message: String },
     ProviderUnavailable { message: String },
+    PasteFailed { message: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -181,6 +182,15 @@ impl AppController {
                 audio_stats: Some(audio_stats),
             };
             self.active_session_id = None;
+        }
+
+        self.snapshot()
+    }
+
+    pub fn report_paste_failure(&mut self, error: AppError) -> AppSnapshot {
+        if self.snapshot.status == AppStatus::Transcribed {
+            self.snapshot.status = AppStatus::Error;
+            self.snapshot.error = Some(error);
         }
 
         self.snapshot()
@@ -380,5 +390,27 @@ mod tests {
 
         assert!(!controller.is_recording_session(first_session_id));
         assert!(controller.is_recording_session(2));
+    }
+
+    #[test]
+    fn paste_failure_keeps_transcript_but_marks_error() {
+        let mut controller = AppController::default();
+
+        controller.begin_start();
+        controller.finish_start(test_audio_format());
+        controller.begin_stop();
+        let audio_stats = test_audio_stats();
+        controller.finish_stop(fake_transcript(&audio_stats), audio_stats.clone());
+
+        let snapshot = controller.report_paste_failure(AppError::PasteFailed {
+            message: "Could not paste into the focused app.".to_string(),
+        });
+
+        assert_eq!(snapshot.status, AppStatus::Error);
+        assert_eq!(
+            snapshot.transcript.map(|transcript| transcript.text),
+            Some(fake_transcript(&audio_stats).text)
+        );
+        assert_eq!(snapshot.audio_stats, Some(audio_stats));
     }
 }

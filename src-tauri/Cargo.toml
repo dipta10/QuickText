@@ -35,5 +35,8 @@ futures-util = "0.3"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
 
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
+enigo = "0.6"
+
 [dev-dependencies]
 hound = "3"

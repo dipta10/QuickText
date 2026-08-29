@@ -78,7 +78,7 @@ jobs:
             |---|---|
             | Windows | `QuickText_0.1.0_x64-setup.exe` (installer) or `.msi` |
             | Mac (Apple Silicon / M1–M4) | `QuickText_0.1.0_aarch64.dmg` |
-            | Linux | `.AppImage` (just run it) or `.deb` / `.rpm` |
+            | Linux | `.AppImage` or `.deb` / `.rpm` |
 
             ## First-time setup
 
@@ -92,7 +92,13 @@ jobs:
 
             - **Windows**: SmartScreen may say "Unknown publisher" → click *More info* → *Run anyway*.
             - **macOS**: first launch may say "cannot verify the developer" → right-click the app → *Open* → *Open* again. If it instead says "damaged", run `xattr -cr /Applications/QuickText.app` in Terminal and open it again.
-            - **Linux**: no fuss.
+            - **Linux (Arch/Manjaro on Wayland)**: if the AppImage opens a blank window and prints `EGL_BAD_PARAMETER`, launch it from its download folder with:
+
+              ```bash
+              LD_PRELOAD=/usr/lib/libwayland-client.so.0 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./QuickText_0.1.0_amd64.AppImage
+              ```
+
+              This is a temporary workaround for an AppImage compatibility issue on newer Mesa/Wayland systems.
 
             A build like this is published on every merge to main; older builds stay available on the [releases page](../../releases). Bug reports welcome!
         with:

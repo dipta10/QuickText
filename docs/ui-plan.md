@@ -70,10 +70,12 @@ Settings should be a separate view reached from a gear button or Settings tab in
 
 Recommended sections:
 
+- General: launch-on-startup preference.
 - Soniox: API key status, save/update key, delete key.
 - Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
 - Behavior: manual copy default, future auto-copy option, max recording duration display.
 - App: tray/background explanation and explicit quit note.
+- Support: temporary debug logging, export diagnostics, delete local diagnostics, and a concise privacy explanation.
 
 Settings rules:
 
@@ -82,6 +84,9 @@ Settings rules:
 - Do not store API keys in frontend persistence.
 - Keep settings controls visually quieter than the Capture record button.
 - Use short labels and direct status text.
+- Keep diagnostics actions in Settings; Capture only shows a compact support reference alongside an error.
+- Before export confirmation, list the included categories: app/build/platform data, locale, timestamps, run/session/error IDs, trigger source, lifecycle/timing data, audio format/counts, fallback outcomes, and stable error categories/codes.
+- In the same confirmation, list the excluded content and explain that deleting local diagnostics cannot delete archives the user exported previously.
 
 ## Trigger Behavior
 
@@ -140,6 +145,7 @@ QuickText window
     Global shortcut
     Behavior
     App/tray
+    Support diagnostics
 
   Bottom line
     Shortcut hint or active error
@@ -172,6 +178,9 @@ QuickText window
 - Missing API key sends the user to Settings with a clear setup message.
 - UI remains compact at the minimum supported window size.
 - No Soniox protocol details appear in UI text.
+- Errors expose a compact support reference without exposing provider protocol details.
+- Diagnostics export requires an explanation and explicit confirmation; it never implies that QuickText uploads the bundle.
+- Temporary debug logging visibly expires after 30 minutes or when the resident process exits.
 
 ## Grilled Decisions
 
@@ -182,4 +191,3 @@ QuickText window
 - **Should missing API key fail silently?** No. It should route to Settings and explain the required setup.
 - **Should the app use a full navigation sidebar?** No for MVP. A compact top-bar toggle is enough.
 - **Should there be a visible tray/background control?** Settings should mention that closing hides to tray and quitting is explicit.
-

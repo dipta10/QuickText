@@ -10,8 +10,8 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 - Capture view: The primary UI view for recording, stopping, viewing transcripts, and copying text.
 - Settings view: The secondary UI view for keybinds, Soniox API key setup, and app preferences.
 - Tray/menu bar resident app: The long-running app process after launch, even when the main window is hidden.
-- Recording session: One attempt to capture microphone audio from start until stop/cancel.
-- Transcription session: One provider connection or request that turns audio for a recording session into text.
+- Recording session: One accepted dictation attempt from the backend start transition through setup, capture, finalization, cancellation, or failure.
+- Transcription session: The logical operation that turns one recording session's audio into text; it may contain more than one provider connection attempt if retry or reconnect behavior is used.
 - Transcript: The final user-visible text produced from a transcription session.
 - Partial transcript: Non-final text emitted while audio is still being processed.
 - Hypothesis tokens: The provider's revisable non-final tokens for un-finalized audio; rendered dimmed and replaced as more audio arrives.
@@ -26,6 +26,10 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 - Settings store: Local non-secret preferences such as shortcut and auto-copy.
 - Input device selection: The user-chosen microphone, persisted as a stable device ID; "System default" tracks the OS default microphone.
 - Device fallback: Behavior when the configured input device is missing at record start; capture uses the OS default instead.
+- App run: One lifetime of the resident QuickText process, identified by a `run_id` generated at process start.
+- Provider session: One provider connection attempt within a transcription session, identified independently so retries remain distinguishable.
+- Support reference: A compact user-visible reference for one error event; exported diagnostics contain its full error and session context.
+- Diagnostics bundle: A user-exported archive of bounded, metadata-only local logs and a technical manifest.
 
 ## Core Entities
 
@@ -116,6 +120,8 @@ Minimum categories:
 
 UI text should be generated from these categories and should not include raw provider protocol details.
 
+Every surfaced `AppError` also carries one full `error_id` and its derived `support_reference`. Re-rendering or notifying the same error reuses those values; a new failure occurrence receives a new `error_id`.
+
 ### AppSettings
 
 Non-secret user preferences.
@@ -129,6 +135,7 @@ Minimum fields:
 - `max_recording_seconds`
 - `live_transcript` (default on)
 - `show_partial_transcript` (default on, only meaningful when `live_transcript` is on)
+- `launch_on_startup` (default off; registered with the operating system by the backend)
 
 ### TrayMenuService
 
@@ -165,6 +172,44 @@ Frontend-only view state that decides whether Capture or Settings is visible.
 
 It must not own recording state once backend recording is connected. Recording state comes from backend app-state events.
 
+### DiagnosticsService
+
+Backend-owned service for privacy-safe support diagnostics.
+
+Responsibilities:
+
+- Generate one UUID v4 `run_id` per resident process launch.
+- Assign and propagate recording-session, provider-session, and error identifiers.
+- Persist versioned JSON Lines events with UTC timestamps and allowlisted metadata.
+- Accept only typed event variants and bounded allowlisted fields; reject free-form external errors and arbitrary metadata.
+- Rotate logs by size and enforce bounded retention.
+- Serialize writes, stable export snapshots, and close/delete/reopen operations through one writer task.
+- Enable non-persistent, time-bounded debug logging without weakening content exclusions.
+- Export confirmed diagnostics bundles and delete retained local diagnostics on request.
+
+It must not persist audio, transcripts, partial transcripts, credentials, clipboard contents, raw provider payloads, identifying paths, network identifiers, or microphone names/IDs. It must not upload diagnostics.
+
+### DiagnosticEvent
+
+One structured local diagnostic record.
+
+Minimum fields:
+
+- `schema_version`
+- `timestamp_utc`
+- `level`
+- `component`
+- `event`
+- `run_id`
+- optional `recording_session_id`
+- optional `provider_session_id`
+- optional `error_id`
+- allowlisted `metadata`
+
+### DiagnosticsBundle
+
+A ZIP archive created only after explicit user confirmation. It contains the current and rotated logs plus a manifest with safe technical metadata, including separate immutable `build_id` and `source_revision` fields. Export creates a local file chosen by the user and never transmits it.
+
 ## Boundaries
 
 - UI must not know Soniox protocol details.
@@ -180,3 +225,7 @@ It must not own recording state once backend recording is connected. Recording s
 - Settings controls must stay out of the Capture view.
 - Input device picking belongs to Settings; Capture may only surface device-fallback notices.
 - Capture should render transcript text as output, not as an editable input.
+- Diagnostic writes, retention, export, and deletion are backend responsibilities; the frontend never receives raw log paths.
+- Logs must use allowlisted structured events rather than arbitrary console forwarding.
+- Recording sessions keep one ID across their lifecycle; each provider connection attempt receives its own ID.
+- Normal and debug logs must preserve the same secret and user-content exclusions.

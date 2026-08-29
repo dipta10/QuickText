@@ -16,6 +16,7 @@ The architecture should keep the app responsive even while audio capture, networ
 - Settings store: saves non-secret user preferences locally.
 - Credential store: saves the Soniox API key in OS-backed secret storage.
 - IPC listener: local socket/named pipe inside the resident app that dispatches external `toggle`/`status` commands to the app controller and enforces single instance.
+- Diagnostics service: owns structured local events, run/session/error correlation IDs, redaction, bounded retention, and user-controlled support export.
 
 ## State Model
 
@@ -97,6 +98,7 @@ MVP settings should include:
 - Soniox API key.
 - Optional auto-copy after transcription.
 - Optional global shortcut.
+- Optional launch on system startup (starts hidden in the tray/menu bar).
 
 The API key should be stored using the operating system's secure credential storage if the chosen desktop framework supports it cleanly.
 
@@ -111,6 +113,16 @@ Handle these explicitly:
 - Network unavailable.
 - Provider timeout or rate limit.
 - Empty or unintelligible audio.
+
+## Support Diagnostics
+
+Persist privacy-safe JSON Lines diagnostics in the platform application log directory. A single backend writer task accepts only typed events, owns the active file, and serializes writes, rotation, stable export snapshots, and close/delete/reopen operations. The diagnostics service attaches one process `run_id`, one `recording_session_id` per accepted take, one `provider_session_id` per provider connection attempt, and one `error_id` per surfaced failure.
+
+Production logs include `info`, `warn`, and `error`; a Settings action can enable metadata-only `debug` events for at most 30 minutes or until process exit. Retain at most five 2 MiB files and no files older than 14 days, pruning the oldest at initialization and after rotation.
+
+Logs must never contain credentials, authorization data, audio, transcript or partial-transcript text, clipboard contents, raw provider payloads, identifying paths, network identifiers, or microphone names/IDs. Free-form external errors and arbitrary metadata are rejected rather than sanitized. Startup events and the export manifest include separate immutable `build_id` and `source_revision` fields because rolling pre-releases may share an app version and a revision may be rebuilt. The Settings Support section lets the user confirm and export the current and rotated logs with a safe manifest, or delete retained diagnostics. Export creates a local archive only; QuickText does not send telemetry or upload logs.
+
+Do not use a process-global sink for persisted support diagnostics: dependency or frontend records could bypass the typed privacy boundary. Resolve the application log directory through Tauri's path APIs and keep file ownership in the diagnostics writer. See [ADR 0015](adrs/0015-local-support-diagnostics.md).
 
 ## Framework Decision
 

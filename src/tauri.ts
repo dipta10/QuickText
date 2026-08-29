@@ -12,6 +12,8 @@ const saveSonioxApiKeyCommand = "save_soniox_api_key";
 const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
 const listInputDevicesCommand = "list_input_devices";
 const setInputDeviceCommand = "set_input_device";
+const getLaunchOnStartupCommand = "get_launch_on_startup";
+const setLaunchOnStartupCommand = "set_launch_on_startup";
 const appStateChangedEvent = "app-state-changed";
 const partialTranscriptEvent = "partial-transcript";
 const deviceFallbackEvent = "device-fallback";
@@ -82,6 +84,18 @@ export const listInputDevices = async (): Promise<BackendInputDeviceList> => {
 export const setInputDevice = async (deviceId: string | null) => {
   assertTauriRuntime();
   await invoke(setInputDeviceCommand, { deviceId });
+};
+
+export const getLaunchOnStartup = async (): Promise<boolean> => {
+  assertTauriRuntime();
+  return await invoke<boolean>(getLaunchOnStartupCommand);
+};
+
+export const setLaunchOnStartup = async (
+  enabled: boolean,
+): Promise<boolean> => {
+  assertTauriRuntime();
+  return await invoke<boolean>(setLaunchOnStartupCommand, { enabled });
 };
 
 export const copyTextToClipboard = async (text: string) => {

@@ -34,6 +34,8 @@ Read the project docs before making architectural changes:
 - `docs/adrs/0011-provider-declared-settings.md`.
 - `docs/adrs/0012-paste-to-target-dictation.md`.
 - `docs/adrs/0013-persist-release-history.md`.
+- `docs/adrs/0014-launch-on-startup.md`.
+- `docs/adrs/0015-local-support-diagnostics.md`.
 
 ## Current Stack
 
@@ -42,6 +44,7 @@ Read the project docs before making architectural changes:
 - Backend: Rust Tauri commands and events.
 - Global shortcuts: `tauri-plugin-global-shortcut`.
 - Tray/background mode: app remains resident after launch; window close hides to tray/menu bar.
+- Launch on startup: opt-in through `tauri-plugin-autostart`; autostart launches hidden.
 - Planned audio capture: Rust backend, likely `cpal`.
 - Planned transcription: Soniox real-time WebSocket STT.
 - CI: GitHub Actions runs Rust tests and a frontend typecheck on pushes to `main` and PRs targeting `main`.

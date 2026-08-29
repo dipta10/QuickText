@@ -2,6 +2,7 @@ use std::{sync::Mutex, time::Duration};
 
 mod app_controller;
 mod audio_recorder;
+mod autostart;
 mod companion_cli;
 mod ipc;
 #[cfg(unix)]
@@ -765,19 +766,34 @@ fn delete_soniox_api_key(credentials: State<'_, CredentialState>) -> Result<(), 
     }
 }
 
+#[tauri::command]
+fn get_launch_on_startup(app: tauri::AppHandle) -> Result<bool, String> {
+    autostart::is_enabled(&app)
+}
+
+#[tauri::command]
+fn set_launch_on_startup(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
+    autostart::set_enabled(&app, enabled)
+}
+
 pub fn entry() -> i32 {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let start_hidden = autostart::is_autostart_launch(&args);
 
-    if !args.is_empty() {
+    if !args.is_empty() && !start_hidden {
         return companion_cli::run(&args);
     }
 
-    run();
+    run_with_options(start_hidden);
     0
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    run_with_options(false);
+}
+
+fn run_with_options(start_hidden: bool) {
     tauri::Builder::default()
         .manage(ShortcutSettings::default())
         .manage(AppControllerState::default())
@@ -786,6 +802,7 @@ pub fn run() {
         .manage(TranscriptionState::default())
         .manage(InputDeviceState::default())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(autostart::plugin())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -798,8 +815,12 @@ pub fn run() {
                 })
                 .build(),
         )
-        .setup(|app| {
+        .setup(move |app| {
             setup_tray(app)?;
+
+            if start_hidden {
+                hide_main_window(app.handle());
+            }
 
             #[cfg(unix)]
             match ipc_server::start(app.handle().clone()) {
@@ -822,7 +843,9 @@ pub fn run() {
             save_soniox_api_key,
             delete_soniox_api_key,
             list_input_devices,
-            set_input_device
+            set_input_device,
+            get_launch_on_startup,
+            set_launch_on_startup
         ])
         .build(tauri::generate_context!())
         .expect("error while building Tauri application")

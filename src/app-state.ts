@@ -45,6 +45,8 @@ export type AppState = {
   autoCopyTranscript: boolean;
   liveTranscript: boolean;
   showPartialTranscript: boolean;
+  launchOnStartup: boolean;
+  launchOnStartupStatus: string;
   hasApiKey: boolean;
   apiKeyStatus: string;
   inputDevices: InputDeviceOption[];
@@ -66,6 +68,7 @@ export const createAppState = (
   liveTranscript: boolean,
   showPartialTranscript: boolean,
   selectedInputDeviceId: string,
+  launchOnStartup: boolean,
 ): AppState => ({
   activeView: "capture",
   recording: "idle",
@@ -77,6 +80,8 @@ export const createAppState = (
   autoCopyTranscript,
   liveTranscript,
   showPartialTranscript,
+  launchOnStartup,
+  launchOnStartupStatus: "",
   hasApiKey: false,
   apiKeyStatus: "",
   inputDevices: [],
@@ -316,6 +321,24 @@ export const setShortcutHideOnStop = (
   status: shortcutHideOnStop
     ? "Shortcut will hide the window when recording stops."
     : "Shortcut will keep the window open when recording stops.",
+});
+
+export const setLaunchOnStartup = (
+  state: AppState,
+  launchOnStartup: boolean,
+  launchOnStartupStatus = "",
+): AppState => ({
+  ...state,
+  launchOnStartup,
+  launchOnStartupStatus,
+});
+
+export const setLaunchOnStartupStatus = (
+  state: AppState,
+  launchOnStartupStatus: string,
+): AppState => ({
+  ...state,
+  launchOnStartupStatus,
 });
 
 export const setStatus = (state: AppState, status: string): AppState => ({

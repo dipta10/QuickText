@@ -27,6 +27,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 const SONIOX_KEY_SERVICE: &str = "com.dipta.stt";
 const SONIOX_KEY_ACCOUNT: &str = "soniox-api-key";
 const DEFAULT_MAX_RECORDING_SECONDS: u64 = 5 * 60;
+const FOCUSED_PASTE_SETTLE_DELAY: Duration = Duration::from_millis(100);
 
 struct ShortcutSettings {
     active_shortcut: Mutex<Option<String>>,
@@ -56,6 +57,24 @@ pub(crate) enum RecordingTrigger {
 struct WindowFlow {
     show_on_start: bool,
     hide_on_stop: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum PasteDelivery {
+    #[default]
+    None,
+    Headless,
+    AfterWindowHide,
+}
+
+impl PasteDelivery {
+    fn is_armed(self) -> bool {
+        self != Self::None
+    }
+
+    fn is_headless(self) -> bool {
+        self == Self::Headless
+    }
 }
 
 fn window_flow(
@@ -103,9 +122,9 @@ mod window_flow_tests {
     }
 
     #[test]
-    fn headless_take_bypasses_requested_window_changes() {
+    fn headless_take_bypasses_window_changes() {
         let flow = window_flow(
-            RecordingTrigger::CompanionIpc { wants_focus: true },
+            RecordingTrigger::CompanionIpc { wants_focus: false },
             true,
             &ShortcutSettings::default(),
         );
@@ -113,12 +132,60 @@ mod window_flow_tests {
         assert!(!flow.show_on_start);
         assert!(!flow.hide_on_stop);
     }
+
+    #[test]
+    fn focused_ipc_take_shows_on_start_and_hides_on_stop() {
+        let flow = window_flow(
+            RecordingTrigger::CompanionIpc { wants_focus: true },
+            false,
+            &ShortcutSettings::default(),
+        );
+
+        assert!(flow.show_on_start);
+        assert!(flow.hide_on_stop);
+    }
+
+    #[test]
+    fn focused_ipc_paste_waits_until_after_the_window_hides() {
+        assert_eq!(
+            paste_delivery_for_trigger(
+                RecordingTrigger::CompanionIpc { wants_focus: true },
+                true,
+                false,
+            ),
+            PasteDelivery::AfterWindowHide
+        );
+    }
+
+    #[test]
+    fn plain_ipc_paste_remains_headless() {
+        assert_eq!(
+            paste_delivery_for_trigger(
+                RecordingTrigger::CompanionIpc { wants_focus: false },
+                true,
+                false,
+            ),
+            PasteDelivery::Headless
+        );
+    }
+
+    #[test]
+    fn paste_is_not_armed_for_the_main_button_or_a_quicktext_focused_take() {
+        assert_eq!(
+            paste_delivery_for_trigger(RecordingTrigger::MainWindowButton, true, false),
+            PasteDelivery::None
+        );
+        assert_eq!(
+            paste_delivery_for_trigger(RecordingTrigger::GlobalShortcut, true, true),
+            PasteDelivery::None
+        );
+    }
 }
 
-/// Whether the active recording should paste when transcription finishes.
+/// How the active recording should deliver its transcript when finalization succeeds.
 #[derive(Default)]
 struct PendingPasteState {
-    armed: Mutex<bool>,
+    delivery: Mutex<PasteDelivery>,
 }
 
 #[derive(Default)]
@@ -505,8 +572,8 @@ pub(crate) async fn toggle_recording_for_app(
     match current_status {
         AppStatus::Idle | AppStatus::Transcribed | AppStatus::Error => {
             clear_pending_paste(&app);
-            let headless_paste = headless_paste_armed(&app, trigger, &settings);
-            let start_flow = window_flow(trigger, headless_paste, &settings);
+            let paste_delivery = paste_delivery_for_start(&app, trigger, &settings);
+            let start_flow = window_flow(trigger, paste_delivery.is_headless(), &settings);
             let starting = {
                 let mut controller = lock_controller(&controller)?;
                 controller.begin_start()
@@ -583,7 +650,7 @@ pub(crate) async fn toggle_recording_for_app(
                 let mut controller = lock_controller(&controller)?;
                 controller.finish_start(audio_format)
             };
-            set_pending_paste(&app, headless_paste);
+            set_pending_paste(&app, paste_delivery);
             let session_id = lock_controller(&controller)?.active_session_id();
             emit_app_snapshot(&app, &recording);
             if let Some(session_id) = session_id {
@@ -615,18 +682,34 @@ pub(crate) async fn toggle_recording_for_app(
     }
 }
 
-fn headless_paste_armed(
+fn paste_delivery_for_start(
     app: &tauri::AppHandle,
     trigger: RecordingTrigger,
     settings: &ShortcutSettings,
-) -> bool {
-    if !paste_to_target_enabled(settings) || matches!(trigger, RecordingTrigger::MainWindowButton) {
-        return false;
+) -> PasteDelivery {
+    paste_delivery_for_trigger(
+        trigger,
+        paste_to_target_enabled(settings),
+        main_window_is_focused(app),
+    )
+}
+
+fn paste_delivery_for_trigger(
+    trigger: RecordingTrigger,
+    paste_enabled: bool,
+    quicktext_focused: bool,
+) -> PasteDelivery {
+    if !paste_enabled || quicktext_focused || matches!(trigger, RecordingTrigger::MainWindowButton)
+    {
+        return PasteDelivery::None;
     }
 
-    // QuickText being focused when the shortcut fires means a normal take.
-    // Otherwise, delivery follows whichever destination is focused at finalize.
-    !main_window_is_focused(app)
+    match trigger {
+        RecordingTrigger::CompanionIpc { wants_focus: true } => PasteDelivery::AfterWindowHide,
+        RecordingTrigger::GlobalShortcut
+        | RecordingTrigger::CompanionIpc { wants_focus: false } => PasteDelivery::Headless,
+        RecordingTrigger::MainWindowButton => PasteDelivery::None,
+    }
 }
 
 fn main_window_is_focused(app: &tauri::AppHandle) -> bool {
@@ -635,21 +718,21 @@ fn main_window_is_focused(app: &tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-fn set_pending_paste(app: &tauri::AppHandle, armed: bool) {
-    if let Ok(mut pending) = app.state::<PendingPasteState>().armed.lock() {
-        *pending = armed;
+fn set_pending_paste(app: &tauri::AppHandle, delivery: PasteDelivery) {
+    if let Ok(mut pending) = app.state::<PendingPasteState>().delivery.lock() {
+        *pending = delivery;
     }
 }
 
 fn clear_pending_paste(app: &tauri::AppHandle) {
-    set_pending_paste(app, false);
+    set_pending_paste(app, PasteDelivery::None);
 }
 
 fn pending_paste_is_armed(app: &tauri::AppHandle) -> bool {
     app.state::<PendingPasteState>()
-        .armed
+        .delivery
         .lock()
-        .map(|armed| *armed)
+        .map(|delivery| delivery.is_armed())
         .unwrap_or(false)
 }
 
@@ -693,21 +776,21 @@ async fn finalize_recording(app: &tauri::AppHandle) -> Result<AppSnapshot, Strin
     };
     emit_app_snapshot(app, &transcribed);
 
-    deliver_pending_paste(app, &transcript.text);
+    deliver_pending_paste(app, &transcript.text).await;
 
     let final_snapshot = lock_controller(&controller)?.snapshot();
     Ok(final_snapshot)
 }
 
-fn deliver_pending_paste(app: &tauri::AppHandle, transcript_text: &str) {
+async fn deliver_pending_paste(app: &tauri::AppHandle, transcript_text: &str) {
     use tauri_plugin_clipboard_manager::ClipboardExt;
 
     let pending = app.state::<PendingPasteState>();
-    let armed = match pending.armed.lock() {
-        Ok(mut armed) => std::mem::take(&mut *armed),
+    let delivery = match pending.delivery.lock() {
+        Ok(mut delivery) => std::mem::take(&mut *delivery),
         Err(_) => return,
     };
-    if !armed {
+    if !delivery.is_armed() {
         return;
     }
 
@@ -719,6 +802,29 @@ fn deliver_pending_paste(app: &tauri::AppHandle, transcript_text: &str) {
             ),
         );
         return;
+    }
+
+    if delivery == PasteDelivery::AfterWindowHide {
+        let Some(window) = app.get_webview_window("main") else {
+            report_paste_failure(
+                app,
+                "Could not find the QuickText window to hide before pasting. The transcript remains in the clipboard."
+                    .to_string(),
+            );
+            return;
+        };
+
+        if let Err(error) = window.hide() {
+            report_paste_failure(
+                app,
+                format!(
+                    "Could not hide QuickText before pasting: {error} The transcript remains in the clipboard."
+                ),
+            );
+            return;
+        }
+
+        tokio::time::sleep(FOCUSED_PASTE_SETTLE_DELAY).await;
     }
 
     if let Err(error) = paste_target::send_paste_keystroke() {

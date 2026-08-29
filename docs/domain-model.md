@@ -172,16 +172,21 @@ Frontend-only view state that decides whether Capture or Settings is visible.
 
 It must not own recording state once backend recording is connected. Recording state comes from backend app-state events.
 
-### DiagnosticsService
+### Logger
 
-Backend-owned service for privacy-safe support diagnostics.
+Backend-owned application logging boundary. Rust application code depends on this familiar
+abstraction and records only typed, allowlisted events through its `debug`, `info`, `warn`, and
+`error` methods. It never accepts arbitrary messages or metadata maps.
+
+### SupportLogManager
+
+Backend-owned management surface around the logger's privacy-safe local files.
 
 Responsibilities:
 
 - Generate one UUID v4 `run_id` per resident process launch.
 - Assign and propagate recording-session, provider-session, and error identifiers.
-- Persist versioned JSON Lines events with UTC timestamps and allowlisted metadata.
-- Accept only typed event variants and bounded allowlisted fields; reject free-form external errors and arbitrary metadata.
+- Persist versioned JSON Lines events with UTC timestamps and allowlisted metadata received from the logger.
 - Rotate logs by size and enforce bounded retention.
 - Serialize writes, stable export snapshots, and close/delete/reopen operations through one writer task.
 - Enable non-persistent, time-bounded debug logging without weakening content exclusions.
@@ -225,7 +230,7 @@ A ZIP archive created only after explicit user confirmation. It contains the cur
 - Settings controls must stay out of the Capture view.
 - Input device picking belongs to Settings; Capture may only surface device-fallback notices.
 - Capture should render transcript text as output, not as an editable input.
-- Diagnostic writes, retention, export, and deletion are backend responsibilities; the frontend never receives raw log paths.
+- Log writes, retention, export, and deletion are backend responsibilities; the frontend never receives raw retained-log paths.
 - Logs must use allowlisted structured events rather than arbitrary console forwarding.
 - Recording sessions keep one ID across their lifecycle; each provider connection attempt receives its own ID.
 - Normal and debug logs must preserve the same secret and user-content exclusions.

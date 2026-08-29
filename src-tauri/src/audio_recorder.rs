@@ -185,7 +185,7 @@ where
         .build_input_stream(
             config,
             move |data: &[T], _| record_audio_chunk::<T>(data, &stats, &audio_tx),
-            move |error| eprintln!("Microphone stream error: {error}"),
+            move |_error| {},
             None,
         )
         .map_err(|error| format!("Could not open microphone input stream: {error}"))

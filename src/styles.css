@@ -109,7 +109,10 @@ button {
 .copy-button,
 .keybind-button,
 .api-key-save-button,
-.api-key-delete-button {
+.api-key-delete-button,
+.enable-debug-logging-button,
+.export-logs-button,
+.delete-logs-button {
   min-height: 38px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -133,7 +136,10 @@ button {
 .copy-button:hover,
 .keybind-button:hover,
 .api-key-save-button:hover,
-.api-key-delete-button:hover {
+.api-key-delete-button:hover,
+.enable-debug-logging-button:hover,
+.export-logs-button:hover,
+.delete-logs-button:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.24);
 }
@@ -197,7 +203,10 @@ button {
 .copy-button:active,
 .keybind-button:active,
 .api-key-save-button:active,
-.api-key-delete-button:active {
+.api-key-delete-button:active,
+.enable-debug-logging-button:active,
+.export-logs-button:active,
+.delete-logs-button:active {
   transform: translateY(1px);
 }
 
@@ -365,7 +374,10 @@ button {
 
 .api-key-save-button,
 .api-key-delete-button,
-.keybind-button {
+.keybind-button,
+.enable-debug-logging-button,
+.export-logs-button,
+.delete-logs-button {
   width: 100%;
   padding: 0 12px;
 }
@@ -396,6 +408,9 @@ button {
 .launch-on-startup-checkbox:focus-visible,
 .api-key-save-button:focus-visible,
 .api-key-delete-button:focus-visible,
+.enable-debug-logging-button:focus-visible,
+.export-logs-button:focus-visible,
+.delete-logs-button:focus-visible,
 .transcript-text:focus-visible {
   outline: 3px solid rgba(94, 179, 255, 0.48);
   outline-offset: 4px;

@@ -22,10 +22,26 @@ pub struct TranscriptResult {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AppError {
-    MissingApiKey { message: String },
-    CredentialStore { message: String },
-    MicrophoneUnavailable { message: String },
-    ProviderUnavailable { message: String },
+    MissingApiKey {
+        message: String,
+        #[serde(rename = "supportReference")]
+        support_reference: String,
+    },
+    CredentialStore {
+        message: String,
+        #[serde(rename = "supportReference")]
+        support_reference: String,
+    },
+    MicrophoneUnavailable {
+        message: String,
+        #[serde(rename = "supportReference")]
+        support_reference: String,
+    },
+    ProviderUnavailable {
+        message: String,
+        #[serde(rename = "supportReference")]
+        support_reference: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -269,6 +285,7 @@ mod tests {
         controller.begin_start();
         let snapshot = controller.fail_start(AppError::MissingApiKey {
             message: "Add your Soniox API key before recording.".to_string(),
+            support_reference: "QT-TEST".to_string(),
         });
 
         assert_eq!(snapshot.status, AppStatus::Error);
@@ -286,6 +303,7 @@ mod tests {
         controller.begin_start();
         let snapshot = controller.fail_start(AppError::CredentialStore {
             message: "Could not read Soniox API key.".to_string(),
+            support_reference: "QT-TEST".to_string(),
         });
 
         assert_eq!(snapshot.status, AppStatus::Error);
@@ -303,6 +321,7 @@ mod tests {
         controller.begin_start();
         let snapshot = controller.fail_start(AppError::MicrophoneUnavailable {
             message: "No microphone input device was found.".to_string(),
+            support_reference: "QT-TEST".to_string(),
         });
 
         assert_eq!(snapshot.status, AppStatus::Error);
@@ -322,6 +341,7 @@ mod tests {
         controller.begin_stop();
         let snapshot = controller.fail_stop(AppError::ProviderUnavailable {
             message: "Soniox finalization failed.".to_string(),
+            support_reference: "QT-TEST".to_string(),
         });
 
         assert_eq!(snapshot.status, AppStatus::Error);
@@ -340,6 +360,7 @@ mod tests {
         controller.finish_start(test_audio_format());
         let snapshot = controller.fail_recording(AppError::ProviderUnavailable {
             message: "Could not connect to Soniox.".to_string(),
+            support_reference: "QT-TEST".to_string(),
         });
 
         assert_eq!(snapshot.status, AppStatus::Error);
@@ -358,6 +379,7 @@ mod tests {
         controller.begin_start();
         let snapshot = controller.fail_recording(AppError::ProviderUnavailable {
             message: "Could not connect to Soniox.".to_string(),
+            support_reference: "QT-TEST".to_string(),
         });
 
         assert_eq!(snapshot.status, AppStatus::Starting);

@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { BackendAppSnapshot, PartialTranscriptUpdate } from "./app-state";
 
 const getAppStateCommand = "get_app_state";
@@ -10,8 +9,13 @@ const setShortcutBehaviorCommand = "set_shortcut_behavior";
 const hasSonioxApiKeyCommand = "has_soniox_api_key";
 const saveSonioxApiKeyCommand = "save_soniox_api_key";
 const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
+const copyTextToClipboardCommand = "copy_text_to_clipboard";
 const getLaunchOnStartupCommand = "get_launch_on_startup";
 const setLaunchOnStartupCommand = "set_launch_on_startup";
+const getLoggingStatusCommand = "get_logging_status";
+const enableTemporaryDebugLoggingCommand = "enable_temporary_debug_logging";
+const exportLogsCommand = "export_logs";
+const deleteLocalLogsCommand = "delete_local_logs";
 const appStateChangedEvent = "app-state-changed";
 const partialTranscriptEvent = "partial-transcript";
 
@@ -75,9 +79,33 @@ export const setLaunchOnStartup = async (
   return await invoke<boolean>(setLaunchOnStartupCommand, { enabled });
 };
 
+export type LoggingStatus = {
+  debugSecondsRemaining: number;
+};
+
+export const getLoggingStatus = async (): Promise<LoggingStatus> => {
+  assertTauriRuntime();
+  return await invoke<LoggingStatus>(getLoggingStatusCommand);
+};
+
+export const enableTemporaryDebugLogging = async (): Promise<LoggingStatus> => {
+  assertTauriRuntime();
+  return await invoke<LoggingStatus>(enableTemporaryDebugLoggingCommand);
+};
+
+export const exportLogs = async (): Promise<boolean> => {
+  assertTauriRuntime();
+  return await invoke<boolean>(exportLogsCommand);
+};
+
+export const deleteLocalLogs = async () => {
+  assertTauriRuntime();
+  await invoke(deleteLocalLogsCommand);
+};
+
 export const copyTextToClipboard = async (text: string) => {
   assertTauriRuntime();
-  await writeText(text);
+  await invoke(copyTextToClipboardCommand, { text });
 };
 
 export const onAppStateChanged = (

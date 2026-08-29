@@ -361,8 +361,7 @@ button {
   line-height: 1.35;
 }
 
-.auto-copy-checkbox,
-.launch-on-startup-checkbox {
+.checkbox-field > input[type="checkbox"] {
   width: 18px;
   height: 18px;
   margin: 0;
@@ -402,8 +401,7 @@ button {
 .keybind-button:focus-visible,
 .api-key-input:focus-visible,
 .max-recording-seconds-input:focus-visible,
-.auto-copy-checkbox:focus-visible,
-.launch-on-startup-checkbox:focus-visible,
+.checkbox-field > input[type="checkbox"]:focus-visible,
 .api-key-save-button:focus-visible,
 .api-key-delete-button:focus-visible,
 .transcript-text:focus-visible {

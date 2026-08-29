@@ -7,6 +7,10 @@ dist/
 build/
 target/
 out/
+packaging/arch/pkg/
+packaging/arch/src/
+packaging/arch/quicktext/
+packaging/arch/*.pkg.tar.zst
 
 # Generated mobile icons (desktop-only app)
 src-tauri/icons/ios/
@@ -29,4 +33,3 @@ worktrees/
 Thumbs.db
 .idea/
 .vscode/
-

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=QuickText
+Comment=Compact desktop speech-to-text app for fast dictation
+Exec=quicktext
+Icon=quicktext
+Terminal=false
+Categories=Utility;
+StartupNotify=true
+StartupWMClass=quicktext

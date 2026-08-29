@@ -41,8 +41,7 @@ prepare() {
 build() {
   cd "$srcdir/$pkgname"
   export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/usr/src/debug/$pkgname"
-  npm run build
-  cargo build --release --locked --manifest-path src-tauri/Cargo.toml
+  npm run tauri build -- --no-bundle
 }
 
 package() {

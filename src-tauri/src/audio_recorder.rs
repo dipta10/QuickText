@@ -286,7 +286,7 @@ fn record_audio_chunk<T>(
     if let Ok(mut stats) = stats.lock() {
         stats.chunk_count += 1;
         stats.sample_count += data.len() as u64;
-        stats.byte_count += (data.len() * mem::size_of::<T>()) as u64;
+        stats.byte_count += mem::size_of_val(data) as u64;
     }
 
     let _ = audio_tx.send(bytes);

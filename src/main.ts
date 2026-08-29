@@ -21,6 +21,7 @@ import {
   setShowPartialTranscript,
   setShortcutFocusOnStart,
   setShortcutHideOnStop,
+  setPasteToTarget,
   setStatus,
   showCapture,
   showSettings,
@@ -35,6 +36,7 @@ import {
   getLiveTranscript,
   getLaunchOnStartup,
   getMaxRecordingSeconds,
+  getPasteToTarget,
   getShowPartialTranscript,
   getShortcutFocusOnStart,
   getShortcutHideOnStop,
@@ -47,6 +49,7 @@ import {
   saveShowPartialTranscript,
   saveShortcutFocusOnStart,
   saveShortcutHideOnStop,
+  savePasteToTarget,
 } from "./settings";
 import {
   copyTextToClipboard,
@@ -61,6 +64,7 @@ import {
   saveSonioxApiKey,
   setGlobalShortcut,
   setInputDevice,
+  setPasteToTargetBackend,
   setLaunchOnStartup as setBackendLaunchOnStartup,
   setShortcutBehavior,
   toggleBackendRecording,
@@ -81,6 +85,7 @@ let state = createAppState(
   getLiveTranscript(),
   getShowPartialTranscript(),
   getInputDeviceId(),
+  getPasteToTarget(),
   getLaunchOnStartup(),
 );
 const view = createAppView(app);
@@ -209,6 +214,8 @@ const render = () => {
   view.showPartialField.hidden = !state.liveTranscript;
   view.showPartialCheckbox.checked = state.showPartialTranscript;
   renderInputDeviceSelect();
+  view.pasteToTargetCheckbox.checked = state.pasteToTarget;
+  view.pasteToTargetNote.hidden = !state.pasteToTarget;
   view.launchOnStartupCheckbox.checked = state.launchOnStartup;
   view.launchOnStartupStatus.textContent =
     state.launchOnStartupStatus ||
@@ -478,6 +485,23 @@ view.showPartialCheckbox.addEventListener("change", () => {
   updateState(setShowPartialTranscript(state, showPartialTranscript));
 });
 
+const pushPasteToTarget = async (pasteToTarget: boolean) => {
+  try {
+    await setPasteToTargetBackend(pasteToTarget);
+  } catch (error) {
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
+view.pasteToTargetCheckbox.addEventListener("change", () => {
+  const pasteToTarget = view.pasteToTargetCheckbox.checked;
+  savePasteToTarget(pasteToTarget);
+  updateState(setPasteToTarget(state, pasteToTarget));
+  void pushPasteToTarget(pasteToTarget);
+});
+
 view.launchOnStartupCheckbox.addEventListener("change", () => {
   void updateLaunchOnStartup(view.launchOnStartupCheckbox.checked);
 });
@@ -565,6 +589,7 @@ void loadBackendState();
 void loadApiKeyStatus();
 void loadLaunchOnStartup();
 void pushShortcutBehavior();
+void pushPasteToTarget(state.pasteToTarget);
 
 if (state.selectedInputDeviceId) {
   setInputDevice(state.selectedInputDeviceId).catch(() => {

@@ -78,7 +78,10 @@ jobs:
             |---|---|
             | Windows | `QuickText_0.1.0_x64-setup.exe` (installer) or `.msi` |
             | Mac (Apple Silicon / M1–M4) | `QuickText_0.1.0_aarch64.dmg` |
-            | Linux | `.AppImage` or `.deb` / `.rpm` |
+            | Arch / Manjaro (x86_64) | `quicktext-0.1.0-${{ github.run_number }}-x86_64.pkg.tar.zst` |
+            | Debian / Ubuntu (x86_64) | `.deb` |
+            | Fedora / RPM-based Linux (x86_64) | `.rpm` |
+            | Other Linux (x86_64) | `.AppImage` (see the Wayland note below) |
 
             ## First-time setup
 
@@ -86,13 +89,19 @@ jobs:
             2. Go to **Settings** and paste your [Soniox](https://soniox.com) API key.
             3. Hit the big button (or your shortcut) and start talking.
 
+            On Arch or Manjaro, install the downloaded native package with:
+
+            ```bash
+            sudo pacman -U ./quicktext-0.1.0-${{ github.run_number }}-x86_64.pkg.tar.zst
+            ```
+
             ## Heads-up
 
             This build is **unsigned**, so your OS will act suspicious:
 
             - **Windows**: SmartScreen may say "Unknown publisher" → click *More info* → *Run anyway*.
             - **macOS**: first launch may say "cannot verify the developer" → right-click the app → *Open* → *Open* again. If it instead says "damaged", run `xattr -cr /Applications/QuickText.app` in Terminal and open it again.
-            - **Linux (Arch/Manjaro on Wayland)**: if the AppImage opens a blank window and prints `EGL_BAD_PARAMETER`, launch it from its download folder with:
+            - **AppImage on newer Wayland/Mesa systems**: prefer the native package above on Arch or Manjaro. If an AppImage opens a blank window and prints `EGL_BAD_PARAMETER`, launch it from its download folder with:
 
               ```bash
               LD_PRELOAD=/usr/lib/libwayland-client.so.0 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./QuickText_0.1.0_amd64.AppImage
@@ -108,9 +117,62 @@ jobs:
           releaseDraft: false
           prerelease: false
 
+  publish-arch-package:
+    name: Build native Arch package
+    needs: publish-release
+    runs-on: ubuntu-22.04
+    container: archlinux:base-devel
+    steps:
+      - name: Install Arch build and runtime dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            alsa-lib \
+            git \
+            github-cli \
+            gtk3 \
+            libayatana-appindicator \
+            libsecret \
+            nodejs-lts-jod \
+            npm \
+            openssl \
+            rust \
+            webkit2gtk-4.1 \
+            wtype \
+            xdotool
+
+      - uses: actions/checkout@v4
+
+      - name: Prepare unprivileged package builder
+        run: |
+          useradd --create-home package-builder
+          chown -R package-builder:package-builder "$GITHUB_WORKSPACE"
+
+      - name: Build pacman package
+        working-directory: packaging/arch
+        run: |
+          runuser -u package-builder -- env \
+            QUICKTEXT_PKGREL="$GITHUB_RUN_NUMBER" \
+            QUICKTEXT_SOURCE_REVISION="$GITHUB_SHA" \
+            QUICKTEXT_SOURCE_URL="file://$GITHUB_WORKSPACE" \
+            makepkg --cleanbuild --clean --noconfirm
+
+      - name: Inspect package metadata and contents
+        run: |
+          pacman -Qip packaging/arch/quicktext-*.pkg.tar.zst
+          pacman -Qlp packaging/arch/quicktext-*.pkg.tar.zst
+
+      - name: Upload Arch package to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release upload "$RELEASE_TAG"
+          packaging/arch/quicktext-*.pkg.tar.zst
+          --repo "$GITHUB_REPOSITORY"
+          --clobber
+
   cleanup-old-releases:
     name: Prune releases beyond the newest 10
-    needs: publish-release
+    needs: [publish-release, publish-arch-package]
     runs-on: ubuntu-latest
     steps:
       - name: Delete releases older than the newest 10

@@ -1,0 +1,64 @@
+pkgname=quicktext
+pkgver=0.1.0
+pkgrel="${QUICKTEXT_PKGREL:-1}"
+pkgdesc="Compact desktop speech-to-text app for fast dictation"
+arch=('x86_64')
+url="https://github.com/dipta10/QuickText"
+license=('MIT')
+depends=(
+  'alsa-lib'
+  'gtk3'
+  'libayatana-appindicator'
+  'libsecret'
+  'openssl'
+  'webkit2gtk-4.1'
+  'wtype'
+  'xdotool'
+)
+makedepends=(
+  'git'
+  'npm'
+  'rust'
+)
+options=('!debug')
+
+_source_revision="${QUICKTEXT_SOURCE_REVISION:-HEAD}"
+_source_url="${QUICKTEXT_SOURCE_URL:-https://github.com/dipta10/QuickText.git}"
+source=(
+  "${pkgname}::git+${_source_url}#commit=${_source_revision}"
+  'quicktext.desktop'
+)
+sha256sums=(
+  'SKIP'
+  '229ae413d344ca48ae4b1cac84bd25b0f3895b67802877360415f7ba742357d6'
+)
+
+prepare() {
+  cd "$srcdir/$pkgname"
+  npm ci
+}
+
+build() {
+  cd "$srcdir/$pkgname"
+  export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/usr/src/debug/$pkgname"
+  npm run tauri build -- --no-bundle
+}
+
+package() {
+  cd "$srcdir/$pkgname"
+
+  install -Dm755 src-tauri/target/release/quicktext \
+    "$pkgdir/usr/bin/quicktext"
+  install -Dm644 "$srcdir/quicktext.desktop" \
+    "$pkgdir/usr/share/applications/quicktext.desktop"
+  install -Dm644 src-tauri/icons/32x32.png \
+    "$pkgdir/usr/share/icons/hicolor/32x32/apps/quicktext.png"
+  install -Dm644 src-tauri/icons/128x128.png \
+    "$pkgdir/usr/share/icons/hicolor/128x128/apps/quicktext.png"
+  install -Dm644 src-tauri/icons/128x128@2x.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/quicktext.png"
+  install -Dm644 src-tauri/icons/icon.png \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps/quicktext.png"
+  install -Dm644 LICENSE \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

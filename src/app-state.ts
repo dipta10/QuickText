@@ -29,6 +29,11 @@ export type PartialTranscriptUpdate = {
   partial_text: string;
 };
 
+export type InputDeviceOption = {
+  id: string;
+  label: string;
+};
+
 export type AppState = {
   activeView: ActiveView;
   recording: RecordingState;
@@ -45,6 +50,10 @@ export type AppState = {
   launchOnStartupStatus: string;
   hasApiKey: boolean;
   apiKeyStatus: string;
+  inputDevices: InputDeviceOption[];
+  inputDeviceDefaultLabel: string;
+  selectedInputDeviceId: string;
+  deviceNotice: string;
   status: string;
   transcript: string;
   partialTranscript: string;
@@ -59,6 +68,7 @@ export const createAppState = (
   shortcutHideOnStop: boolean,
   liveTranscript: boolean,
   showPartialTranscript: boolean,
+  selectedInputDeviceId: string,
   pasteToTarget: boolean,
   launchOnStartup: boolean,
 ): AppState => ({
@@ -77,6 +87,10 @@ export const createAppState = (
   launchOnStartupStatus: "",
   hasApiKey: false,
   apiKeyStatus: "",
+  inputDevices: [],
+  inputDeviceDefaultLabel: "",
+  selectedInputDeviceId,
+  deviceNotice: "",
   status: "Ready.",
   transcript: "",
   partialTranscript: "",
@@ -158,8 +172,18 @@ export const applyBackendSnapshot = (
     apiKeyStatus: isMissingApiKey
       ? snapshot.error?.message ?? state.apiKeyStatus
       : state.apiKeyStatus,
+    deviceNotice:
+      snapshot.status === "starting" ? "" : state.deviceNotice,
   };
 };
+
+export const setDeviceNotice = (
+  state: AppState,
+  deviceNotice: string,
+): AppState => ({
+  ...state,
+  deviceNotice,
+});
 
 export const applyPartialTranscript = (
   state: AppState,
@@ -215,6 +239,27 @@ export const setApiKeyStatus = (
 ): AppState => ({
   ...state,
   apiKeyStatus,
+});
+
+export const setInputDeviceOptions = (
+  state: AppState,
+  inputDevices: InputDeviceOption[],
+  inputDeviceDefaultLabel: string,
+): AppState => ({
+  ...state,
+  inputDevices,
+  inputDeviceDefaultLabel,
+});
+
+export const setSelectedInputDevice = (
+  state: AppState,
+  selectedInputDeviceId: string,
+): AppState => ({
+  ...state,
+  selectedInputDeviceId,
+  status: selectedInputDeviceId
+    ? `Microphone set to "${selectedInputDeviceId}".`
+    : "Using the system default microphone.",
 });
 
 export const setMaxRecordingSeconds = (

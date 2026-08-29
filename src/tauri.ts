@@ -11,10 +11,23 @@ const setPasteToTargetCommand = "set_paste_to_target";
 const hasSonioxApiKeyCommand = "has_soniox_api_key";
 const saveSonioxApiKeyCommand = "save_soniox_api_key";
 const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
+const listInputDevicesCommand = "list_input_devices";
+const setInputDeviceCommand = "set_input_device";
 const getLaunchOnStartupCommand = "get_launch_on_startup";
 const setLaunchOnStartupCommand = "set_launch_on_startup";
 const appStateChangedEvent = "app-state-changed";
 const partialTranscriptEvent = "partial-transcript";
+const deviceFallbackEvent = "device-fallback";
+
+export type BackendInputDeviceInfo = {
+  id: string;
+  label: string;
+};
+
+export type BackendInputDeviceList = {
+  defaultLabel: string | null;
+  devices: BackendInputDeviceInfo[];
+};
 
 const assertTauriRuntime = () => {
   if (!("__TAURI_INTERNALS__" in window)) {
@@ -69,6 +82,16 @@ export const deleteSonioxApiKey = async () => {
   await invoke(deleteSonioxApiKeyCommand);
 };
 
+export const listInputDevices = async (): Promise<BackendInputDeviceList> => {
+  assertTauriRuntime();
+  return await invoke<BackendInputDeviceList>(listInputDevicesCommand);
+};
+
+export const setInputDevice = async (deviceId: string | null) => {
+  assertTauriRuntime();
+  await invoke(setInputDeviceCommand, { deviceId });
+};
+
 export const getLaunchOnStartup = async (): Promise<boolean> => {
   assertTauriRuntime();
   return await invoke<boolean>(getLaunchOnStartupCommand);
@@ -100,6 +123,13 @@ export const onPartialTranscript = (
 ) => {
   assertTauriRuntime();
   return listen<PartialTranscriptUpdate>(partialTranscriptEvent, (event) => {
+    handler(event.payload);
+  });
+};
+
+export const onDeviceFallback = (handler: (message: string) => void) => {
+  assertTauriRuntime();
+  return listen<string>(deviceFallbackEvent, (event) => {
     handler(event.payload);
   });
 };

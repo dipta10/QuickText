@@ -158,6 +158,14 @@ mod window_flow_tests {
     }
 
     #[test]
+    fn global_shortcut_paste_waits_until_after_the_window_hides() {
+        assert_eq!(
+            paste_delivery_for_trigger(RecordingTrigger::GlobalShortcut, true, false),
+            PasteDelivery::AfterWindowHide
+        );
+    }
+
+    #[test]
     fn plain_ipc_paste_remains_headless() {
         assert_eq!(
             paste_delivery_for_trigger(
@@ -759,9 +767,10 @@ fn paste_delivery_for_trigger(
     }
 
     match trigger {
-        RecordingTrigger::CompanionIpc { wants_focus: true } => PasteDelivery::AfterWindowHide,
-        RecordingTrigger::GlobalShortcut
-        | RecordingTrigger::CompanionIpc { wants_focus: false } => PasteDelivery::Headless,
+        RecordingTrigger::GlobalShortcut | RecordingTrigger::CompanionIpc { wants_focus: true } => {
+            PasteDelivery::AfterWindowHide
+        }
+        RecordingTrigger::CompanionIpc { wants_focus: false } => PasteDelivery::Headless,
         RecordingTrigger::MainWindowButton => PasteDelivery::None,
     }
 }

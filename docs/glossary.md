@@ -15,8 +15,8 @@ Terms used across the product and ADR docs. Add entries here when an ADR introdu
 - **Endpoint delay**: How long the provider waits for silence before finalizing transcript tokens (Soniox `max_endpoint_delay_ms`, 500–3000 ms); controls how quickly final text appears after speech stops.
 - **Session-applied settings**: Transcription settings take effect when the next recording session starts; an in-flight recording keeps its prior values.
 - **Paste-to-target**: Opt-in behavior where a finalized transcript is written to the clipboard and pasted into the application or field focused when transcription finishes.
-- **Headless take**: A recording started by global shortcut or plain CLI/IPC while paste-to-target is enabled; the main window is never shown or focused, and finalize pastes into the target app.
-- **Focused paste take**: A recording started with `quicktext toggle focus` while paste-to-target is enabled; QuickText shows while recording, then hides after finalization and pastes once the operating system transfers focus.
+- **Headless take**: A recording started by plain CLI/IPC while paste-to-target is enabled; the main window is never shown or focused, and finalize pastes into the target app.
+- **Focused paste take**: A recording started by the global shortcut with focus-on-start enabled, or by `quicktext toggle focus`, while paste-to-target is enabled; QuickText shows while recording, then hides after finalization and pastes once the operating system transfers focus.
 - **Paste target**: The application or field focused when delivery occurs. QuickText never captures or restores the application focused when recording began. If QuickText itself is focused at trigger time, the take is not paste-enabled.
 - **App run**: One lifetime of the resident QuickText process, from process start until exit; all events in that lifetime share one UUID v4 `run_id`.
 - **Recording session ID**: UUID v4 correlating one accepted dictation take from the `starting` transition through setup, capture, finalization, cancellation, or failure.

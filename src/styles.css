@@ -29,7 +29,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -139,6 +140,7 @@ button {
 }
 
 .main-content {
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
 }
@@ -306,6 +308,7 @@ button {
 
 .settings-view {
   align-content: start;
+  min-width: 0;
   overflow: auto;
   padding-right: 2px;
 }
@@ -313,6 +316,7 @@ button {
 .settings-section {
   display: grid;
   gap: 10px;
+  min-width: 0;
   padding: 14px;
 }
 
@@ -325,6 +329,7 @@ button {
 .settings-field {
   display: grid;
   gap: 7px;
+  min-width: 0;
 }
 
 .settings-field-label {
@@ -334,8 +339,10 @@ button {
 }
 
 .api-key-input,
+.input-device-select,
 .max-recording-seconds-input {
   width: 100%;
+  min-width: 0;
   min-height: 42px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -344,6 +351,11 @@ button {
   padding: 0 12px;
   font-size: 0.92rem;
   font-weight: 500;
+}
+
+.input-device-select {
+  max-width: 100%;
+  text-overflow: ellipsis;
 }
 
 .api-key-input::placeholder,
@@ -401,6 +413,7 @@ button {
 .copy-button:focus-visible,
 .keybind-button:focus-visible,
 .api-key-input:focus-visible,
+.input-device-select:focus-visible,
 .max-recording-seconds-input:focus-visible,
 .auto-copy-checkbox:focus-visible,
 .launch-on-startup-checkbox:focus-visible,

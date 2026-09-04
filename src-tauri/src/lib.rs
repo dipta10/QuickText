@@ -28,6 +28,53 @@ const SONIOX_KEY_SERVICE: &str = "com.dipta.stt";
 const SONIOX_KEY_ACCOUNT: &str = "soniox-api-key";
 const DEFAULT_MAX_RECORDING_SECONDS: u64 = 5 * 60;
 const FOCUSED_PASTE_SETTLE_DELAY: Duration = Duration::from_millis(100);
+const BUILD_ID: &str = env!("QUICKTEXT_BUILD_ID");
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct BuildInfo {
+    version: String,
+    build_id: String,
+}
+
+fn resolve_build_id(build_id: Option<&str>) -> String {
+    build_id
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("Development")
+        .to_string()
+}
+
+#[cfg(test)]
+mod build_info_tests {
+    use super::*;
+
+    #[test]
+    fn keeps_the_release_build_id_unchanged() {
+        assert_eq!(resolve_build_id(Some("v0.1.0-pre.42")), "v0.1.0-pre.42");
+    }
+
+    #[test]
+    fn uses_development_for_missing_or_blank_build_ids() {
+        assert_eq!(resolve_build_id(None), "Development");
+        assert_eq!(resolve_build_id(Some("   ")), "Development");
+    }
+
+    #[test]
+    fn serializes_build_id_for_the_frontend() {
+        let build_info = BuildInfo {
+            version: "0.1.0".to_string(),
+            build_id: "v0.1.0-pre.42".to_string(),
+        };
+
+        assert_eq!(
+            serde_json::to_value(build_info).unwrap(),
+            serde_json::json!({
+                "version": "0.1.0",
+                "buildId": "v0.1.0-pre.42",
+            })
+        );
+    }
+}
 
 struct ShortcutSettings {
     active_shortcut: Mutex<Option<String>>,
@@ -557,6 +604,14 @@ fn get_soniox_api_key_available(
 #[tauri::command]
 fn get_app_state(controller: State<'_, AppControllerState>) -> Result<AppSnapshot, String> {
     Ok(lock_controller(&controller)?.snapshot())
+}
+
+#[tauri::command]
+fn get_build_info(app: tauri::AppHandle) -> BuildInfo {
+    BuildInfo {
+        version: app.package_info().version.to_string(),
+        build_id: resolve_build_id(Some(BUILD_ID)),
+    }
 }
 
 #[tauri::command]
@@ -1126,6 +1181,7 @@ fn run_with_options(start_hidden: bool) {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_state,
+            get_build_info,
             toggle_recording,
             set_global_shortcut,
             set_shortcut_behavior,

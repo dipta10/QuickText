@@ -36,6 +36,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate release build identity
+        env:
+          QUICKTEXT_BUILD_ID: ${{ env.RELEASE_TAG }}
+        shell: bash
+        run: |
+          test -n "$QUICKTEXT_BUILD_ID"
+          test "$QUICKTEXT_BUILD_ID" = "$RELEASE_TAG"
+
       - name: Install Tauri Linux system dependencies
         if: matrix.settings.platform == 'linux'
         run: |
@@ -69,6 +77,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QUICKTEXT_BUILD_ID: ${{ env.RELEASE_TAG }}
           RELEASE_NOTES: |
             Dictate, get instant text, copy it anywhere. Press once to record, press again to stop — your words appear as text you can paste into anything.
 
@@ -142,6 +151,13 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Validate release build identity
+        env:
+          QUICKTEXT_BUILD_ID: ${{ env.RELEASE_TAG }}
+        run: |
+          test -n "$QUICKTEXT_BUILD_ID"
+          test "$QUICKTEXT_BUILD_ID" = "$RELEASE_TAG"
+
       - name: Prepare unprivileged package builder
         run: |
           useradd --create-home package-builder
@@ -151,6 +167,7 @@ jobs:
         working-directory: packaging/arch
         run: |
           runuser -u package-builder -- env \
+            QUICKTEXT_BUILD_ID="$RELEASE_TAG" \
             QUICKTEXT_PKGREL="$GITHUB_RUN_NUMBER" \
             QUICKTEXT_SOURCE_REVISION="$GITHUB_SHA" \
             QUICKTEXT_SOURCE_URL="file://$GITHUB_WORKSPACE" \

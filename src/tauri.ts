@@ -4,6 +4,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { BackendAppSnapshot, PartialTranscriptUpdate } from "./app-state";
 
 const getAppStateCommand = "get_app_state";
+const getBuildInfoCommand = "get_build_info";
 const toggleRecordingCommand = "toggle_recording";
 const setGlobalShortcutCommand = "set_global_shortcut";
 const setShortcutBehaviorCommand = "set_shortcut_behavior";
@@ -27,6 +28,11 @@ export type BackendInputDeviceInfo = {
 export type BackendInputDeviceList = {
   defaultLabel: string | null;
   devices: BackendInputDeviceInfo[];
+};
+
+export type BuildInfo = {
+  version: string;
+  buildId: string;
 };
 
 const assertTauriRuntime = () => {
@@ -56,6 +62,11 @@ export const setPasteToTargetBackend = async (enabled: boolean) => {
 export const getAppState = async (): Promise<BackendAppSnapshot> => {
   assertTauriRuntime();
   return await invoke<BackendAppSnapshot>(getAppStateCommand);
+};
+
+export const getBuildInfo = async (): Promise<BuildInfo> => {
+  assertTauriRuntime();
+  return await invoke<BuildInfo>(getBuildInfoCommand);
 };
 
 export const toggleBackendRecording = async (

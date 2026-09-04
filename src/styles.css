@@ -108,6 +108,7 @@ button {
 
 .view-toggle-button,
 .copy-button,
+.copy-build-info-button,
 .keybind-button,
 .api-key-save-button,
 .api-key-delete-button {
@@ -126,12 +127,14 @@ button {
 }
 
 .view-toggle-button,
-.copy-button {
+.copy-button,
+.copy-build-info-button {
   padding: 0 12px;
 }
 
 .view-toggle-button:hover,
 .copy-button:hover,
+.copy-build-info-button:hover,
 .keybind-button:hover,
 .api-key-save-button:hover,
 .api-key-delete-button:hover {
@@ -197,6 +200,7 @@ button {
 .record-button:active,
 .view-toggle-button:active,
 .copy-button:active,
+.copy-build-info-button:active,
 .keybind-button:active,
 .api-key-save-button:active,
 .api-key-delete-button:active {
@@ -384,6 +388,39 @@ button {
   gap: 8px;
 }
 
+.build-info {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.build-info-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 12px;
+  align-items: start;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.build-info-row dt {
+  color: #8c99aa;
+  font-weight: 700;
+}
+
+.build-info-row dd {
+  min-width: 0;
+  margin: 0;
+  color: #d7dee9;
+  overflow-wrap: anywhere;
+  text-align: right;
+  user-select: text;
+}
+
+.copy-build-info-button {
+  width: 100%;
+}
+
 .api-key-save-button,
 .api-key-delete-button,
 .keybind-button {
@@ -410,6 +447,7 @@ button {
 .record-button:focus-visible,
 .view-toggle-button:focus-visible,
 .copy-button:focus-visible,
+.copy-build-info-button:focus-visible,
 .keybind-button:focus-visible,
 .api-key-input:focus-visible,
 .input-device-select:focus-visible,

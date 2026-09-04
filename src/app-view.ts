@@ -33,6 +33,10 @@ export type AppView = {
   pasteToTargetNote: HTMLParagraphElement;
   launchOnStartupCheckbox: HTMLInputElement;
   launchOnStartupStatus: HTMLParagraphElement;
+  appVersion: HTMLSpanElement;
+  buildId: HTMLSpanElement;
+  copyBuildInfoButton: HTMLButtonElement;
+  buildInfoStatus: HTMLParagraphElement;
   bottomStatus: HTMLParagraphElement;
 };
 
@@ -213,6 +217,20 @@ const appTemplate = `
           <p class="settings-note">
             Closing the window will hide QuickText when tray mode is connected.
           </p>
+          <dl class="build-info" aria-label="Application build information">
+            <div class="build-info-row">
+              <dt>Version</dt>
+              <dd class="app-version">Loading...</dd>
+            </div>
+            <div class="build-info-row">
+              <dt>Build</dt>
+              <dd class="build-id">Loading...</dd>
+            </div>
+          </dl>
+          <button class="copy-build-info-button" type="button">
+            Copy build information
+          </button>
+          <p class="build-info-status settings-note" role="status" aria-live="polite"></p>
         </section>
       </section>
     </main>
@@ -302,6 +320,14 @@ export const createAppView = (root: HTMLElement): AppView => {
   const launchOnStartupStatus = root.querySelector<HTMLParagraphElement>(
     ".launch-on-startup-status",
   );
+  const appVersion = root.querySelector<HTMLSpanElement>(".app-version");
+  const buildId = root.querySelector<HTMLSpanElement>(".build-id");
+  const copyBuildInfoButton = root.querySelector<HTMLButtonElement>(
+    ".copy-build-info-button",
+  );
+  const buildInfoStatus = root.querySelector<HTMLParagraphElement>(
+    ".build-info-status",
+  );
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
 
@@ -340,6 +366,10 @@ export const createAppView = (root: HTMLElement): AppView => {
     !pasteToTargetNote ||
     !launchOnStartupCheckbox ||
     !launchOnStartupStatus ||
+    !appVersion ||
+    !buildId ||
+    !copyBuildInfoButton ||
+    !buildInfoStatus ||
     !bottomStatus
   ) {
     throw new Error("App controls were not found");
@@ -380,6 +410,10 @@ export const createAppView = (root: HTMLElement): AppView => {
     pasteToTargetNote,
     launchOnStartupCheckbox,
     launchOnStartupStatus,
+    appVersion,
+    buildId,
+    copyBuildInfoButton,
+    buildInfoStatus,
     bottomStatus,
   };
 };

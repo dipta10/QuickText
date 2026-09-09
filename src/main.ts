@@ -55,6 +55,7 @@ import {
   copyTextToClipboard,
   deleteSonioxApiKey,
   getAppState,
+  getBuildInfo,
   getLaunchOnStartup as getBackendLaunchOnStartup,
   hasSonioxApiKey,
   listInputDevices,
@@ -341,6 +342,37 @@ const loadBackendState = async () => {
   }
 };
 
+const loadBuildInfo = async () => {
+  try {
+    const buildInfo = await getBuildInfo();
+    view.appVersion.textContent = buildInfo.version;
+    view.buildId.textContent = buildInfo.buildId;
+    view.sourceRevision.textContent =
+      buildInfo.sourceRevision === "Development"
+        ? buildInfo.sourceRevision
+        : buildInfo.sourceRevision.slice(0, 7);
+  } catch {
+    view.appVersion.textContent = "Unavailable";
+    view.buildId.textContent = "Unavailable";
+    view.sourceRevision.textContent = "Unavailable";
+  }
+};
+
+const copyBuildInfo = async () => {
+  const version = view.appVersion.textContent || "Unavailable";
+  const buildId = view.buildId.textContent || "Unavailable";
+  const sourceRevision = view.sourceRevision.textContent || "Unavailable";
+  const text = `QuickText\nVersion: ${version}\nBuild: ${buildId}\nCommit: ${sourceRevision}`;
+
+  try {
+    await copyTextToClipboard(text);
+    view.buildInfoStatus.textContent = "Build information copied.";
+  } catch (error) {
+    view.buildInfoStatus.textContent =
+      error instanceof Error ? error.message : String(error);
+  }
+};
+
 const loadLaunchOnStartup = async () => {
   try {
     const enabled = await getBackendLaunchOnStartup();
@@ -452,6 +484,10 @@ view.viewToggleButton.addEventListener("click", () => {
 
 view.copyButton.addEventListener("click", () => {
   void copyTranscript();
+});
+
+view.copyBuildInfoButton.addEventListener("click", () => {
+  void copyBuildInfo();
 });
 
 view.maxRecordingSecondsInput.addEventListener("change", () => {
@@ -586,6 +622,7 @@ void onDeviceFallback((message) => {
 render();
 window.setInterval(render, 1000);
 void loadBackendState();
+void loadBuildInfo();
 void loadApiKeyStatus();
 void loadLaunchOnStartup();
 void pushShortcutBehavior();

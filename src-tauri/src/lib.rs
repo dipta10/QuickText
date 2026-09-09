@@ -29,16 +29,18 @@ const SONIOX_KEY_ACCOUNT: &str = "soniox-api-key";
 const DEFAULT_MAX_RECORDING_SECONDS: u64 = 5 * 60;
 const FOCUSED_PASTE_SETTLE_DELAY: Duration = Duration::from_millis(100);
 const BUILD_ID: &str = env!("QUICKTEXT_BUILD_ID");
+const SOURCE_REVISION: &str = env!("QUICKTEXT_SOURCE_REVISION");
 
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct BuildInfo {
     version: String,
     build_id: String,
+    source_revision: String,
 }
 
-fn resolve_build_id(build_id: Option<&str>) -> String {
-    build_id
+fn resolve_build_metadata(value: Option<&str>) -> String {
+    value
         .filter(|value| !value.trim().is_empty())
         .unwrap_or("Development")
         .to_string()
@@ -49,21 +51,29 @@ mod build_info_tests {
     use super::*;
 
     #[test]
-    fn keeps_the_release_build_id_unchanged() {
-        assert_eq!(resolve_build_id(Some("v0.1.0-pre.42")), "v0.1.0-pre.42");
+    fn keeps_release_metadata_unchanged() {
+        assert_eq!(
+            resolve_build_metadata(Some("v0.1.0-pre.42")),
+            "v0.1.0-pre.42"
+        );
+        assert_eq!(
+            resolve_build_metadata(Some("297f58467b6f27fc3d622af7fc7788c54a171583")),
+            "297f58467b6f27fc3d622af7fc7788c54a171583"
+        );
     }
 
     #[test]
-    fn uses_development_for_missing_or_blank_build_ids() {
-        assert_eq!(resolve_build_id(None), "Development");
-        assert_eq!(resolve_build_id(Some("   ")), "Development");
+    fn uses_development_for_missing_or_blank_build_metadata() {
+        assert_eq!(resolve_build_metadata(None), "Development");
+        assert_eq!(resolve_build_metadata(Some("   ")), "Development");
     }
 
     #[test]
-    fn serializes_build_id_for_the_frontend() {
+    fn serializes_build_info_for_the_frontend() {
         let build_info = BuildInfo {
             version: "0.1.0".to_string(),
             build_id: "v0.1.0-pre.42".to_string(),
+            source_revision: "297f58467b6f27fc3d622af7fc7788c54a171583".to_string(),
         };
 
         assert_eq!(
@@ -71,6 +81,7 @@ mod build_info_tests {
             serde_json::json!({
                 "version": "0.1.0",
                 "buildId": "v0.1.0-pre.42",
+                "sourceRevision": "297f58467b6f27fc3d622af7fc7788c54a171583",
             })
         );
     }
@@ -610,7 +621,8 @@ fn get_app_state(controller: State<'_, AppControllerState>) -> Result<AppSnapsho
 fn get_build_info(app: tauri::AppHandle) -> BuildInfo {
     BuildInfo {
         version: app.package_info().version.to_string(),
-        build_id: resolve_build_id(Some(BUILD_ID)),
+        build_id: resolve_build_metadata(Some(BUILD_ID)),
+        source_revision: resolve_build_metadata(Some(SOURCE_REVISION)),
     }
 }
 

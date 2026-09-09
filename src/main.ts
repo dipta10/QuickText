@@ -347,16 +347,22 @@ const loadBuildInfo = async () => {
     const buildInfo = await getBuildInfo();
     view.appVersion.textContent = buildInfo.version;
     view.buildId.textContent = buildInfo.buildId;
+    view.sourceRevision.textContent =
+      buildInfo.sourceRevision === "Development"
+        ? buildInfo.sourceRevision
+        : buildInfo.sourceRevision.slice(0, 7);
   } catch {
     view.appVersion.textContent = "Unavailable";
     view.buildId.textContent = "Unavailable";
+    view.sourceRevision.textContent = "Unavailable";
   }
 };
 
 const copyBuildInfo = async () => {
   const version = view.appVersion.textContent || "Unavailable";
   const buildId = view.buildId.textContent || "Unavailable";
-  const text = `QuickText\nVersion: ${version}\nBuild: ${buildId}`;
+  const sourceRevision = view.sourceRevision.textContent || "Unavailable";
+  const text = `QuickText\nVersion: ${version}\nBuild: ${buildId}\nCommit: ${sourceRevision}`;
 
   try {
     await copyTextToClipboard(text);

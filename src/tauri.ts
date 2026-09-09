@@ -33,6 +33,7 @@ export type BackendInputDeviceList = {
 export type BuildInfo = {
   version: string;
   buildId: string;
+  sourceRevision: string;
 };
 
 const assertTauriRuntime = () => {

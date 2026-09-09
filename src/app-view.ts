@@ -35,6 +35,7 @@ export type AppView = {
   launchOnStartupStatus: HTMLParagraphElement;
   appVersion: HTMLSpanElement;
   buildId: HTMLSpanElement;
+  sourceRevision: HTMLSpanElement;
   copyBuildInfoButton: HTMLButtonElement;
   buildInfoStatus: HTMLParagraphElement;
   bottomStatus: HTMLParagraphElement;
@@ -226,6 +227,10 @@ const appTemplate = `
               <dt>Build</dt>
               <dd class="build-id">Loading...</dd>
             </div>
+            <div class="build-info-row">
+              <dt>Commit</dt>
+              <dd class="source-revision">Loading...</dd>
+            </div>
           </dl>
           <button class="copy-build-info-button" type="button">
             Copy build information
@@ -322,6 +327,9 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const appVersion = root.querySelector<HTMLSpanElement>(".app-version");
   const buildId = root.querySelector<HTMLSpanElement>(".build-id");
+  const sourceRevision = root.querySelector<HTMLSpanElement>(
+    ".source-revision",
+  );
   const copyBuildInfoButton = root.querySelector<HTMLButtonElement>(
     ".copy-build-info-button",
   );
@@ -368,6 +376,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     !launchOnStartupStatus ||
     !appVersion ||
     !buildId ||
+    !sourceRevision ||
     !copyBuildInfoButton ||
     !buildInfoStatus ||
     !bottomStatus
@@ -412,6 +421,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     launchOnStartupStatus,
     appVersion,
     buildId,
+    sourceRevision,
     copyBuildInfoButton,
     buildInfoStatus,
     bottomStatus,

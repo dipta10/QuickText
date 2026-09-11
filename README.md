@@ -33,7 +33,7 @@ Download an unsigned prebuilt package from the rolling [pre-release](https://git
 ### Build From Source
 
 ```bash
-git clone https://github.com/<you>/quicktext.git
+git clone https://github.com/dipta10/quicktext.git
 cd quicktext
 npm install
 npm run tauri build

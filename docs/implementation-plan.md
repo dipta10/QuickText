@@ -27,6 +27,7 @@ The core product promise is a fast toggle loop:
 - Background mode: app stays resident in tray/menu bar after launch.
 - Global shortcut: Tauri global-shortcut plugin.
 - Settings: local app settings plus OS credential storage for the Soniox API key.
+- Transcription description: optional backend-persisted text, snapshotted at recording start and mapped by the Soniox provider to `context.text`.
 - Linux distribution: native Debian, RPM, and Arch x86_64 packages, with AppImage retained as a qualified compatibility fallback.
 - Maximum recording duration: 5 minutes for MVP, with configurability deferred.
 - Transcript history: out of MVP.
@@ -105,6 +106,7 @@ Deliverables:
 - Top bar with app identity, status, and Settings/Capture toggle.
 - Capture view for record/stop, recording status, transcript display, and copy action.
 - Settings view for Soniox API key, shortcut, behavior, and tray/background information.
+- Plain Description textarea in the Soniox Settings section.
 - Primary record/stop button.
 - Status text for idle, recording, stopping, transcribed, and error states.
 - Selectable transcript result panel instead of a textarea.
@@ -145,12 +147,17 @@ Deliverables:
 - Store Soniox API key in OS credential storage.
 - Detect missing API key before recording starts.
 - Allow key update and deletion.
+- Persist an empty-by-default transcription description with a 10,000-character maximum.
+- Expose backend commands to read and save the description without trimming or transforming it.
 
 Acceptance checks:
 
 - API key is not written to ordinary config files.
 - Missing key produces a clear UI error.
 - Restarting the app preserves settings.
+- Description text round-trips exactly, including line breaks and surrounding whitespace.
+- Empty description remains empty.
+- Values longer than 10,000 characters are rejected without replacing the previous saved value.
 
 ## Milestone 4: Audio Capture Spike
 
@@ -174,6 +181,7 @@ Deliverables:
 - Implement provider boundary.
 - Open Soniox real-time STT WebSocket session.
 - Send config with API key, model, audio format, sample rate, and channel count.
+- Map a non-empty session description to Soniox `context.text`; omit `context` when the description is empty.
 - Stream binary audio frames while recording.
 - Send an empty frame to finalize.
 - Parse tokens into a transcript.
@@ -184,6 +192,8 @@ Acceptance checks:
 - Short recording produces a final transcript.
 - Stop finalizes the active stream instead of uploading after the fact.
 - Provider errors do not leak raw protocol messages into the UI.
+- A recording uses the description snapshot captured at its start, even if Settings changes while it is active.
+- Provider config tests cover empty omission and exact non-empty serialization.
 
 ## Milestone 6: Triggering And Clipboard
 

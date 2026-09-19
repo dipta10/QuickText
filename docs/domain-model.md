@@ -24,6 +24,7 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 - Auto-copy: Optional behavior that copies the transcript immediately when finalization succeeds.
 - Credential store: OS-backed secret storage for the Soniox API key.
 - Settings store: Local non-secret preferences such as shortcut and auto-copy.
+- Transcription description: Optional user-authored background text supplied to a new transcription session to help recognition. An empty description means no context is supplied.
 - Input device selection: The user-chosen microphone, persisted as a stable device ID; "System default" tracks the OS default microphone.
 - Device fallback: Behavior when the configured input device is missing at record start; capture uses the OS default instead.
 - App run: One lifetime of the resident QuickText process, identified by a `run_id` generated at process start.
@@ -78,6 +79,7 @@ Responsibilities:
 - Send the provider-specific finalization signal.
 - Convert token responses into transcript text.
 - Map Soniox and network failures into app-level errors.
+- Map the app-level transcription description to Soniox `context.text`, omitting context when the description is empty.
 
 ### TranscriptResult
 
@@ -131,6 +133,7 @@ Minimum fields:
 - `global_shortcut`
 - `auto_copy`
 - `input_device_id` (stable device ID; absent means system default)
+- `transcription_description` (default empty; maximum 10,000 characters)
 - `language_hints`
 - `max_recording_seconds`
 - `live_transcript` (default on)
@@ -229,3 +232,5 @@ A ZIP archive created only after explicit user confirmation. It contains the cur
 - Logs must use allowlisted structured events rather than arbitrary console forwarding.
 - Recording sessions keep one ID across their lifecycle; each provider connection attempt receives its own ID.
 - Normal and debug logs must preserve the same secret and user-content exclusions.
+- The transcription description is snapshotted when recording starts; changes never alter an in-flight provider session.
+- The transcription description is user content and must never be written to diagnostics.

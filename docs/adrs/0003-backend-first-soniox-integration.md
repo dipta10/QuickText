@@ -52,5 +52,5 @@ The frontend must render backend state events once real recording starts. It may
 ## Open Questions
 
 - Which raw PCM format should the recorder normalize to for the first Soniox implementation?
-- Should language hints default to English-only, empty auto-detection, or a saved setting?
+- Language preferences are resolved by [ADR 0017](0017-language-preferences.md): an empty saved list keeps automatic detection, while selected codes are sent as non-strict hints.
 - Should provider finalization have a fixed timeout before returning a user-facing timeout error?

@@ -344,7 +344,8 @@ button {
 
 .api-key-input,
 .input-device-select,
-.max-recording-seconds-input {
+.max-recording-seconds-input,
+.language-search-input {
   width: 100%;
   min-width: 0;
   min-height: 42px;
@@ -363,8 +364,70 @@ button {
 }
 
 .api-key-input::placeholder,
-.max-recording-seconds-input::placeholder {
+.max-recording-seconds-input::placeholder,
+.language-search-input::placeholder {
   color: #687488;
+}
+
+.language-picker {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.language-picker > summary {
+  min-height: 42px;
+  padding: 11px 12px;
+  color: #f5f7fa;
+  cursor: pointer;
+  font-size: 0.92rem;
+}
+
+.language-picker-panel {
+  display: grid;
+  gap: 10px;
+  padding: 0 10px 10px;
+}
+
+.language-options {
+  display: grid;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}
+
+.language-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 9px;
+  color: #d7dee9;
+  font-size: 0.85rem;
+}
+
+.language-option + .language-option {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.language-option input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #e8eef8;
+}
+
+.language-code {
+  color: #687488;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.clear-languages-button {
+  width: 100%;
 }
 
 .checkbox-field {

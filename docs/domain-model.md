@@ -24,6 +24,7 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 - Auto-copy: Optional behavior that copies the transcript immediately when finalization succeeds.
 - Credential store: OS-backed secret storage for the Soniox API key.
 - Settings store: Local non-secret preferences such as shortcut and auto-copy.
+- Language preferences: Zero or more likely spoken languages selected by the user. An empty selection means automatic detection.
 - Input device selection: The user-chosen microphone, persisted as a stable device ID; "System default" tracks the OS default microphone.
 - Device fallback: Behavior when the configured input device is missing at record start; capture uses the OS default instead.
 - App run: One lifetime of the resident QuickText process, identified by a `run_id` generated at process start.
@@ -131,7 +132,7 @@ Minimum fields:
 - `global_shortcut`
 - `auto_copy`
 - `input_device_id` (stable device ID; absent means system default)
-- `language_hints`
+- `language_preferences` (ISO codes; empty means automatic detection)
 - `max_recording_seconds`
 - `live_transcript` (default on)
 - `show_partial_transcript` (default on, only meaningful when `live_transcript` is on)
@@ -224,6 +225,7 @@ A ZIP archive created only after explicit user confirmation. It contains the cur
 - Window visibility must not be treated as app lifetime; explicit quit is required to stop the resident process.
 - Settings controls must stay out of the Capture view.
 - Input device picking belongs to Settings; Capture may only surface device-fallback notices.
+- Language preferences belong to Settings, are snapshotted at recording start, and reach Soniox only through the provider boundary.
 - Capture should render transcript text as output, not as an editable input.
 - Diagnostic writes, retention, export, and deletion are backend responsibilities; the frontend never receives raw log paths.
 - Logs must use allowlisted structured events rather than arbitrary console forwarding.

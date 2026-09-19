@@ -49,21 +49,14 @@ pub struct SonioxSession {
 }
 
 impl SonioxSession {
-    pub fn start(api_key: String, audio_format: AudioFormat) -> Self {
+    pub fn start(api_key: String, audio_format: AudioFormat, language_hints: Vec<String>) -> Self {
         let (audio_tx, audio_rx) = mpsc::unbounded_channel();
         let (command_tx, command_rx) = mpsc::unbounded_channel();
         let (partial_tx, partial_rx) = mpsc::unbounded_channel();
         let (ready_tx, ready_rx) = oneshot::channel();
         let stream_error: SharedErrorSlot = Arc::new(Mutex::new(None));
 
-        let config_message = serde_json::to_string(&SonioxConfig {
-            api_key,
-            model: SONIOX_MODEL,
-            audio_format: soniox_audio_format(&audio_format),
-            sample_rate: audio_format.sample_rate,
-            num_channels: audio_format.channels,
-        })
-        .expect("Soniox config fields serialize infallibly");
+        let config_message = soniox_config_message(&api_key, &audio_format, &language_hints);
 
         tauri::async_runtime::spawn(run_configured_session(
             config_message,
@@ -356,13 +349,31 @@ fn soniox_audio_format(audio_format: &AudioFormat) -> &'static str {
     }
 }
 
+fn soniox_config_message(
+    api_key: &str,
+    audio_format: &AudioFormat,
+    language_hints: &[String],
+) -> String {
+    serde_json::to_string(&SonioxConfig {
+        api_key,
+        model: SONIOX_MODEL,
+        audio_format: soniox_audio_format(audio_format),
+        sample_rate: audio_format.sample_rate,
+        num_channels: audio_format.channels,
+        language_hints: (!language_hints.is_empty()).then_some(language_hints),
+    })
+    .expect("Soniox config fields serialize infallibly")
+}
+
 #[derive(Serialize)]
 struct SonioxConfig<'a> {
-    api_key: String,
+    api_key: &'a str,
     model: &'a str,
     audio_format: &'a str,
     sample_rate: u32,
     num_channels: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language_hints: Option<&'a [String]>,
 }
 
 #[derive(Deserialize)]
@@ -385,6 +396,36 @@ struct SonioxToken {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_audio_format() -> AudioFormat {
+        AudioFormat {
+            sample_rate: 16_000,
+            channels: 1,
+            encoding: AudioEncoding::I16,
+        }
+    }
+
+    #[test]
+    fn omits_language_hints_for_automatic_detection() {
+        let config: serde_json::Value =
+            serde_json::from_str(&soniox_config_message("secret", &test_audio_format(), &[]))
+                .unwrap();
+
+        assert!(config.get("language_hints").is_none());
+    }
+
+    #[test]
+    fn sends_selected_language_hints() {
+        let hints = vec!["en".to_string(), "bn".to_string()];
+        let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
+            "secret",
+            &test_audio_format(),
+            &hints,
+        ))
+        .unwrap();
+
+        assert_eq!(config["language_hints"], serde_json::json!(["en", "bn"]));
+    }
 
     #[test]
     fn responds_to_queued_finish_with_connect_error() {

@@ -21,6 +21,9 @@ export type AppView = {
   apiKeySaveButton: HTMLButtonElement;
   apiKeyDeleteButton: HTMLButtonElement;
   apiKeyStatus: HTMLParagraphElement;
+  transcriptionDescriptionInput: HTMLTextAreaElement;
+  transcriptionDescriptionSaveButton: HTMLButtonElement;
+  transcriptionDescriptionStatus: HTMLParagraphElement;
   languagePicker: HTMLDetailsElement;
   languagePickerSummary: HTMLSpanElement;
   languageSearchInput: HTMLInputElement;
@@ -117,6 +120,27 @@ const appTemplate = `
             <button class="api-key-delete-button" type="button">Delete</button>
           </div>
           <p class="api-key-status" role="status"></p>
+          <label class="settings-field" for="transcription-description">
+            <span class="settings-field-label">Description</span>
+            <textarea
+              class="transcription-description-input"
+              id="transcription-description"
+              maxlength="10000"
+              rows="5"
+              placeholder="Describe the topic, project, or background"
+              aria-describedby="transcription-description-status"
+            ></textarea>
+          </label>
+          <button class="transcription-description-save-button" type="button">
+            Save description
+          </button>
+          <p
+            class="transcription-description-status settings-note"
+            id="transcription-description-status"
+            role="status"
+          >
+            Applied to the next recording. Leave empty to send no context.
+          </p>
           <div class="settings-field">
             <span class="settings-field-label">Transcription languages</span>
             <details class="language-picker">
@@ -326,6 +350,18 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const apiKeyStatus =
     root.querySelector<HTMLParagraphElement>(".api-key-status");
+  const transcriptionDescriptionInput =
+    root.querySelector<HTMLTextAreaElement>(
+      ".transcription-description-input",
+    );
+  const transcriptionDescriptionSaveButton =
+    root.querySelector<HTMLButtonElement>(
+      ".transcription-description-save-button",
+    );
+  const transcriptionDescriptionStatus =
+    root.querySelector<HTMLParagraphElement>(
+      ".transcription-description-status",
+    );
   const languagePicker =
     root.querySelector<HTMLDetailsElement>(".language-picker");
   const languagePickerSummary = root.querySelector<HTMLSpanElement>(
@@ -411,6 +447,9 @@ export const createAppView = (root: HTMLElement): AppView => {
     !apiKeySaveButton ||
     !apiKeyDeleteButton ||
     !apiKeyStatus ||
+    !transcriptionDescriptionInput ||
+    !transcriptionDescriptionSaveButton ||
+    !transcriptionDescriptionStatus ||
     !languagePicker ||
     !languagePickerSummary ||
     !languageSearchInput ||
@@ -462,6 +501,9 @@ export const createAppView = (root: HTMLElement): AppView => {
     apiKeySaveButton,
     apiKeyDeleteButton,
     apiKeyStatus,
+    transcriptionDescriptionInput,
+    transcriptionDescriptionSaveButton,
+    transcriptionDescriptionStatus,
     languagePicker,
     languagePickerSummary,
     languageSearchInput,

@@ -49,14 +49,20 @@ pub struct SonioxSession {
 }
 
 impl SonioxSession {
-    pub fn start(api_key: String, audio_format: AudioFormat, language_hints: Vec<String>) -> Self {
+    pub fn start(
+        api_key: String,
+        audio_format: AudioFormat,
+        language_hints: Vec<String>,
+        description: String,
+    ) -> Self {
         let (audio_tx, audio_rx) = mpsc::unbounded_channel();
         let (command_tx, command_rx) = mpsc::unbounded_channel();
         let (partial_tx, partial_rx) = mpsc::unbounded_channel();
         let (ready_tx, ready_rx) = oneshot::channel();
         let stream_error: SharedErrorSlot = Arc::new(Mutex::new(None));
 
-        let config_message = soniox_config_message(&api_key, &audio_format, &language_hints);
+        let config_message =
+            soniox_config_message(&api_key, &audio_format, &language_hints, &description);
 
         tauri::async_runtime::spawn(run_configured_session(
             config_message,
@@ -353,6 +359,7 @@ fn soniox_config_message(
     api_key: &str,
     audio_format: &AudioFormat,
     language_hints: &[String],
+    description: &str,
 ) -> String {
     serde_json::to_string(&SonioxConfig {
         api_key,
@@ -361,6 +368,7 @@ fn soniox_config_message(
         sample_rate: audio_format.sample_rate,
         num_channels: audio_format.channels,
         language_hints: (!language_hints.is_empty()).then_some(language_hints),
+        context: (!description.is_empty()).then_some(SonioxContext { text: description }),
     })
     .expect("Soniox config fields serialize infallibly")
 }
@@ -374,6 +382,13 @@ struct SonioxConfig<'a> {
     num_channels: u16,
     #[serde(skip_serializing_if = "Option::is_none")]
     language_hints: Option<&'a [String]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    context: Option<SonioxContext<'a>>,
+}
+
+#[derive(Serialize)]
+struct SonioxContext<'a> {
+    text: &'a str,
 }
 
 #[derive(Deserialize)]
@@ -407,9 +422,13 @@ mod tests {
 
     #[test]
     fn omits_language_hints_for_automatic_detection() {
-        let config: serde_json::Value =
-            serde_json::from_str(&soniox_config_message("secret", &test_audio_format(), &[]))
-                .unwrap();
+        let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
+            "secret",
+            &test_audio_format(),
+            &[],
+            "",
+        ))
+        .unwrap();
 
         assert!(config.get("language_hints").is_none());
     }
@@ -421,10 +440,51 @@ mod tests {
             "secret",
             &test_audio_format(),
             &hints,
+            "",
         ))
         .unwrap();
 
         assert_eq!(config["language_hints"], serde_json::json!(["en", "bn"]));
+    }
+
+    #[test]
+    fn omits_context_for_empty_description() {
+        let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
+            "secret",
+            &test_audio_format(),
+            &[],
+            "",
+        ))
+        .unwrap();
+
+        assert!(config.get("context").is_none());
+    }
+
+    #[test]
+    fn sends_description_as_exact_context_text() {
+        let description = "  Project Atlas\nKeep the spacing.  ";
+        let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
+            "secret",
+            &test_audio_format(),
+            &[],
+            description,
+        ))
+        .unwrap();
+
+        assert_eq!(config["context"]["text"], description);
+    }
+
+    #[test]
+    fn sends_whitespace_only_description_unchanged() {
+        let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
+            "secret",
+            &test_audio_format(),
+            &[],
+            "   ",
+        ))
+        .unwrap();
+
+        assert_eq!(config["context"]["text"], "   ");
     }
 
     #[test]

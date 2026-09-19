@@ -144,7 +144,8 @@ async fn transcribes_recorded_fixtures() {
             load_wav_pcm(&fixture.wav_path).expect("readable WAV fixture");
 
         let chunk_duration = chunk_duration(&audio_format);
-        let mut session = SonioxSession::start(api_key.clone(), audio_format, Vec::new());
+        let mut session =
+            SonioxSession::start(api_key.clone(), audio_format, Vec::new(), String::new());
 
         let provider_ready = session
             .take_ready_receiver()

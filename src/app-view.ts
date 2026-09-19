@@ -21,6 +21,12 @@ export type AppView = {
   apiKeySaveButton: HTMLButtonElement;
   apiKeyDeleteButton: HTMLButtonElement;
   apiKeyStatus: HTMLParagraphElement;
+  languagePicker: HTMLDetailsElement;
+  languagePickerSummary: HTMLSpanElement;
+  languageSearchInput: HTMLInputElement;
+  languageOptions: HTMLDivElement;
+  clearLanguagesButton: HTMLButtonElement;
+  languageStatus: HTMLParagraphElement;
   inputDeviceSelect: HTMLSelectElement;
   inputDeviceStatus: HTMLParagraphElement;
   maxRecordingSecondsInput: HTMLInputElement;
@@ -111,6 +117,34 @@ const appTemplate = `
             <button class="api-key-delete-button" type="button">Delete</button>
           </div>
           <p class="api-key-status" role="status"></p>
+          <div class="settings-field">
+            <span class="settings-field-label">Transcription languages</span>
+            <details class="language-picker">
+              <summary>
+                <span class="language-picker-summary">Automatic detection</span>
+              </summary>
+              <div class="language-picker-panel">
+                <input
+                  class="language-search-input"
+                  type="search"
+                  autocomplete="off"
+                  placeholder="Search languages"
+                  aria-label="Search transcription languages"
+                />
+                <div
+                  class="language-options"
+                  role="group"
+                  aria-label="Preferred transcription languages"
+                ></div>
+                <button class="clear-languages-button" type="button">
+                  Clear selections
+                </button>
+              </div>
+            </details>
+          </div>
+          <p class="language-status settings-note" role="status">
+            Automatic detection is used when no language is selected.
+          </p>
         </section>
 
         <section class="settings-section">
@@ -292,6 +326,21 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const apiKeyStatus =
     root.querySelector<HTMLParagraphElement>(".api-key-status");
+  const languagePicker =
+    root.querySelector<HTMLDetailsElement>(".language-picker");
+  const languagePickerSummary = root.querySelector<HTMLSpanElement>(
+    ".language-picker-summary",
+  );
+  const languageSearchInput = root.querySelector<HTMLInputElement>(
+    ".language-search-input",
+  );
+  const languageOptions =
+    root.querySelector<HTMLDivElement>(".language-options");
+  const clearLanguagesButton = root.querySelector<HTMLButtonElement>(
+    ".clear-languages-button",
+  );
+  const languageStatus =
+    root.querySelector<HTMLParagraphElement>(".language-status");
   const inputDeviceSelect = root.querySelector<HTMLSelectElement>(
     ".input-device-select",
   );
@@ -362,6 +411,12 @@ export const createAppView = (root: HTMLElement): AppView => {
     !apiKeySaveButton ||
     !apiKeyDeleteButton ||
     !apiKeyStatus ||
+    !languagePicker ||
+    !languagePickerSummary ||
+    !languageSearchInput ||
+    !languageOptions ||
+    !clearLanguagesButton ||
+    !languageStatus ||
     !inputDeviceSelect ||
     !inputDeviceStatus ||
     !maxRecordingSecondsInput ||
@@ -407,6 +462,12 @@ export const createAppView = (root: HTMLElement): AppView => {
     apiKeySaveButton,
     apiKeyDeleteButton,
     apiKeyStatus,
+    languagePicker,
+    languagePickerSummary,
+    languageSearchInput,
+    languageOptions,
+    clearLanguagesButton,
+    languageStatus,
     inputDeviceSelect,
     inputDeviceStatus,
     maxRecordingSecondsInput,

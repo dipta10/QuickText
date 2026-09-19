@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted for the advanced provider settings slice.
+Superseded by [ADR 0017](0017-language-preferences.md). The language-only
+feature was implemented without endpoint controls or a generic
+provider-declared settings framework.
 
 ## Context
 

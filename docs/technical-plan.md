@@ -102,10 +102,16 @@ MVP settings should include:
 - Optional auto-copy after transcription.
 - Optional global shortcut.
 - Optional launch on system startup (starts hidden in the tray/menu bar).
+- Optional transcription language preferences (empty by default for automatic detection).
 
 The API key should be stored using the operating system's secure credential storage if the chosen desktop framework supports it cleanly.
 
 The transcription description is a plain string with a 10,000-character maximum. Save and pass it through unchanged: do not trim it, generate defaults, parse terms, or derive structured context. A zero-length string means no context. Soniox's actual context limit is 8,000 tokens, so provider rejection remains possible for unusual text even within the character cap and should use the normal provider-error path. See [ADR 0018](adrs/0018-soniox-transcription-description.md).
+
+Language preferences are non-secret backend-managed settings. The bundled
+Soniox catalog is available offline. At session start, selected ISO codes are
+passed through the provider boundary; the Soniox client emits
+`language_hints` only for a non-empty selection. See [ADR 0017](adrs/0017-language-preferences.md).
 
 ## Error Cases
 

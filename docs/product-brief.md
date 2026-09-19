@@ -41,6 +41,7 @@ The app should keep running in the background after launch. Closing the main win
 - Tray/menu bar background mode after launch.
 - Basic error handling for missing API key, microphone permission failure, network failure, and provider failure.
 - Local privacy-safe support diagnostics with bounded retention, correlated run/session identifiers, and explicit user export.
+- Optional persisted transcription-language preferences; no selection keeps Soniox automatic detection.
 
 ## Non-Goals for MVP
 
@@ -81,9 +82,9 @@ The app should keep running in the background after launch. Closing the main win
 - UI after transcription: keep the UI open so the user can inspect and copy the transcript.
 - UI information architecture: use a Capture view for recording/transcripts and a Settings view for keybind/API/preferences.
 - Transcription context: Settings provides one optional Description field. Its saved text is applied to each new Soniox session; an empty value supplies no context.
+- Language behavior: Settings allows one or more non-strict language preferences; the default remains automatic detection.
 
 ## Open Product Questions
 
 - Should there be a maximum recording duration in MVP?
 - What default global shortcut should be least likely to conflict across Linux, macOS, and Windows?
-- Should language hints be fixed initially or exposed in settings?

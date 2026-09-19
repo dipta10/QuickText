@@ -57,6 +57,7 @@ import {
   getAppState,
   getBuildInfo,
   getLaunchOnStartup as getBackendLaunchOnStartup,
+  getLanguagePreferences,
   hasSonioxApiKey,
   listInputDevices,
   onAppStateChanged,
@@ -67,9 +68,11 @@ import {
   setInputDevice,
   setPasteToTargetBackend,
   setLaunchOnStartup as setBackendLaunchOnStartup,
+  setLanguagePreferences,
   setShortcutBehavior,
   toggleBackendRecording,
 } from "./tauri";
+import type { SupportedLanguage } from "./tauri";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -91,6 +94,11 @@ let state = createAppState(
 );
 const view = createAppView(app);
 let lastAutoCopiedTranscript = "";
+let availableLanguages: SupportedLanguage[] = [];
+let selectedLanguageCodes: string[] = [];
+let confirmedLanguageCodes: string[] = [];
+let languageSearch = "";
+let languagePreferencesSaving = false;
 
 const formatElapsedTime = (startedAt: number | null): string => {
   if (!startedAt) {
@@ -165,6 +173,62 @@ const renderInputDeviceSelect = () => {
   view.inputDeviceStatus.textContent = selectedKnown
     ? ""
     : `Saved microphone "${state.selectedInputDeviceId}" is currently unavailable.`;
+};
+
+const languageSummary = () => {
+  if (selectedLanguageCodes.length === 0) {
+    return "Automatic detection";
+  }
+
+  if (selectedLanguageCodes.length === 1) {
+    return (
+      availableLanguages.find(
+        (language) => language.code === selectedLanguageCodes[0],
+      )?.name ?? selectedLanguageCodes[0]
+    );
+  }
+
+  return `${selectedLanguageCodes.length} languages selected`;
+};
+
+const renderLanguagePicker = () => {
+  view.languagePickerSummary.textContent = languageSummary();
+  view.clearLanguagesButton.disabled =
+    languagePreferencesSaving || selectedLanguageCodes.length === 0;
+  view.languageSearchInput.disabled = languagePreferencesSaving;
+  view.languageOptions.innerHTML = "";
+
+  const query = languageSearch.trim().toLocaleLowerCase();
+  const visibleLanguages = availableLanguages.filter(
+    (language) =>
+      !query ||
+      language.name.toLocaleLowerCase().includes(query) ||
+      language.code.includes(query),
+  );
+
+  for (const language of visibleLanguages) {
+    const label = document.createElement("label");
+    label.className = "language-option";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = language.code;
+    checkbox.checked = selectedLanguageCodes.includes(language.code);
+    checkbox.disabled = languagePreferencesSaving;
+    const name = document.createElement("span");
+    name.textContent = language.name;
+    const code = document.createElement("span");
+    code.className = "language-code";
+    code.textContent = language.code;
+    label.append(checkbox, name, code);
+    view.languageOptions.appendChild(label);
+  }
+
+  if (visibleLanguages.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "settings-note";
+    empty.textContent = "No languages match your search.";
+    view.languageOptions.appendChild(empty);
+  }
 };
 
 const render = () => {
@@ -329,6 +393,47 @@ const loadApiKeyStatus = async () => {
         error instanceof Error ? error.message : String(error),
       ),
     );
+  }
+};
+
+const loadLanguagePreferences = async () => {
+  try {
+    const snapshot = await getLanguagePreferences();
+    availableLanguages = snapshot.availableLanguages;
+    selectedLanguageCodes = [...snapshot.selectedCodes];
+    confirmedLanguageCodes = [...snapshot.selectedCodes];
+    renderLanguagePicker();
+  } catch (error) {
+    view.languageStatus.textContent =
+      error instanceof Error ? error.message : String(error);
+  }
+};
+
+const saveSelectedLanguages = async (selectedCodes: string[]) => {
+  if (languagePreferencesSaving) {
+    return;
+  }
+
+  const previousCodes = [...confirmedLanguageCodes];
+  selectedLanguageCodes = selectedCodes;
+  languagePreferencesSaving = true;
+  view.languageStatus.textContent = "Saving language preferences...";
+  renderLanguagePicker();
+
+  try {
+    const savedCodes = await setLanguagePreferences(selectedCodes);
+    selectedLanguageCodes = [...savedCodes];
+    confirmedLanguageCodes = [...savedCodes];
+    view.languageStatus.textContent = savedCodes.length
+      ? "Language preferences saved. They apply to the next recording."
+      : "Automatic language detection is enabled.";
+  } catch (error) {
+    selectedLanguageCodes = previousCodes;
+    view.languageStatus.textContent =
+      error instanceof Error ? error.message : String(error);
+  } finally {
+    languagePreferencesSaving = false;
+    renderLanguagePicker();
   }
 };
 
@@ -572,6 +677,34 @@ view.inputDeviceSelect.addEventListener("change", () => {
   void saveInputDeviceSelection(view.inputDeviceSelect.value);
 });
 
+view.languageSearchInput.addEventListener("input", () => {
+  languageSearch = view.languageSearchInput.value;
+  renderLanguagePicker();
+});
+
+view.languageOptions.addEventListener("change", (event) => {
+  const checkbox = event.target;
+  if (!(checkbox instanceof HTMLInputElement) || checkbox.type !== "checkbox") {
+    return;
+  }
+
+  const selected = new Set(selectedLanguageCodes);
+  if (checkbox.checked) {
+    selected.add(checkbox.value);
+  } else {
+    selected.delete(checkbox.value);
+  }
+  void saveSelectedLanguages(
+    availableLanguages
+      .map((language) => language.code)
+      .filter((code) => selected.has(code)),
+  );
+});
+
+view.clearLanguagesButton.addEventListener("click", () => {
+  void saveSelectedLanguages([]);
+});
+
 window.addEventListener("keydown", (event) => {
   if (!isCapturingShortcut(state)) {
     return;
@@ -624,6 +757,7 @@ window.setInterval(render, 1000);
 void loadBackendState();
 void loadBuildInfo();
 void loadApiKeyStatus();
+void loadLanguagePreferences();
 void loadLaunchOnStartup();
 void pushShortcutBehavior();
 void pushPasteToTarget(state.pasteToTarget);

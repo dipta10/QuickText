@@ -11,7 +11,7 @@ The main UI should separate the active dictation workflow from configuration. Re
 QuickText has two main views:
 
 - Capture: the default operational view for recording, stopping, reviewing, and copying the transcript.
-- Settings: configuration for Soniox API key, global shortcut, tray behavior, language hints, and future preferences.
+- Settings: configuration for Soniox API key, global shortcut, tray behavior, language preferences, and future preferences.
 
 The app should always open to Capture when triggered for dictation. Settings should never block the core record/stop loop unless a required setup item is missing.
 
@@ -71,7 +71,7 @@ Settings should be a separate view reached from a gear button or Settings tab in
 Recommended sections:
 
 - General: launch-on-startup preference.
-- Soniox: API key status, save/update key, delete key, and one Description textarea.
+- Soniox: API key status, save/update key, delete key, one Description textarea, and a searchable multi-select for transcription languages.
 - Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
 - Behavior: manual copy default, future auto-copy option, max recording duration display.
 - App: tray/background explanation and explicit quit note.
@@ -82,6 +82,7 @@ Settings rules:
 - Do not show raw provider protocol details.
 - Do not show stored API key values.
 - Do not store API keys in frontend persistence.
+- Describe an empty language selection as Automatic detection and keep language selection available without an API key.
 - Keep settings controls visually quieter than the Capture record button.
 - Keep Description a plain multi-line text box with a 10,000-character maximum. Do not add presets, parsing, term editors, generated suggestions, or other context controls.
 - Use short labels and direct status text.
@@ -144,6 +145,7 @@ QuickText window
   Settings view
     Soniox API key
     Description
+    Transcription languages
     Global shortcut
     Behavior
     App/tray
@@ -175,6 +177,7 @@ The Description control loads the backend-persisted value, saves its exact conte
 - Settings contains keybind and Soniox API key controls.
 - Settings contains one Description textarea in the Soniox section and enforces the 10,000-character maximum.
 - Description text persists exactly; an empty field supplies no context to a new recording.
+- Settings supports multiple transcription-language preferences and a clear return to Automatic detection.
 - Pressing the global shortcut while Settings is open switches to Capture and starts recording.
 - Pressing the global shortcut while hidden shows Capture and starts recording.
 - With "Focus window when recording starts" off, starting via shortcut records without raising or focusing the window.

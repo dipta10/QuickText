@@ -16,6 +16,8 @@ const listInputDevicesCommand = "list_input_devices";
 const setInputDeviceCommand = "set_input_device";
 const getLaunchOnStartupCommand = "get_launch_on_startup";
 const setLaunchOnStartupCommand = "set_launch_on_startup";
+const getLanguagePreferencesCommand = "get_language_preferences";
+const setLanguagePreferencesCommand = "set_language_preferences";
 const appStateChangedEvent = "app-state-changed";
 const partialTranscriptEvent = "partial-transcript";
 const deviceFallbackEvent = "device-fallback";
@@ -34,6 +36,16 @@ export type BuildInfo = {
   version: string;
   buildId: string;
   sourceRevision: string;
+};
+
+export type SupportedLanguage = {
+  code: string;
+  name: string;
+};
+
+export type LanguagePreferencesSnapshot = {
+  availableLanguages: SupportedLanguage[];
+  selectedCodes: string[];
 };
 
 const assertTauriRuntime = () => {
@@ -114,6 +126,18 @@ export const setLaunchOnStartup = async (
 ): Promise<boolean> => {
   assertTauriRuntime();
   return await invoke<boolean>(setLaunchOnStartupCommand, { enabled });
+};
+
+export const getLanguagePreferences = async (): Promise<LanguagePreferencesSnapshot> => {
+  assertTauriRuntime();
+  return await invoke<LanguagePreferencesSnapshot>(getLanguagePreferencesCommand);
+};
+
+export const setLanguagePreferences = async (
+  selectedCodes: string[],
+): Promise<string[]> => {
+  assertTauriRuntime();
+  return await invoke<string[]>(setLanguagePreferencesCommand, { selectedCodes });
 };
 
 export const copyTextToClipboard = async (text: string) => {

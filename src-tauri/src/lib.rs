@@ -7,6 +7,7 @@ mod companion_cli;
 mod ipc;
 #[cfg(unix)]
 mod ipc_server;
+mod language_preferences;
 mod paste_target;
 mod soniox_provider;
 
@@ -16,6 +17,7 @@ mod transcription_fixture_tests;
 use app_controller::{AppController, AppError, AppSnapshot, AppStatus, TranscriptResult};
 use audio_recorder::{AudioCaptureStats, AudioRecorder};
 use keyring::{Entry, Error as KeyringError};
+use language_preferences::{LanguagePreferencesSnapshot, LanguagePreferencesState};
 use soniox_provider::{PartialTranscript, SonioxSession};
 use tauri::{
     menu::{Menu, MenuItem},
@@ -632,6 +634,28 @@ fn list_input_devices() -> audio_recorder::InputDeviceList {
 }
 
 #[tauri::command]
+fn get_language_preferences(
+    preferences: State<'_, LanguagePreferencesState>,
+) -> Result<LanguagePreferencesSnapshot, String> {
+    language_preferences::snapshot(&preferences)
+}
+
+#[tauri::command]
+fn set_language_preferences(
+    app: tauri::AppHandle,
+    preferences: State<'_, LanguagePreferencesState>,
+    selected_codes: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let previous_codes = language_preferences::selected_codes(&preferences)?;
+    let selected_codes = language_preferences::set_selected_codes(&preferences, selected_codes)?;
+    if let Err(error) = language_preferences::save(&app, &selected_codes) {
+        let _ = language_preferences::set_selected_codes(&preferences, previous_codes);
+        return Err(error);
+    }
+    Ok(selected_codes)
+}
+
+#[tauri::command]
 fn set_input_device(
     input_device: State<'_, InputDeviceState>,
     device_id: Option<String>,
@@ -679,6 +703,7 @@ pub(crate) async fn toggle_recording_for_app(
     let recorder = app.state::<AudioRecorderState>();
     let transcription = app.state::<TranscriptionState>();
     let input_device = app.state::<InputDeviceState>();
+    let language_preferences = app.state::<LanguagePreferencesState>();
     let max_recording_seconds = max_recording_seconds
         .filter(|seconds| *seconds > 0)
         .unwrap_or(DEFAULT_MAX_RECORDING_SECONDS);
@@ -733,7 +758,9 @@ pub(crate) async fn toggle_recording_for_app(
                 }
             };
 
-            let mut soniox_session = SonioxSession::start(api_key, audio_format.clone());
+            let language_hints = language_preferences::selected_codes(&language_preferences)?;
+            let mut soniox_session =
+                SonioxSession::start(api_key, audio_format.clone(), language_hints);
             let provider_ready_rx = soniox_session.take_ready_receiver();
 
             if let Some(partial_rx) = soniox_session.take_partial_receiver() {
@@ -1157,6 +1184,7 @@ fn run_with_options(start_hidden: bool) {
         .manage(AudioRecorderState::default())
         .manage(TranscriptionState::default())
         .manage(InputDeviceState::default())
+        .manage(LanguagePreferencesState::default())
         .manage(PendingPasteState::default())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(autostart::plugin())
@@ -1173,6 +1201,13 @@ fn run_with_options(start_hidden: bool) {
                 .build(),
         )
         .setup(move |app| {
+            if let Err(error) = language_preferences::load(
+                app.handle(),
+                app.state::<LanguagePreferencesState>().inner(),
+            ) {
+                eprintln!("QuickText language settings error: {error}");
+            }
+
             setup_tray(app)?;
 
             if start_hidden {
@@ -1203,6 +1238,8 @@ fn run_with_options(start_hidden: bool) {
             delete_soniox_api_key,
             list_input_devices,
             set_input_device,
+            get_language_preferences,
+            set_language_preferences,
             get_launch_on_startup,
             set_launch_on_startup
         ])

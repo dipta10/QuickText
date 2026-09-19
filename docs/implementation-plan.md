@@ -27,6 +27,7 @@ The core product promise is a fast toggle loop:
 - Background mode: app stays resident in tray/menu bar after launch.
 - Global shortcut: Tauri global-shortcut plugin.
 - Settings: local app settings plus OS credential storage for the Soniox API key.
+- Language preferences: optional backend-persisted ISO codes; an empty list keeps Soniox automatic detection.
 - Linux distribution: native Debian, RPM, and Arch x86_64 packages, with AppImage retained as a qualified compatibility fallback.
 - Maximum recording duration: 5 minutes for MVP, with configurability deferred.
 - Transcript history: out of MVP.
@@ -174,6 +175,7 @@ Deliverables:
 - Implement provider boundary.
 - Open Soniox real-time STT WebSocket session.
 - Send config with API key, model, audio format, sample rate, and channel count.
+- Include selected language hints in the initial config, omitting the field when no languages are selected.
 - Stream binary audio frames while recording.
 - Send an empty frame to finalize.
 - Parse tokens into a transcript.
@@ -297,7 +299,7 @@ These are the decisions most likely to break the plan if answered casually.
 - Window behavior: Should the UI hide after copy, after stop, or never automatically? Current plan keeps it visible after transcription.
 - UI structure: Do keybind and API key controls belong on the recording screen? No, they belong in Settings so Capture stays focused.
 - Recording bounds: What prevents accidental long recordings? Current plan should add a conservative maximum duration before public release.
-- Language defaults: Is the app English-only at first, or should language hints be configurable? Current plan starts with English-oriented defaults and leaves language settings for a follow-up.
+- Language defaults: Automatic detection is the default; users can save one or more non-strict language preferences per [ADR 0017](adrs/0017-language-preferences.md).
 
 ## Immediate Next Step
 

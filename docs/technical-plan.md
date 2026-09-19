@@ -99,8 +99,14 @@ MVP settings should include:
 - Optional auto-copy after transcription.
 - Optional global shortcut.
 - Optional launch on system startup (starts hidden in the tray/menu bar).
+- Optional transcription language preferences (empty by default for automatic detection).
 
 The API key should be stored using the operating system's secure credential storage if the chosen desktop framework supports it cleanly.
+
+Language preferences are non-secret backend-managed settings. The bundled
+Soniox catalog is available offline. At session start, selected ISO codes are
+passed through the provider boundary; the Soniox client emits
+`language_hints` only for a non-empty selection. See [ADR 0017](adrs/0017-language-preferences.md).
 
 ## Error Cases
 

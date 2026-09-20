@@ -28,6 +28,7 @@ The core product promise is a fast toggle loop:
 - Global shortcut: Tauri global-shortcut plugin.
 - Settings: local app settings plus OS credential storage for the Soniox API key.
 - Transcription description: optional backend-persisted text, snapshotted at recording start and mapped by the Soniox provider to `context.text`.
+- Transcription terms: optional one-term-per-line backend-persisted text, parsed and snapshotted at recording start, then mapped by the Soniox provider to `context.terms`.
 - Language preferences: optional backend-persisted ISO codes; an empty list keeps Soniox automatic detection.
 - Linux distribution: native Debian, RPM, and Arch x86_64 packages, with AppImage retained as a qualified compatibility fallback.
 - Maximum recording duration: 5 minutes for MVP, with configurability deferred.
@@ -150,6 +151,8 @@ Deliverables:
 - Allow key update and deletion.
 - Persist an empty-by-default transcription description with a 10,000-character maximum.
 - Expose backend commands to read and save the description without trimming or transforming it.
+- Persist an empty-by-default terms editor value with a 10,000-character maximum.
+- Expose backend commands to read and save the terms editor text exactly.
 
 Acceptance checks:
 
@@ -158,6 +161,7 @@ Acceptance checks:
 - Restarting the app preserves settings.
 - Description text round-trips exactly, including line breaks and surrounding whitespace.
 - Empty description remains empty.
+- Terms editor text round-trips exactly; blank lines produce no provider terms.
 - Values longer than 10,000 characters are rejected without replacing the previous saved value.
 
 ## Milestone 4: Audio Capture Spike
@@ -182,7 +186,8 @@ Deliverables:
 - Implement provider boundary.
 - Open Soniox real-time STT WebSocket session.
 - Send config with API key, model, audio format, sample rate, and channel count.
-- Map a non-empty session description to Soniox `context.text`; omit `context` when the description is empty.
+- Map a non-empty session description to Soniox `context.text`; omit that field when the description is empty.
+- Map non-empty session terms to Soniox `context.terms`; omit `context` only when both description and terms are empty.
 - Include selected language hints in the initial config, omitting the field when no languages are selected.
 - Stream binary audio frames while recording.
 - Send an empty frame to finalize.
@@ -195,7 +200,8 @@ Acceptance checks:
 - Stop finalizes the active stream instead of uploading after the fact.
 - Provider errors do not leak raw protocol messages into the UI.
 - A recording uses the description snapshot captured at its start, even if Settings changes while it is active.
-- Provider config tests cover empty omission and exact non-empty serialization.
+- A recording uses the terms snapshot captured at its start, even if Settings changes while it is active.
+- Provider config tests cover empty omission, exact description serialization, and terms serialization alone and alongside a description.
 
 ## Milestone 6: Triggering And Clipboard
 

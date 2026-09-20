@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for documentation; implementation is planned separately.
+Accepted and implemented. Extended by [ADR 0019](0019-soniox-transcription-terms.md), which adds a separate terms field.
 
 ## Context
 
@@ -23,7 +23,7 @@ Add one multi-line **Description** field to the existing Soniox section in Setti
 - The app controller passes the snapshot through the provider boundary as an app-level transcription description.
 - The Soniox provider serializes a non-empty description as `context: { "text": description }` in the initial WebSocket configuration.
 - When the description has zero length, the Soniox provider omits `context`. A whitespace-only value is non-empty and is sent unchanged.
-- No other context controls, defaults, presets, counters, term extraction, or structured fields are included.
+- No other context controls, defaults, presets, counters, term extraction, or structured fields are included by this decision. ADR 0019 later adds explicit user-authored terms without extracting them from the description.
 
 Soniox limits total context to 8,000 tokens, approximately 10,000 characters. The character limit is a simple UI and persistence bound, not a local token estimator. If Soniox rejects an unusual value within that bound because it exceeds the token limit, QuickText uses its existing provider-error path.
 

@@ -113,7 +113,8 @@ button {
 .keybind-button,
 .api-key-save-button,
 .api-key-delete-button,
-.transcription-description-save-button {
+.transcription-description-save-button,
+.transcription-terms-save-button {
   min-height: 38px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -140,7 +141,8 @@ button {
 .keybind-button:hover,
 .api-key-save-button:hover,
 .api-key-delete-button:hover,
-.transcription-description-save-button:hover {
+.transcription-description-save-button:hover,
+.transcription-terms-save-button:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.24);
 }
@@ -207,14 +209,16 @@ button {
 .keybind-button:active,
 .api-key-save-button:active,
 .api-key-delete-button:active,
-.transcription-description-save-button:active {
+.transcription-description-save-button:active,
+.transcription-terms-save-button:active {
   transform: translateY(1px);
 }
 
 .record-button:disabled,
 .copy-button:disabled,
 .api-key-delete-button:disabled,
-.transcription-description-save-button:disabled {
+.transcription-description-save-button:disabled,
+.transcription-terms-save-button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
   transform: none;
@@ -363,7 +367,8 @@ button {
   font-weight: 500;
 }
 
-.transcription-description-input {
+.transcription-description-input,
+.transcription-terms-input {
   width: 100%;
   min-width: 0;
   min-height: 112px;
@@ -389,7 +394,8 @@ button {
   color: #687488;
 }
 
-.transcription-description-input::placeholder {
+.transcription-description-input::placeholder,
+.transcription-terms-input::placeholder {
   color: #687488;
 }
 
@@ -511,7 +517,8 @@ button {
 .api-key-save-button,
 .api-key-delete-button,
 .keybind-button,
-.transcription-description-save-button {
+.transcription-description-save-button,
+.transcription-terms-save-button {
   width: 100%;
   padding: 0 12px;
 }
@@ -519,6 +526,7 @@ button {
 .keybind-status,
 .api-key-status,
 .transcription-description-status,
+.transcription-terms-status,
 .settings-note,
 .bottom-status {
   margin: 0;
@@ -540,12 +548,14 @@ button {
 .keybind-button:focus-visible,
 .api-key-input:focus-visible,
 .transcription-description-input:focus-visible,
+.transcription-terms-input:focus-visible,
 .input-device-select:focus-visible,
 .max-recording-seconds-input:focus-visible,
 .checkbox-field > input[type="checkbox"]:focus-visible,
 .api-key-save-button:focus-visible,
 .api-key-delete-button:focus-visible,
 .transcription-description-save-button:focus-visible,
+.transcription-terms-save-button:focus-visible,
 .transcript-text:focus-visible {
   outline: 3px solid rgba(94, 179, 255, 0.48);
   outline-offset: 4px;

@@ -2,9 +2,9 @@
 
 ## Summary
 
-Add one persisted multi-line **Description** field to the Soniox Settings section. Snapshot its exact saved value when a recording starts and pass a non-empty value through the provider boundary to Soniox as `context.text`. Empty means no Soniox `context` object.
+Add one persisted multi-line **Description** field to the Soniox Settings section. Snapshot its exact saved value when a recording starts and pass a non-empty value through the provider boundary to Soniox as `context.text`. Empty means no Soniox `context.text`; a later terms value may still require the enclosing `context` object.
 
-This document plans the change only. It does not include implementation.
+This plan has been implemented. [ADR 0019](adrs/0019-soniox-transcription-terms.md) and the terms implementation plan extend it with an explicit Terms field.
 
 ## Scope
 
@@ -14,7 +14,7 @@ This document plans the change only. It does not include implementation.
 - Applied to the next recording session, not an active one.
 - Non-empty values serialized by the Soniox provider as `context.text`.
 
-No vocabulary editor, structured context builder, automatic suggestions, presets, trimming, parsing, token estimator, or additional Soniox controls are included.
+This description slice does not extract or transform terms. A later explicit one-term-per-line control is defined separately in [the terms implementation plan](soniox-transcription-terms-implementation-plan.md).
 
 ## Data Flow
 
@@ -113,7 +113,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --check
 - The saved value survives restart and is unchanged by persistence.
 - Every new recording uses the description value captured at its start.
 - Non-empty text reaches Soniox only as `context.text` inside the provider configuration.
-- Empty text produces no `context` object.
+- Empty text produces no `context.text`; if terms are also empty, no `context` object is produced.
 - No description content appears in diagnostics or support exports.
 - The existing Capture flow, API-key storage, language behavior, and other provider settings remain unchanged.
 

@@ -71,7 +71,7 @@ Settings should be a separate view reached from a gear button or Settings tab in
 Recommended sections:
 
 - General: launch-on-startup preference.
-- Soniox: API key status, save/update key, delete key, one Description textarea, and a searchable multi-select for transcription languages.
+- Soniox: API key status, save/update key, delete key, Description and Terms textareas, and a searchable multi-select for transcription languages.
 - Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
 - Behavior: manual copy default, future auto-copy option, max recording duration display.
 - App: tray/background explanation and explicit quit note.
@@ -84,7 +84,8 @@ Settings rules:
 - Do not store API keys in frontend persistence.
 - Describe an empty language selection as Automatic detection and keep language selection available without an API key.
 - Keep settings controls visually quieter than the Capture record button.
-- Keep Description a plain multi-line text box with a 10,000-character maximum. Do not add presets, parsing, term editors, generated suggestions, or other context controls.
+- Keep Description a plain multi-line text box with a 10,000-character maximum.
+- Keep Terms a plain multi-line text box with a 10,000-character maximum and explain that each line is one term. Do not add chips, presets, generated suggestions, sorting, or deduplication.
 - Use short labels and direct status text.
 - Keep diagnostics actions in Settings; Capture only shows a compact support reference alongside an error.
 - Before export confirmation, list the included categories: app/build/platform data, locale, timestamps, run/session/error IDs, trigger source, lifecycle/timing data, audio format/counts, fallback outcomes, and stable error categories/codes.
@@ -170,13 +171,16 @@ QuickText window
 
 The Description control loads the backend-persisted value, saves its exact contents, and remains empty by default. It does not trim whitespace or substitute placeholder text as a value. Saving affects the next recording session and never changes one already in progress.
 
+The Terms control also preserves its editor text and remains empty by default. At the session boundary, surrounding whitespace is trimmed from each line and blank lines are omitted. Saving affects the next recording session and never changes one already in progress.
+
 ## Acceptance Criteria
 
 - Opening the app shows Capture, not settings.
 - Capture has one dominant record/stop action.
 - Settings contains keybind and Soniox API key controls.
-- Settings contains one Description textarea in the Soniox section and enforces the 10,000-character maximum.
+- Settings contains Description and Terms textareas in the Soniox section and enforces a 10,000-character maximum on each.
 - Description text persists exactly; an empty field supplies no context to a new recording.
+- Terms editor text persists exactly; each nonblank trimmed line becomes one term and an empty list supplies no terms.
 - Settings supports multiple transcription-language preferences and a clear return to Automatic detection.
 - Pressing the global shortcut while Settings is open switches to Capture and starts recording.
 - Pressing the global shortcut while hidden shows Capture and starts recording.
@@ -200,4 +204,4 @@ The Description control loads the backend-persisted value, saves its exact conte
 - **Should missing API key fail silently?** No. It should route to Settings and explain the required setup.
 - **Should the app use a full navigation sidebar?** No for MVP. A compact top-bar toggle is enough.
 - **Should there be a visible tray/background control?** Settings should mention that closing hides to tray and quitting is explicit.
-- **What context UI is required?** One Description textarea only. Structured fields, vocabulary editors, and automatic context generation are out of scope.
+- **What context UI is required?** One Description textarea and one simple one-term-per-line Terms textarea. Structured general context, translation terms, chips, and automatic context generation remain out of scope.

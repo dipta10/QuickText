@@ -76,7 +76,7 @@ interface TranscriptionSession {
 }
 ```
 
-`TranscriptionOptions` includes the optional app-level transcription description. The app controller snapshots the saved description when a recording starts. Provider implementations decide how to represent it; the Soniox client maps a non-empty value to `context.text` and omits `context` when the value is empty. The frontend does not construct provider JSON.
+`TranscriptionOptions` includes the optional app-level transcription description and terms. The app controller snapshots both when a recording starts. Provider implementations decide how to represent them; the Soniox client maps a non-empty description to `context.text`, non-empty terms to `context.terms`, and omits `context` when both are empty. The frontend does not construct provider JSON.
 
 Partial updates carry provider-agnostic text fields only; token semantics and stream markers stay inside the Soniox client. The decision is recorded in [ADR 0006](adrs/0006-streaming-partial-transcripts.md).
 
@@ -99,6 +99,7 @@ MVP settings should include:
 
 - Soniox API key.
 - Optional transcription description, persisted as ordinary non-secret settings data.
+- Optional transcription terms, persisted as ordinary non-secret settings data.
 - Optional auto-copy after transcription.
 - Optional global shortcut.
 - Optional launch on system startup (starts hidden in the tray/menu bar).
@@ -107,6 +108,8 @@ MVP settings should include:
 The API key should be stored using the operating system's secure credential storage if the chosen desktop framework supports it cleanly.
 
 The transcription description is a plain string with a 10,000-character maximum. Save and pass it through unchanged: do not trim it, generate defaults, parse terms, or derive structured context. A zero-length string means no context. Soniox's actual context limit is 8,000 tokens, so provider rejection remains possible for unusual text even within the character cap and should use the normal provider-error path. See [ADR 0018](adrs/0018-soniox-transcription-description.md).
+
+Transcription terms use a second plain multi-line string with a 10,000-character maximum. Preserve the editor text when saving; at session start, trim each line and omit blank lines to produce the provider-neutral term list. Do not generate, sort, or deduplicate terms. Soniox maps a non-empty list to `context.terms`. The description and terms share Soniox's total context allowance, and an oversized combined payload uses the normal provider-error path. See [ADR 0019](adrs/0019-soniox-transcription-terms.md).
 
 Language preferences are non-secret backend-managed settings. The bundled
 Soniox catalog is available offline. At session start, selected ISO codes are
@@ -133,7 +136,7 @@ Production logs include `info`, `warn`, and `error`; a Settings action can enabl
 
 Logs must never contain credentials, authorization data, audio, transcript or partial-transcript text, clipboard contents, raw provider payloads, identifying paths, network identifiers, or microphone names/IDs. Free-form external errors and arbitrary metadata are rejected rather than sanitized. Startup events and the export manifest include separate immutable `build_id` and `source_revision` fields because rolling pre-releases may share an app version and a revision may be rebuilt. The Settings Support section lets the user confirm and export the current and rotated logs with a safe manifest, or delete retained diagnostics. Export creates a local archive only; QuickText does not send telemetry or upload logs.
 
-The transcription description is also user-authored content. Diagnostics may record that description settings were saved or applied, but never their value, length, or a derived excerpt, hash, or tokenization.
+The transcription description and terms are user-authored content. Diagnostics may record that context settings were saved or applied, but never their values, lengths, counts, excerpts, hashes, parsing results, or tokenization.
 
 Do not use a process-global sink for persisted support diagnostics: dependency or frontend records could bypass the typed privacy boundary. Resolve the application log directory through Tauri's path APIs and keep file ownership in the diagnostics writer. See [ADR 0015](adrs/0015-local-support-diagnostics.md).
 

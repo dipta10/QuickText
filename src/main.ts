@@ -59,6 +59,7 @@ import {
   getLaunchOnStartup as getBackendLaunchOnStartup,
   getLanguagePreferences,
   getTranscriptionDescription,
+  getTranscriptionTerms,
   hasSonioxApiKey,
   listInputDevices,
   onAppStateChanged,
@@ -71,6 +72,7 @@ import {
   setLaunchOnStartup as setBackendLaunchOnStartup,
   setLanguagePreferences,
   setTranscriptionDescription,
+  setTranscriptionTerms,
   setShortcutBehavior,
   toggleBackendRecording,
 } from "./tauri";
@@ -102,6 +104,7 @@ let confirmedLanguageCodes: string[] = [];
 let languageSearch = "";
 let languagePreferencesSaving = false;
 let transcriptionDescriptionSaving = false;
+let transcriptionTermsSaving = false;
 
 const formatElapsedTime = (startedAt: number | null): string => {
   if (!startedAt) {
@@ -476,6 +479,44 @@ const saveTranscriptionDescription = async () => {
   }
 };
 
+const loadTranscriptionTerms = async () => {
+  try {
+    view.transcriptionTermsInput.value = await getTranscriptionTerms();
+  } catch (error) {
+    view.transcriptionTermsStatus.textContent =
+      error instanceof Error ? error.message : String(error);
+  }
+};
+
+const saveTranscriptionTerms = async () => {
+  if (transcriptionTermsSaving) {
+    return;
+  }
+
+  transcriptionTermsSaving = true;
+  view.transcriptionTermsSaveButton.disabled = true;
+  view.transcriptionTermsStatus.textContent = "Saving terms...";
+
+  try {
+    const termsText = await setTranscriptionTerms(
+      view.transcriptionTermsInput.value,
+    );
+    view.transcriptionTermsInput.value = termsText;
+    const hasTerms = termsText
+      .split(/\r?\n/u)
+      .some((term) => term.trim().length > 0);
+    view.transcriptionTermsStatus.textContent = hasTerms
+      ? "Terms saved. They apply to the next recording."
+      : "Terms cleared. New recordings will send no terms.";
+  } catch (error) {
+    view.transcriptionTermsStatus.textContent =
+      error instanceof Error ? error.message : String(error);
+  } finally {
+    transcriptionTermsSaving = false;
+    view.transcriptionTermsSaveButton.disabled = false;
+  }
+};
+
 const loadBackendState = async () => {
   try {
     updateState(applyBackendSnapshot(state, await getAppState()));
@@ -716,6 +757,10 @@ view.transcriptionDescriptionSaveButton.addEventListener("click", () => {
   void saveTranscriptionDescription();
 });
 
+view.transcriptionTermsSaveButton.addEventListener("click", () => {
+  void saveTranscriptionTerms();
+});
+
 view.inputDeviceSelect.addEventListener("change", () => {
   void saveInputDeviceSelection(view.inputDeviceSelect.value);
 });
@@ -802,6 +847,7 @@ void loadBuildInfo();
 void loadApiKeyStatus();
 void loadLanguagePreferences();
 void loadTranscriptionDescription();
+void loadTranscriptionTerms();
 void loadLaunchOnStartup();
 void pushShortcutBehavior();
 void pushPasteToTarget(state.pasteToTarget);

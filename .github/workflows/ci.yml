@@ -48,8 +48,8 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
-  frontend-typecheck:
-    name: Frontend typecheck
+  frontend-tests:
+    name: Frontend tests and typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +60,9 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Run frontend tests
+        run: npm test
 
       - name: Typecheck frontend
         run: npx tsc --noEmit

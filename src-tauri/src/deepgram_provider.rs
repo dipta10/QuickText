@@ -204,7 +204,7 @@ fn deepgram_url(audio_format: &AudioFormat, terms: &[String]) -> Result<String, 
         AudioEncoding::F32 => "linear32",
     };
     let mut url = format!(
-        "{DEEPGRAM_ENDPOINT}?model=nova-3&interim_results=true&endpointing=false&encoding={encoding}&sample_rate={}&channels={}",
+        "{DEEPGRAM_ENDPOINT}?model=nova-3&interim_results=true&endpointing=false&punctuate=true&encoding={encoding}&sample_rate={}&channels={}",
         audio_format.sample_rate, audio_format.channels,
     );
     for term in terms {
@@ -478,13 +478,13 @@ mod tests {
     }
 
     #[test]
-    fn configures_nova_interims_manual_completion_and_plain_keyterms() {
+    fn configures_nova_interims_punctuation_manual_completion_and_plain_keyterms() {
         let url = deepgram_url(
             &i16_format(),
             &["QuickText".to_string(), "speech API".to_string()],
         )
         .unwrap();
-        assert_eq!(url, "wss://api.deepgram.com/v1/listen?model=nova-3&interim_results=true&endpointing=false&encoding=linear16&sample_rate=16000&channels=1&keyterm=QuickText&keyterm=speech%20API");
+        assert_eq!(url, "wss://api.deepgram.com/v1/listen?model=nova-3&interim_results=true&endpointing=false&punctuate=true&encoding=linear16&sample_rate=16000&channels=1&keyterm=QuickText&keyterm=speech%20API");
     }
 
     #[test]

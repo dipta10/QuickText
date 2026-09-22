@@ -28,6 +28,7 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 - Settings store: Local non-secret preferences such as shortcut and auto-copy.
 - Language preferences: Soniox-specific likely spoken languages. An empty selection means Soniox automatic detection. Deepgram has no language setting in its first release and uses English.
 - Terms and phrases: A provider-neutral ordered list of important terminology. Each provider validates and maps the list to its own prompting mechanism.
+- Transcription description: Optional user-authored background text supplied to a new transcription session to help recognition. An empty description means no context is supplied.
 - Input device selection: The user-chosen microphone, persisted as a stable device ID; "System default" tracks the OS default microphone.
 - Device fallback: Behavior when the configured input device is missing at record start; capture uses the OS default instead.
 - App run: One lifetime of the resident QuickText process, identified by a `run_id` generated at process start.
@@ -82,6 +83,8 @@ Responsibilities:
 - Send the provider-specific finalization signal.
 - Convert token responses into transcript text.
 - Map Soniox and network failures into app-level errors.
+- Map the app-level transcription description to Soniox `context.text`, omitting that field when the description is empty.
+- Map non-empty app-level transcription terms to Soniox `context.terms`; omit context only when both description and terms are empty.
 
 ### DeepgramTranscriptionProvider
 
@@ -154,6 +157,8 @@ Minimum fields:
 - `auto_copy`
 - `input_device_id` (stable device ID; absent means system default)
 - `language_preferences` (Soniox ISO codes; empty means Soniox automatic detection)
+- `transcription_description` (default empty; maximum 10,000 characters)
+- `transcription_terms_text` (default empty; maximum 10,000 characters; one term per line)
 - `max_recording_seconds`
 - `live_transcript` (default on)
 - `show_partial_transcript` (default on, only meaningful when `live_transcript` is on)
@@ -257,3 +262,7 @@ A ZIP archive created only after explicit user confirmation. It contains the cur
 - Recording sessions keep one ID across their lifecycle; each provider connection attempt receives its own ID.
 - Live transcript events carry recording and provider session IDs so stale events can be rejected.
 - Normal and debug logs must preserve the same secret and user-content exclusions.
+- The transcription description is snapshotted when recording starts; changes never alter an in-flight provider session.
+- The transcription description is user content and must never be written to diagnostics.
+- Transcription terms are parsed and snapshotted when recording starts; changes never alter an in-flight provider session.
+- Transcription terms and any values derived from them are user content and must never be written to diagnostics.

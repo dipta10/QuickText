@@ -73,7 +73,7 @@ Recommended sections:
 
 - General: launch-on-startup preference.
 - Transcription: active-provider selector and shared `Terms and phrases` field.
-- Soniox: API key status, save/update key, delete key, and a searchable multi-select for transcription languages.
+- Soniox: API key status, save/update key, delete key, Description textarea, and a searchable multi-select for transcription languages.
 - Deepgram: API key status, save/update key, delete key, and a clear English-only note with no language control.
 - Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
 - Behavior: manual copy default, future auto-copy option, max recording duration display.
@@ -89,6 +89,8 @@ Settings rules:
 - Keep the shared terms list when provider validation fails and show an actionable inline error.
 - Describe an empty language selection as Automatic detection and keep language selection available without an API key.
 - Keep settings controls visually quieter than the Capture record button.
+- Keep Description a plain multi-line text box with a 10,000-character maximum.
+- Keep Terms a plain multi-line text box with a 10,000-character maximum and explain that each line is one term. Do not add chips, presets, generated suggestions, sorting, or deduplication.
 - Use short labels and direct status text.
 - Keep diagnostics actions in Settings; Capture only shows a compact support reference alongside an error.
 - Before export confirmation, list the included categories: app/build/platform data, locale, timestamps, run/session/error IDs, trigger source, lifecycle/timing data, audio format/counts, fallback outcomes, and stable error categories/codes.
@@ -150,7 +152,7 @@ QuickText window
   Settings view
     Provider selector
     Terms and phrases
-    Soniox API key and transcription languages
+    Soniox API key, Description, and transcription languages
     Deepgram API key and English-only note
     Global shortcut
     Behavior
@@ -175,11 +177,18 @@ QuickText window
 10. Validate with `npm run build` and the existing Rust checks if backend files change.
 11. Add provider status, selector, credential sections, shared terms, active-provider label, and session-correlated transcript handling without moving backend settings into `localStorage`.
 
+The Description control loads the backend-persisted value, saves its exact contents, and remains empty by default. It does not trim whitespace or substitute placeholder text as a value. Saving affects the next recording session and never changes one already in progress.
+
+The Terms control also preserves its editor text and remains empty by default. At the session boundary, surrounding whitespace is trimmed from each line and blank lines are omitted. Saving affects the next recording session and never changes one already in progress.
+
 ## Acceptance Criteria
 
 - Opening the app shows Capture, not settings.
 - Capture has one dominant record/stop action.
 - Settings contains keybind, provider selection, separate Soniox and Deepgram credential controls, and shared terms.
+- Settings contains Description and Terms textareas in the Soniox section and enforces a 10,000-character maximum on each.
+- Description text persists exactly; an empty field supplies no context to a new recording.
+- Terms editor text persists exactly; each nonblank trimmed line becomes one term and an empty list supplies no terms.
 - Settings supports multiple transcription-language preferences and a clear return to Automatic detection.
 - Pressing the global shortcut while Settings is open switches to Capture and starts recording.
 - Pressing the global shortcut while hidden shows Capture and starts recording.
@@ -207,3 +216,4 @@ QuickText window
 - **Should missing API key fail silently?** No. It should route to Settings and explain the required setup.
 - **Should the app use a full navigation sidebar?** No for MVP. A compact top-bar toggle is enough.
 - **Should there be a visible tray/background control?** Settings should mention that closing hides to tray and quitting is explicit.
+- **What context UI is required?** One Description textarea and one simple one-term-per-line Terms textarea. Structured general context, translation terms, chips, and automatic context generation remain out of scope.

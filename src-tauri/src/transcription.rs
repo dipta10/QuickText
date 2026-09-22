@@ -41,6 +41,7 @@ pub struct TranscriptionOptions {
     pub api_key: String,
     pub audio_format: AudioFormat,
     pub language_hints: Vec<String>,
+    pub description: String,
     pub terms: Vec<String>,
 }
 

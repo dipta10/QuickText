@@ -21,6 +21,12 @@ export type AppView = {
   apiKeySaveButton: HTMLButtonElement;
   apiKeyDeleteButton: HTMLButtonElement;
   apiKeyStatus: HTMLParagraphElement;
+  transcriptionDescriptionInput: HTMLTextAreaElement;
+  transcriptionDescriptionSaveButton: HTMLButtonElement;
+  transcriptionDescriptionStatus: HTMLParagraphElement;
+  transcriptionTermsInput: HTMLTextAreaElement;
+  transcriptionTermsSaveButton: HTMLButtonElement;
+  transcriptionTermsStatus: HTMLParagraphElement;
   languagePicker: HTMLDetailsElement;
   languagePickerSummary: HTMLSpanElement;
   languageSearchInput: HTMLInputElement;
@@ -117,6 +123,48 @@ const appTemplate = `
             <button class="api-key-delete-button" type="button">Delete</button>
           </div>
           <p class="api-key-status" role="status"></p>
+          <label class="settings-field" for="transcription-description">
+            <span class="settings-field-label">Description</span>
+            <textarea
+              class="transcription-description-input"
+              id="transcription-description"
+              maxlength="10000"
+              rows="5"
+              placeholder="Describe the topic, project, or background"
+              aria-describedby="transcription-description-status"
+            ></textarea>
+          </label>
+          <button class="transcription-description-save-button" type="button">
+            Save description
+          </button>
+          <p
+            class="transcription-description-status settings-note"
+            id="transcription-description-status"
+            role="status"
+          >
+            Applied to the next recording. Leave empty to send no description.
+          </p>
+          <label class="settings-field" for="transcription-terms">
+            <span class="settings-field-label">Terms</span>
+            <textarea
+              class="transcription-terms-input"
+              id="transcription-terms"
+              maxlength="10000"
+              rows="5"
+              placeholder="Soniox&#10;Hyprland&#10;QuickText"
+              aria-describedby="transcription-terms-status"
+            ></textarea>
+          </label>
+          <button class="transcription-terms-save-button" type="button">
+            Save terms
+          </button>
+          <p
+            class="transcription-terms-status settings-note"
+            id="transcription-terms-status"
+            role="status"
+          >
+            Enter one term per line. Blank lines are ignored.
+          </p>
           <div class="settings-field">
             <span class="settings-field-label">Transcription languages</span>
             <details class="language-picker">
@@ -326,6 +374,28 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const apiKeyStatus =
     root.querySelector<HTMLParagraphElement>(".api-key-status");
+  const transcriptionDescriptionInput =
+    root.querySelector<HTMLTextAreaElement>(
+      ".transcription-description-input",
+    );
+  const transcriptionDescriptionSaveButton =
+    root.querySelector<HTMLButtonElement>(
+      ".transcription-description-save-button",
+    );
+  const transcriptionDescriptionStatus =
+    root.querySelector<HTMLParagraphElement>(
+      ".transcription-description-status",
+    );
+  const transcriptionTermsInput = root.querySelector<HTMLTextAreaElement>(
+    ".transcription-terms-input",
+  );
+  const transcriptionTermsSaveButton =
+    root.querySelector<HTMLButtonElement>(
+      ".transcription-terms-save-button",
+    );
+  const transcriptionTermsStatus = root.querySelector<HTMLParagraphElement>(
+    ".transcription-terms-status",
+  );
   const languagePicker =
     root.querySelector<HTMLDetailsElement>(".language-picker");
   const languagePickerSummary = root.querySelector<HTMLSpanElement>(
@@ -411,6 +481,12 @@ export const createAppView = (root: HTMLElement): AppView => {
     !apiKeySaveButton ||
     !apiKeyDeleteButton ||
     !apiKeyStatus ||
+    !transcriptionDescriptionInput ||
+    !transcriptionDescriptionSaveButton ||
+    !transcriptionDescriptionStatus ||
+    !transcriptionTermsInput ||
+    !transcriptionTermsSaveButton ||
+    !transcriptionTermsStatus ||
     !languagePicker ||
     !languagePickerSummary ||
     !languageSearchInput ||
@@ -462,6 +538,12 @@ export const createAppView = (root: HTMLElement): AppView => {
     apiKeySaveButton,
     apiKeyDeleteButton,
     apiKeyStatus,
+    transcriptionDescriptionInput,
+    transcriptionDescriptionSaveButton,
+    transcriptionDescriptionStatus,
+    transcriptionTermsInput,
+    transcriptionTermsSaveButton,
+    transcriptionTermsStatus,
     languagePicker,
     languagePickerSummary,
     languageSearchInput,

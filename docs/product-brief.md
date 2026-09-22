@@ -38,6 +38,7 @@ The app should keep running in the background after launch. Closing the main win
 - Selectable Soniox or Deepgram transcription provider, with Soniox as the default.
 - Separate secure API key configuration for Soniox and Deepgram.
 - Shared terms and phrases that adapt to the selected provider.
+- Optional persisted transcription description supplied to Soniox as session context.
 - Global shortcut for start/stop.
 - Tray/menu bar background mode after launch.
 - Basic error handling for missing API key, microphone permission failure, network failure, and provider failure.
@@ -60,6 +61,7 @@ The app should keep running in the background after launch. Closing the main win
 - Auto-copy transcript after completion.
 - Paste transcript into the currently focused app.
 - Local transcript history.
+- Structured context hints beyond the transcription description and explicit terms.
 - Streaming partial transcript display while speaking.
 - Offline fallback provider.
 
@@ -83,7 +85,7 @@ The app should keep running in the background after launch. Closing the main win
 - UI information architecture: use a Capture view for recording/transcripts and a Settings view for keybind/API/preferences.
 - Provider behavior: Soniox remains the default, Deepgram is opt-in, and QuickText never sends a recording to the inactive provider.
 - Language behavior: Soniox allows one or more non-strict language preferences and defaults to automatic detection. Deepgram is English-only until a later language-settings feature.
-- Terminology behavior: one shared terms-and-phrases list maps to each provider's supported prompting mechanism.
+- Transcription context: Settings provides optional Description and Terms fields. Description is sent to Soniox as background text; each nonblank Terms line becomes a provider-neutral term mapped by the selected provider. Empty fields supply no corresponding context.
 
 ## Open Product Questions
 

@@ -22,6 +22,8 @@ Other parameters were considered and rejected for this scope:
 - Profanity filtering: does not exist in Soniox's API (it is a Deepgram parameter).
 - Model selection, custom context, diarization, translation: no second model exists yet; context is free-form UI surface; diarization and translation are out of MVP scope per product constraints.
 
+Custom context was deferred only for this advanced-settings slice. [ADR 0018](0018-soniox-transcription-description.md) later adds a fixed app-level transcription description, and [ADR 0019](0019-soniox-transcription-terms.md) adds explicit transcription terms, without expanding the provider-declared settings schema.
+
 A naive "Soniox section" hard-coded in the frontend would violate the project rule that Soniox-specific details stay out of UI code and behind the provider boundary.
 
 ## Decision
@@ -42,6 +44,7 @@ Expose provider-specific transcription settings through a **provider-declared sc
 - Backend state becomes the source of truth for transcription settings, consistent with ADR 0003's backend-first direction.
 - Mid-session reconfiguration stays out of scope.
 - Future providers implement the same descriptor contract instead of new UI work.
+- The later transcription-description field is not part of this descriptor contract; it is a single provider-neutral session option with a fixed UI control.
 
 ## Grilled Decisions
 
@@ -54,3 +57,8 @@ Expose provider-specific transcription settings through a **provider-declared sc
 - **What does zero selected languages mean?** Auto-detect; no hints sent.
 - **Reset affordance?** One reset-to-defaults action for the whole advanced section.
 - **Mid-recording changes?** Not applied to the in-flight session; take effect next session.
+
+## References
+
+- [ADR 0018](0018-soniox-transcription-description.md): one persisted transcription description mapped to Soniox context text.
+- [ADR 0019](0019-soniox-transcription-terms.md): one persisted terms editor mapped to Soniox context terms.

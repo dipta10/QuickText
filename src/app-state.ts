@@ -153,6 +153,8 @@ export const applyBackendSnapshot = (
   snapshot: BackendAppSnapshot,
 ): AppState => {
   const isMissingApiKey = snapshot.error?.type === "missing_api_key";
+  const shouldClearTranscript =
+    snapshot.status === "starting" || snapshot.status === "error";
   const shouldShowCapture =
     snapshot.status !== "idle" && snapshot.status !== "error";
 
@@ -165,7 +167,9 @@ export const applyBackendSnapshot = (
         : state.activeView,
     recording: snapshot.status,
     status: statusText(snapshot),
-    transcript: snapshot.transcript?.text ?? state.transcript,
+    transcript:
+      snapshot.transcript?.text ??
+      (shouldClearTranscript ? "" : state.transcript),
     partialTranscript:
       snapshot.status === "recording" ? state.partialTranscript : "",
     recordingStartedAt: recordingStartedAt(state, snapshot),

@@ -112,11 +112,19 @@ impl SonioxSession {
             })?;
         drop(self.audio_tx);
 
-        let result =
-            tokio::time::timeout(Duration::from_secs(FINALIZATION_TIMEOUT_SECONDS), result_rx)
-                .await
-                .map_err(|_| "Soniox finalization timed out.".to_string())?
-                .map_err(|_| "Soniox stream ended before finalization completed.".to_string())?;
+        let result = match tokio::time::timeout(
+            Duration::from_secs(FINALIZATION_TIMEOUT_SECONDS),
+            result_rx,
+        )
+        .await
+        {
+            Ok(result) => result
+                .map_err(|_| "Soniox stream ended before finalization completed.".to_string())?,
+            Err(_) => {
+                let _ = self.command_tx.send(SonioxCommand::Cancel);
+                return Err("Soniox finalization timed out.".to_string());
+            }
+        };
 
         result
     }
@@ -182,9 +190,15 @@ async fn run_soniox_session(
         tokio::select! {
             biased;
 
-            Some(command) = command_rx.recv(), if finish_tx.is_none() => {
+            Some(command) = command_rx.recv() => {
                 match command {
                     SonioxCommand::Finish(responder) => {
+                        if finish_tx.is_some() {
+                            let _ = responder.send(Err(
+                                "Soniox finalization is already in progress.".to_string(),
+                            ));
+                            continue;
+                        }
                         finish_tx = Some(responder);
 
                         // Flush audio that buffered while the provider was
@@ -563,6 +577,43 @@ mod tests {
             .expect("command channel stays open");
 
         fail_queued_finishes(command_rx, "Could not connect to Soniox.".to_string());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn finalization_timeout_cancels_the_provider_session() {
+        let (audio_tx, _audio_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        let (command_tx, mut command_rx) = mpsc::unbounded_channel();
+        let (partial_tx, _partial_rx) = mpsc::unbounded_channel::<PartialTranscript>();
+        let (cancelled_tx, cancelled_rx) = oneshot::channel();
+
+        tokio::spawn(async move {
+            let finish_tx = match command_rx.recv().await {
+                Some(SonioxCommand::Finish(finish_tx)) => finish_tx,
+                _ => panic!("the session sends a finish command first"),
+            };
+
+            if matches!(command_rx.recv().await, Some(SonioxCommand::Cancel)) {
+                let _ = cancelled_tx.send(());
+            }
+
+            drop(finish_tx);
+            drop(partial_tx);
+        });
+
+        let session = SonioxSession {
+            audio_tx,
+            command_tx,
+            partial_rx: None,
+            ready_rx: None,
+            stream_error: Arc::new(Mutex::new(None)),
+        };
+
+        let error = session.stop().await.unwrap_err();
+
+        assert_eq!(error, "Soniox finalization timed out.");
+        cancelled_rx
+            .await
+            .expect("a timed-out session receives a cancel command");
     }
 
     #[test]

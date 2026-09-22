@@ -8,8 +8,9 @@ import {
   isBusy,
   isRecording,
   saveShortcut,
-  setApiKeyPresence,
-  setApiKeyStatus,
+  setActiveProvider,
+  setProviderApiKeyPresence,
+  setProviderApiKeyStatus,
   setAutoCopyTranscript,
   setDeviceNotice,
   setInputDeviceOptions,
@@ -27,6 +28,7 @@ import {
   showSettings,
   startShortcutCapture,
 } from "./app-state";
+import type { ProviderId } from "./app-state";
 import { createAppView } from "./app-view";
 import { formatShortcut } from "./shortcut";
 import {
@@ -53,19 +55,21 @@ import {
 } from "./settings";
 import {
   copyTextToClipboard,
-  deleteSonioxApiKey,
+  deleteProviderApiKey,
   getAppState,
   getBuildInfo,
   getLaunchOnStartup as getBackendLaunchOnStartup,
   getLanguagePreferences,
+  getTranscriptionSettings,
   getTranscriptionDescription,
   getTranscriptionTerms,
-  hasSonioxApiKey,
+  hasProviderApiKey,
   listInputDevices,
   onAppStateChanged,
   onDeviceFallback,
   onPartialTranscript,
-  saveSonioxApiKey,
+  saveProviderApiKey,
+  setActiveProvider as setActiveProviderBackend,
   setGlobalShortcut,
   setInputDevice,
   setPasteToTargetBackend,
@@ -198,10 +202,14 @@ const languageSummary = () => {
 };
 
 const renderLanguagePicker = () => {
+  const providerControlsDisabled = isBusy(state) || isRecording(state);
   view.languagePickerSummary.textContent = languageSummary();
   view.clearLanguagesButton.disabled =
-    languagePreferencesSaving || selectedLanguageCodes.length === 0;
-  view.languageSearchInput.disabled = languagePreferencesSaving;
+    providerControlsDisabled ||
+    languagePreferencesSaving ||
+    selectedLanguageCodes.length === 0;
+  view.languageSearchInput.disabled =
+    providerControlsDisabled || languagePreferencesSaving;
   view.languageOptions.innerHTML = "";
 
   const query = languageSearch.trim().toLocaleLowerCase();
@@ -219,7 +227,7 @@ const renderLanguagePicker = () => {
     checkbox.type = "checkbox";
     checkbox.value = language.code;
     checkbox.checked = selectedLanguageCodes.includes(language.code);
-    checkbox.disabled = languagePreferencesSaving;
+    checkbox.disabled = providerControlsDisabled || languagePreferencesSaving;
     const name = document.createElement("span");
     name.textContent = language.name;
     const code = document.createElement("span");
@@ -239,6 +247,8 @@ const renderLanguagePicker = () => {
 
 const render = () => {
   const isSettings = state.activeView === "settings";
+  const providerControlsDisabled = isBusy(state) || isRecording(state);
+  const providerName = state.activeProvider === "soniox" ? "Soniox" : "Deepgram";
   view.captureView.hidden = isSettings;
   view.settingsView.hidden = !isSettings;
   view.viewToggleButton.textContent = isSettings ? "Capture" : "Settings";
@@ -256,6 +266,7 @@ const render = () => {
   );
   view.recordButton.disabled = isBusy(state);
   view.recordStatus.textContent = statusLabel();
+  view.providerLabel.textContent = `Provider: ${providerName}`;
   view.deviceNotice.textContent = state.deviceNotice;
   view.recordingTimer.textContent = formatElapsedTime(state.recordingStartedAt);
   view.activityIndicator.hidden = !isRecording(state);
@@ -273,10 +284,43 @@ const render = () => {
   view.keybindStatus.textContent = state.status;
   view.shortcutFocusOnStartCheckbox.checked = state.shortcutFocusOnStart;
   view.shortcutHideOnStopCheckbox.checked = state.shortcutHideOnStop;
-  view.apiKeyDeleteButton.disabled = !state.hasApiKey;
+  view.providerSelect.value = state.activeProvider;
+  view.providerSelect.disabled = providerControlsDisabled;
+  view.sonioxSection.hidden = state.activeProvider !== "soniox";
+  view.deepgramSection.hidden = state.activeProvider !== "deepgram";
+  view.sonioxSection.classList.toggle(
+    "is-active-provider",
+    state.activeProvider === "soniox",
+  );
+  view.deepgramSection.classList.toggle(
+    "is-active-provider",
+    state.activeProvider === "deepgram",
+  );
+  view.apiKeyInput.disabled = providerControlsDisabled;
+  view.apiKeySaveButton.disabled = providerControlsDisabled;
+  view.apiKeyDeleteButton.disabled =
+    providerControlsDisabled || !state.providerApiKeyConfigured.soniox;
   view.apiKeyStatus.textContent =
-    state.apiKeyStatus ||
-    (state.hasApiKey ? "API key saved." : "No API key saved.");
+    state.providerApiKeyStatus.soniox ||
+    (state.providerApiKeyConfigured.soniox
+      ? "API key saved."
+      : "No API key saved.");
+  view.deepgramApiKeyInput.disabled = providerControlsDisabled;
+  view.deepgramApiKeySaveButton.disabled = providerControlsDisabled;
+  view.deepgramApiKeyDeleteButton.disabled =
+    providerControlsDisabled || !state.providerApiKeyConfigured.deepgram;
+  view.deepgramApiKeyStatus.textContent =
+    state.providerApiKeyStatus.deepgram ||
+    (state.providerApiKeyConfigured.deepgram
+      ? "API key saved."
+      : "No API key saved.");
+  view.transcriptionDescriptionInput.disabled = providerControlsDisabled;
+  view.transcriptionDescriptionSaveButton.disabled =
+    providerControlsDisabled || transcriptionDescriptionSaving;
+  view.transcriptionTermsInput.disabled = providerControlsDisabled;
+  view.transcriptionTermsSaveButton.disabled =
+    providerControlsDisabled || transcriptionTermsSaving;
+  view.languagePicker.classList.toggle("is-disabled", providerControlsDisabled);
   if (document.activeElement !== view.maxRecordingSecondsInput) {
     view.maxRecordingSecondsInput.value = state.maxRecordingSeconds.toString();
   }
@@ -389,13 +433,47 @@ const saveInputDeviceSelection = async (deviceId: string) => {
   }
 };
 
-const loadApiKeyStatus = async () => {
+const loadApiKeyStatus = async (provider: ProviderId) => {
   try {
-    updateState(setApiKeyPresence(state, await hasSonioxApiKey()));
+    updateState(
+      setProviderApiKeyPresence(
+        state,
+        provider,
+        await hasProviderApiKey(provider),
+      ),
+    );
   } catch (error) {
     updateState(
-      setApiKeyStatus(
+      setProviderApiKeyStatus(
         state,
+        provider,
+        error instanceof Error ? error.message : String(error),
+      ),
+    );
+  }
+};
+
+const loadTranscriptionSettings = async () => {
+  try {
+    const settings = await getTranscriptionSettings();
+    updateState(setActiveProvider(state, settings.activeProvider));
+  } catch (error) {
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
+const updateActiveProvider = async (provider: ProviderId) => {
+  const previous = state.activeProvider;
+  updateState(setActiveProvider(state, provider));
+  try {
+    const saved = await setActiveProviderBackend(provider);
+    updateState(setActiveProvider(state, saved));
+  } catch (error) {
+    updateState(
+      setStatus(
+        setActiveProvider(state, previous),
         error instanceof Error ? error.message : String(error),
       ),
     );
@@ -619,13 +697,18 @@ const toggleRecording = async () => {
   }
 };
 
-const saveApiKey = async () => {
+const providerApiKeyInput = (provider: ProviderId) =>
+  provider === "soniox" ? view.apiKeyInput : view.deepgramApiKeyInput;
+
+const saveApiKey = async (provider: ProviderId) => {
+  const input = providerApiKeyInput(provider);
   try {
-    const hasApiKey = await saveSonioxApiKey(view.apiKeyInput.value);
-    view.apiKeyInput.value = "";
+    const hasApiKey = await saveProviderApiKey(provider, input.value);
+    input.value = "";
     updateState(
-      setApiKeyPresence(
+      setProviderApiKeyPresence(
         state,
+        provider,
         hasApiKey,
         hasApiKey
           ? "API key saved."
@@ -634,23 +717,28 @@ const saveApiKey = async () => {
     );
   } catch (error) {
     updateState(
-      setApiKeyStatus(
+      setProviderApiKeyStatus(
         state,
+        provider,
         error instanceof Error ? error.message : String(error),
       ),
     );
   }
 };
 
-const deleteApiKey = async () => {
+const deleteApiKey = async (provider: ProviderId) => {
+  const input = providerApiKeyInput(provider);
   try {
-    await deleteSonioxApiKey();
-    view.apiKeyInput.value = "";
-    updateState(setApiKeyPresence(state, false, "API key deleted."));
+    await deleteProviderApiKey(provider);
+    input.value = "";
+    updateState(
+      setProviderApiKeyPresence(state, provider, false, "API key deleted."),
+    );
   } catch (error) {
     updateState(
-      setApiKeyStatus(
+      setProviderApiKeyStatus(
         state,
+        provider,
         error instanceof Error ? error.message : String(error),
       ),
     );
@@ -746,11 +834,23 @@ view.shortcutHideOnStopCheckbox.addEventListener("change", () => {
 });
 
 view.apiKeySaveButton.addEventListener("click", () => {
-  void saveApiKey();
+  void saveApiKey("soniox");
 });
 
 view.apiKeyDeleteButton.addEventListener("click", () => {
-  void deleteApiKey();
+  void deleteApiKey("soniox");
+});
+
+view.deepgramApiKeySaveButton.addEventListener("click", () => {
+  void saveApiKey("deepgram");
+});
+
+view.deepgramApiKeyDeleteButton.addEventListener("click", () => {
+  void deleteApiKey("deepgram");
+});
+
+view.providerSelect.addEventListener("change", () => {
+  void updateActiveProvider(view.providerSelect.value as ProviderId);
 });
 
 view.transcriptionDescriptionSaveButton.addEventListener("click", () => {
@@ -844,7 +944,9 @@ render();
 window.setInterval(render, 1000);
 void loadBackendState();
 void loadBuildInfo();
-void loadApiKeyStatus();
+void loadTranscriptionSettings();
+void loadApiKeyStatus("soniox");
+void loadApiKeyStatus("deepgram");
 void loadLanguagePreferences();
 void loadTranscriptionDescription();
 void loadTranscriptionTerms();

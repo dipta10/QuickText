@@ -1,7 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import type { BackendAppSnapshot, PartialTranscriptUpdate } from "./app-state";
+import type {
+  BackendAppSnapshot,
+  PartialTranscriptUpdate,
+  ProviderId,
+} from "./app-state";
 
 const getAppStateCommand = "get_app_state";
 const getBuildInfoCommand = "get_build_info";
@@ -9,9 +13,11 @@ const toggleRecordingCommand = "toggle_recording";
 const setGlobalShortcutCommand = "set_global_shortcut";
 const setShortcutBehaviorCommand = "set_shortcut_behavior";
 const setPasteToTargetCommand = "set_paste_to_target";
-const hasSonioxApiKeyCommand = "has_soniox_api_key";
-const saveSonioxApiKeyCommand = "save_soniox_api_key";
-const deleteSonioxApiKeyCommand = "delete_soniox_api_key";
+const hasProviderApiKeyCommand = "has_provider_api_key";
+const saveProviderApiKeyCommand = "save_provider_api_key";
+const deleteProviderApiKeyCommand = "delete_provider_api_key";
+const getTranscriptionSettingsCommand = "get_transcription_settings";
+const setActiveProviderCommand = "set_active_provider";
 const listInputDevicesCommand = "list_input_devices";
 const setInputDeviceCommand = "set_input_device";
 const getLaunchOnStartupCommand = "get_launch_on_startup";
@@ -50,6 +56,10 @@ export type SupportedLanguage = {
 export type LanguagePreferencesSnapshot = {
   availableLanguages: SupportedLanguage[];
   selectedCodes: string[];
+};
+
+export type TranscriptionSettingsSnapshot = {
+  activeProvider: ProviderId;
 };
 
 const assertTauriRuntime = () => {
@@ -95,19 +105,36 @@ export const toggleBackendRecording = async (
   });
 };
 
-export const hasSonioxApiKey = async (): Promise<boolean> => {
+export const hasProviderApiKey = async (
+  provider: ProviderId,
+): Promise<boolean> => {
   assertTauriRuntime();
-  return await invoke<boolean>(hasSonioxApiKeyCommand);
+  return await invoke<boolean>(hasProviderApiKeyCommand, { provider });
 };
 
-export const saveSonioxApiKey = async (apiKey: string): Promise<boolean> => {
+export const saveProviderApiKey = async (
+  provider: ProviderId,
+  apiKey: string,
+): Promise<boolean> => {
   assertTauriRuntime();
-  return await invoke<boolean>(saveSonioxApiKeyCommand, { apiKey });
+  return await invoke<boolean>(saveProviderApiKeyCommand, { provider, apiKey });
 };
 
-export const deleteSonioxApiKey = async () => {
+export const deleteProviderApiKey = async (provider: ProviderId) => {
   assertTauriRuntime();
-  await invoke(deleteSonioxApiKeyCommand);
+  await invoke(deleteProviderApiKeyCommand, { provider });
+};
+
+export const getTranscriptionSettings = async (): Promise<TranscriptionSettingsSnapshot> => {
+  assertTauriRuntime();
+  return await invoke<TranscriptionSettingsSnapshot>(getTranscriptionSettingsCommand);
+};
+
+export const setActiveProvider = async (
+  provider: ProviderId,
+): Promise<ProviderId> => {
+  assertTauriRuntime();
+  return await invoke<ProviderId>(setActiveProviderCommand, { provider });
 };
 
 export const listInputDevices = async (): Promise<BackendInputDeviceList> => {

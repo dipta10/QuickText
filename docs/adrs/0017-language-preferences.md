@@ -54,6 +54,9 @@ Add a language-only preference to the Soniox section of Settings.
 - QuickText gains one focused settings surface rather than a generic settings
   renderer. Future provider controls should justify their own product and
   architecture decisions when they are actually needed.
+- This remains the Soniox language contract after Deepgram is added. Deepgram
+  is English-only in its first release, and these preferences do not configure
+  it implicitly.
 
 ## Grilled Decisions
 
@@ -81,4 +84,4 @@ Add a language-only preference to the Soniox section of Settings.
 - [ADR 0002](0002-streaming-soniox-stt.md): Soniox real-time streaming.
 - [ADR 0003](0003-backend-first-soniox-integration.md): backend provider boundary.
 - [ADR 0004](0004-capture-settings-ui.md): Settings/Capture separation.
-
+- [ADR 0018](0018-multi-provider-deepgram-stt.md): multi-provider selection and Deepgram's initial English-only scope.

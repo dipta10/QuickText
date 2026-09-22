@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
     sync::{Mutex, MutexGuard},
@@ -61,11 +62,13 @@ pub fn save(app: &AppHandle, terms_text: &str) -> Result<(), String> {
         .map_err(|error| format!("Could not save the transcription terms: {error}"))
 }
 
-fn parse_terms(terms_text: &str) -> Vec<String> {
+pub(crate) fn parse_terms(terms_text: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
     terms_text
         .lines()
         .map(str::trim)
         .filter(|term| !term.is_empty())
+        .filter(|term| seen.insert((*term).to_string()))
         .map(str::to_string)
         .collect()
 }
@@ -122,7 +125,7 @@ mod tests {
     fn parses_one_trimmed_term_per_nonblank_line() {
         assert_eq!(
             parse_terms(" Soniox \n\n  Hyprland compositor  \r\nSoniox"),
-            vec!["Soniox", "Hyprland compositor", "Soniox"]
+            vec!["Soniox", "Hyprland compositor"]
         );
     }
 

@@ -2,7 +2,7 @@
 
 ## Plan Summary
 
-Build QuickText as a Tauri 2 desktop app with a compact web UI and a Rust backend that owns microphone capture, Soniox streaming, tray/menu bar residency, global shortcut handling, clipboard writes, and local settings.
+Build QuickText as a Tauri 2 desktop app with a compact web UI and a Rust backend that owns microphone capture, selectable Soniox or Deepgram streaming, tray/menu bar residency, global shortcut handling, clipboard writes, and local settings.
 
 The core product promise is a fast toggle loop:
 
@@ -11,7 +11,7 @@ The core product promise is a fast toggle loop:
 3. Start recording immediately.
 4. Trigger again.
 5. Stop recording.
-6. Finalize Soniox stream.
+6. Finalize the selected provider stream.
 7. Show transcript.
 8. Copy transcript on demand.
 
@@ -22,14 +22,14 @@ The core product promise is a fast toggle loop:
 - UI structure: Capture view plus Settings view, without adding a frontend framework for MVP.
 - Backend: Rust Tauri commands and events.
 - Audio capture: Rust backend, using a cross-platform audio crate such as `cpal`.
-- Transcription path: Soniox real-time STT WebSocket streaming.
+- Transcription path: selectable Soniox or Deepgram real-time STT WebSocket streaming, with Soniox as the default.
 - Clipboard: Tauri clipboard plugin.
 - Background mode: app stays resident in tray/menu bar after launch.
 - Global shortcut: Tauri global-shortcut plugin.
-- Settings: local app settings plus OS credential storage for the Soniox API key.
+- Settings: backend-owned provider selection and shared terms plus separate OS credential storage entries for Soniox and Deepgram.
+- Language preferences: optional Soniox-only backend-persisted ISO codes; an empty list keeps Soniox automatic detection. Deepgram is English-only initially.
 - Transcription description: optional backend-persisted text, snapshotted at recording start and mapped by the Soniox provider to `context.text`.
-- Transcription terms: optional one-term-per-line backend-persisted text, parsed and snapshotted at recording start, then mapped by the Soniox provider to `context.terms`.
-- Language preferences: optional backend-persisted ISO codes; an empty list keeps Soniox automatic detection.
+- Transcription terms: optional one-term-per-line backend-persisted text, parsed and snapshotted at recording start, then mapped by the selected provider.
 - Linux distribution: native Debian, RPM, and Arch x86_64 packages, with AppImage retained as a qualified compatibility fallback.
 - Maximum recording duration: 5 minutes for MVP, with configurability deferred.
 - Transcript history: out of MVP.
@@ -48,10 +48,10 @@ App controller/state machine
   |     v
   |   PCM audio chunks
   |
-  +-- Transcription provider interface
+  +-- Transcription provider registry and interfaces
   |     |
-  |     v
-  |   Soniox WebSocket client
+  |     +-- Soniox WebSocket client
+  |     +-- Deepgram Nova 3 WebSocket client
   |
   +-- Settings store
   +-- Credential store
@@ -75,7 +75,7 @@ The app should have one source of truth for recording state.
 State transitions:
 
 - `idle` -> `starting` when trigger is pressed.
-- `starting` -> `recording` when microphone and Soniox session are ready.
+- `starting` -> `recording` when the microphone is active and the selected provider session is ready.
 - `starting` -> `error` when setup fails.
 - `recording` -> `stopping` when trigger is pressed.
 - `recording` -> `stopping` automatically when the 5 minute MVP duration limit is reached.
@@ -146,9 +146,9 @@ Acceptance checks:
 Deliverables:
 
 - Store non-secret preferences locally.
-- Store Soniox API key in OS credential storage.
-- Detect missing API key before recording starts.
-- Allow key update and deletion.
+- Store each provider API key under a separate OS credential-store account.
+- Detect a missing selected-provider key before recording starts.
+- Allow provider-specific key update and deletion without affecting the other provider.
 - Persist an empty-by-default transcription description with a 10,000-character maximum.
 - Expose backend commands to read and save the description without trimming or transforming it.
 - Persist an empty-by-default terms editor value with a 10,000-character maximum.
@@ -169,7 +169,7 @@ Acceptance checks:
 Deliverables:
 
 - Capture microphone audio in Rust.
-- Normalize to the format sent to Soniox.
+- Expose a normalized format that each provider adapter can map to its supported wire encoding.
 - Expose microphone permission/device errors.
 - Add a local debug path to confirm non-empty audio chunks without sending them to Soniox.
 
@@ -317,12 +317,32 @@ These are the decisions most likely to break the plan if answered casually.
 - Recording bounds: What prevents accidental long recordings? Current plan should add a conservative maximum duration before public release.
 - Language defaults: Automatic detection is the default; users can save one or more non-strict language preferences per [ADR 0017](adrs/0017-language-preferences.md).
 
+## Milestone 10 Deepgram Speech to Text
+
+Deliver the feature in three stages:
+
+1. Extract provider-neutral Rust types and object-safe provider/session traits, adapt Soniox without behavior changes, and add fake-provider orchestration tests.
+2. Add backend provider selection, separate credentials, shared terms, migration, provider-aware Settings, and recording-session correlation on transcript events.
+3. Add the Deepgram Nova 3 v1 adapter, audio normalization, interim and final aggregation, `CloseStream` completion, offline tests, and a secret-gated live CI fixture.
+
+Acceptance checks:
+
+- Existing users remain on Soniox with their credentials and language preferences intact.
+- Every trigger path uses the backend-persisted provider.
+- Exactly one provider receives each recording and no automatic fallback occurs.
+- Deepgram is English-only, publishes through the shared transcript contract, and finalizes reliably after explicit stop.
+- Shared terms map to both providers and preserve user input after provider-specific validation failures.
+- Stale transcript events cannot update another recording.
+- Normal checks run without credentials; Soniox and Deepgram live fixtures are independently secret-gated.
+
+See [Deepgram integration plan](deepgram-stt-integration-plan.md) and [ADR 0018](adrs/0018-multi-provider-deepgram-stt.md).
+
 ## Immediate Next Step
 
-Scaffold the Tauri app and implement Milestone 1 with mocked backend state. Do not integrate Soniox first; the UI state machine and app controller should be stable before real audio and network behavior are added.
+Implement Stage 1 of Milestone 10. Make the documented provider boundary real and preserve Soniox behavior before adding settings or Deepgram protocol code.
 
 ## References
 
-- Soniox STT WebSocket API: https://soniox.com/docs/api-reference/stt/websocket-api
-- Tauri global shortcut plugin: https://v2.tauri.app/plugin/global-shortcut/
-- Tauri plugin overview: https://v2.tauri.app/plugin/
+- [Soniox STT WebSocket API](https://soniox.com/docs/api-reference/stt/websocket-api).
+- [Tauri global shortcut plugin](https://v2.tauri.app/plugin/global-shortcut/).
+- [Tauri plugin overview](https://v2.tauri.app/plugin/).

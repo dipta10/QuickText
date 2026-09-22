@@ -10,7 +10,8 @@ import {
 const snapshot = (
   status: BackendAppSnapshot["status"],
   error: BackendAppSnapshot["error"] = null,
-): BackendAppSnapshot => ({ status, transcript: null, error });
+  sessionId: number | null = null,
+): BackendAppSnapshot => ({ status, sessionId, transcript: null, error });
 
 describe("recording-session transcript lifecycle", () => {
   it("clears live text when finalization times out", () => {
@@ -27,10 +28,12 @@ describe("recording-session transcript lifecycle", () => {
       false,
     );
 
-    state = applyBackendSnapshot(state, snapshot("recording"));
+    state = applyBackendSnapshot(state, snapshot("recording", null, 1));
     state = applyPartialTranscript(state, {
-      final_text: "words from the failed recording",
-      partial_text: "still forming",
+      recordingSessionId: 1,
+      providerSessionId: 1,
+      finalText: "words from the failed recording",
+      partialText: "still forming",
     });
     state = applyBackendSnapshot(state, snapshot("stopping"));
     state = applyBackendSnapshot(
@@ -61,6 +64,7 @@ describe("recording-session transcript lifecycle", () => {
 
     state = applyBackendSnapshot(state, {
       status: "transcribed",
+      sessionId: 1,
       transcript: {
         text: "words from the previous recording",
         provider: "soniox",
@@ -71,5 +75,60 @@ describe("recording-session transcript lifecycle", () => {
 
     expect(state.transcript).toBe("");
     expect(state.partialTranscript).toBe("");
+  });
+
+  it("ignores delayed transcript updates from an older recording", () => {
+    let state = createAppState(
+      "",
+      300,
+      false,
+      false,
+      false,
+      true,
+      true,
+      "",
+      false,
+      false,
+    );
+
+    state = applyBackendSnapshot(state, snapshot("recording", null, 2));
+    const unchanged = applyPartialTranscript(state, {
+      recordingSessionId: 1,
+      providerSessionId: 9,
+      finalText: "stale recording",
+      partialText: "stale",
+    });
+
+    expect(unchanged).toBe(state);
+  });
+
+  it("routes missing credentials to the provider named by the backend", () => {
+    const state = createAppState(
+      "",
+      300,
+      false,
+      false,
+      false,
+      true,
+      true,
+      "",
+      false,
+      false,
+    );
+
+    const next = applyBackendSnapshot(
+      state,
+      snapshot("error", {
+        type: "missing_api_key",
+        provider: "deepgram",
+        message: "Add your Deepgram API key before recording.",
+      }),
+    );
+
+    expect(next.activeView).toBe("settings");
+    expect(next.providerApiKeyStatus.deepgram).toBe(
+      "Add your Deepgram API key before recording.",
+    );
+    expect(next.providerApiKeyStatus.soniox).toBe("");
   });
 });

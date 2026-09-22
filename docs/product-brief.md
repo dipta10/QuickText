@@ -2,15 +2,15 @@
 
 ## Summary
 
-Build QuickText, a desktop speech-to-text app that can be opened quickly, record speech, transcribe it through Soniox, and make the resulting text easy to copy.
+Build QuickText, a desktop speech-to-text app that can be opened quickly, record speech, transcribe it through a selected provider, and make the resulting text easy to copy. Soniox remains the default provider, and Deepgram is an optional alternative.
 
 QuickText is meant for fast capture rather than long-form audio editing. The core loop should feel instant and predictable.
 
 ## Target Platforms
 
-- Linux
-- macOS
-- Windows
+- Linux.
+- macOS.
+- Windows.
 
 ## Primary User Flow
 
@@ -20,7 +20,7 @@ QuickText is meant for fast capture rather than long-form audio editing. The cor
 4. User speaks.
 5. User presses the same button or shortcut again.
 6. Recording stops.
-7. The app sends audio to Soniox or finalizes an active Soniox stream.
+7. The app streams audio to the selected provider and finalizes that provider's active session.
 8. The transcript appears in the UI.
 9. User can copy the transcript to the clipboard.
 
@@ -35,17 +35,19 @@ The app should keep running in the background after launch. Closing the main win
 - Visible transcription/progress state.
 - Transcript display area.
 - Copy-to-clipboard button.
-- Soniox API key configuration.
-- Optional persisted transcription description and explicit terms supplied to Soniox as session context.
+- Selectable Soniox or Deepgram transcription provider, with Soniox as the default.
+- Separate secure API key configuration for Soniox and Deepgram.
+- Shared terms and phrases that adapt to the selected provider.
+- Optional persisted transcription description supplied to Soniox as session context.
 - Global shortcut for start/stop.
 - Tray/menu bar background mode after launch.
 - Basic error handling for missing API key, microphone permission failure, network failure, and provider failure.
 - Local privacy-safe support diagnostics with bounded retention, correlated run/session identifiers, and explicit user export.
-- Optional persisted transcription-language preferences; no selection keeps Soniox automatic detection.
+- Optional persisted Soniox transcription-language preferences; no selection keeps Soniox automatic detection.
+- Deepgram Nova 3 streaming transcription in English, with language configuration deferred.
 
 ## Non-Goals for MVP
 
-- Multi-provider support beyond clean internal boundaries.
 - Transcript history.
 - Speaker diarization UI.
 - Long-form audio file import.
@@ -77,12 +79,13 @@ The app should keep running in the background after launch. Closing the main win
 
 - First trigger surface: use a global shortcut plus visible UI button for MVP.
 - Background behavior: app stays resident in tray/menu bar after launch; closing the window hides it.
-- Recording strategy: stream live to Soniox instead of upload-after-stop.
+- Recording strategy: stream live to the selected provider instead of uploading after stop.
 - Auto-copy default: keep manual copy as the MVP default; auto-copy can be added as an option.
 - UI after transcription: keep the UI open so the user can inspect and copy the transcript.
 - UI information architecture: use a Capture view for recording/transcripts and a Settings view for keybind/API/preferences.
-- Transcription context: Settings provides optional Description and Terms fields. Description is sent as background text; each nonblank Terms line is sent as an explicit term. Empty fields supply no corresponding context.
-- Language behavior: Settings allows one or more non-strict language preferences; the default remains automatic detection.
+- Provider behavior: Soniox remains the default, Deepgram is opt-in, and QuickText never sends a recording to the inactive provider.
+- Language behavior: Soniox allows one or more non-strict language preferences and defaults to automatic detection. Deepgram is English-only until a later language-settings feature.
+- Transcription context: Settings provides optional Description and Terms fields. Description is sent to Soniox as background text; each nonblank Terms line becomes a provider-neutral term mapped by the selected provider. Empty fields supply no corresponding context.
 
 ## Open Product Questions
 

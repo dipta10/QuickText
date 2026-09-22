@@ -10,6 +10,7 @@ mod ipc_server;
 mod language_preferences;
 mod paste_target;
 mod soniox_provider;
+mod transcription;
 
 #[cfg(test)]
 mod transcription_fixture_tests;
@@ -18,13 +19,16 @@ use app_controller::{AppController, AppError, AppSnapshot, AppStatus, Transcript
 use audio_recorder::{AudioCaptureStats, AudioRecorder};
 use keyring::{Entry, Error as KeyringError};
 use language_preferences::{LanguagePreferencesSnapshot, LanguagePreferencesState};
-use soniox_provider::{PartialTranscript, SonioxSession};
+use soniox_provider::SonioxProvider;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use transcription::{
+    PartialTranscript, TranscriptionOptions, TranscriptionProvider, TranscriptionSession,
+};
 
 const SONIOX_KEY_SERVICE: &str = "com.dipta.stt";
 const SONIOX_KEY_ACCOUNT: &str = "soniox-api-key";
@@ -273,7 +277,7 @@ struct AudioRecorderState {
 
 #[derive(Default)]
 struct TranscriptionState {
-    session: Mutex<Option<SonioxSession>>,
+    session: Mutex<Option<Box<dyn TranscriptionSession>>>,
 }
 
 #[derive(Default)]
@@ -518,7 +522,7 @@ fn lock_recorder<'a>(
 
 fn lock_transcription<'a>(
     transcription: &'a State<'_, TranscriptionState>,
-) -> Result<std::sync::MutexGuard<'a, Option<SonioxSession>>, String> {
+) -> Result<std::sync::MutexGuard<'a, Option<Box<dyn TranscriptionSession>>>, String> {
     transcription
         .session
         .lock()
@@ -759,23 +763,27 @@ pub(crate) async fn toggle_recording_for_app(
             };
 
             let language_hints = language_preferences::selected_codes(&language_preferences)?;
-            let mut soniox_session =
-                SonioxSession::start(api_key, audio_format.clone(), language_hints);
-            let provider_ready_rx = soniox_session.take_ready_receiver();
+            let mut provider_session = SonioxProvider.start_session(TranscriptionOptions {
+                api_key,
+                audio_format: audio_format.clone(),
+                language_hints,
+                terms: Vec::new(),
+            })?;
+            let provider_ready_rx = provider_session.take_ready_receiver();
 
-            if let Some(partial_rx) = soniox_session.take_partial_receiver() {
+            if let Some(partial_rx) = provider_session.take_partial_receiver() {
                 tauri::async_runtime::spawn(forward_partial_transcripts(app.clone(), partial_rx));
             }
 
             // Capture starts before the provider connects; chunks buffer in
             // the session channel until the connection is ready.
             let started = match AudioRecorder::start(
-                soniox_session.audio_sender(),
+                provider_session.audio_sender(),
                 selected_device.as_deref(),
             ) {
                 Ok(started) => started,
                 Err(error) => {
-                    soniox_session.cancel();
+                    provider_session.cancel();
                     let error_snapshot = {
                         let mut controller = lock_controller(&controller)?;
                         controller.fail_start(microphone_unavailable_error(error))
@@ -799,7 +807,7 @@ pub(crate) async fn toggle_recording_for_app(
             }
             {
                 let mut active_session = lock_transcription(&transcription)?;
-                *active_session = Some(soniox_session);
+                *active_session = Some(provider_session);
             }
 
             let recording = {

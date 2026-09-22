@@ -15,6 +15,10 @@ type SonioxWebsocket =
 use crate::{
     app_controller::TranscriptResult,
     audio_recorder::{AudioEncoding, AudioFormat},
+    transcription::{
+        PartialTranscript, ProviderId, TranscriptionOptions, TranscriptionProvider,
+        TranscriptionSession,
+    },
 };
 
 const SONIOX_WEBSOCKET_URL: &str = "wss://stt-rt.soniox.com/transcribe-websocket";
@@ -26,12 +30,6 @@ const FINALIZATION_TIMEOUT_SECONDS: u64 = 12;
 const SONIOX_STREAM_MARKERS: [&str; 2] = ["<end>", "<fin>"];
 
 type SharedErrorSlot = Arc<Mutex<Option<String>>>;
-
-#[derive(Debug, Clone, Serialize)]
-pub struct PartialTranscript {
-    pub final_text: String,
-    pub partial_text: String,
-}
 
 #[derive(Debug)]
 enum SonioxCommand {
@@ -119,6 +117,50 @@ impl SonioxSession {
 
     pub fn cancel(self) {
         let _ = self.command_tx.send(SonioxCommand::Cancel);
+    }
+}
+
+impl TranscriptionSession for SonioxSession {
+    fn audio_sender(&self) -> UnboundedSender<Vec<u8>> {
+        SonioxSession::audio_sender(self)
+    }
+
+    fn take_partial_receiver(&mut self) -> Option<mpsc::UnboundedReceiver<PartialTranscript>> {
+        SonioxSession::take_partial_receiver(self)
+    }
+
+    fn take_ready_receiver(&mut self) -> Option<oneshot::Receiver<Result<(), String>>> {
+        SonioxSession::take_ready_receiver(self)
+    }
+
+    fn stop(
+        self: Box<Self>,
+    ) -> crate::transcription::ProviderFuture<Result<TranscriptResult, String>> {
+        Box::pin(async move { SonioxSession::stop(*self).await })
+    }
+
+    fn cancel(self: Box<Self>) {
+        SonioxSession::cancel(*self);
+    }
+}
+
+pub struct SonioxProvider;
+
+impl TranscriptionProvider for SonioxProvider {
+    fn id(&self) -> ProviderId {
+        ProviderId::Soniox
+    }
+
+    fn start_session(
+        &self,
+        options: TranscriptionOptions,
+    ) -> Result<Box<dyn TranscriptionSession>, String> {
+        let _ = options.terms;
+        Ok(Box::new(SonioxSession::start(
+            options.api_key,
+            options.audio_format,
+            options.language_hints,
+        )))
     }
 }
 

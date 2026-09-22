@@ -10,6 +10,8 @@ mod ipc_server;
 mod language_preferences;
 mod paste_target;
 mod soniox_provider;
+mod transcription_description;
+mod transcription_terms;
 
 #[cfg(test)]
 mod transcription_fixture_tests;
@@ -25,6 +27,8 @@ use tauri::{
     Emitter, Manager, State, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use transcription_description::TranscriptionDescriptionState;
+use transcription_terms::TranscriptionTermsState;
 
 const SONIOX_KEY_SERVICE: &str = "com.dipta.stt";
 const SONIOX_KEY_ACCOUNT: &str = "soniox-api-key";
@@ -641,6 +645,48 @@ fn get_language_preferences(
 }
 
 #[tauri::command]
+fn get_transcription_description(
+    description: State<'_, TranscriptionDescriptionState>,
+) -> Result<String, String> {
+    transcription_description::description(&description)
+}
+
+#[tauri::command]
+fn set_transcription_description(
+    app: tauri::AppHandle,
+    state: State<'_, TranscriptionDescriptionState>,
+    description: String,
+) -> Result<String, String> {
+    let previous_description = transcription_description::description(&state)?;
+    let description = transcription_description::set_description(&state, description)?;
+    if let Err(error) = transcription_description::save(&app, &description) {
+        let _ = transcription_description::set_description(&state, previous_description);
+        return Err(error);
+    }
+    Ok(description)
+}
+
+#[tauri::command]
+fn get_transcription_terms(terms: State<'_, TranscriptionTermsState>) -> Result<String, String> {
+    transcription_terms::terms_text(&terms)
+}
+
+#[tauri::command]
+fn set_transcription_terms(
+    app: tauri::AppHandle,
+    state: State<'_, TranscriptionTermsState>,
+    terms_text: String,
+) -> Result<String, String> {
+    let previous_terms_text = transcription_terms::terms_text(&state)?;
+    let terms_text = transcription_terms::set_terms_text(&state, terms_text)?;
+    if let Err(error) = transcription_terms::save(&app, &terms_text) {
+        let _ = transcription_terms::set_terms_text(&state, previous_terms_text);
+        return Err(error);
+    }
+    Ok(terms_text)
+}
+
+#[tauri::command]
 fn set_language_preferences(
     app: tauri::AppHandle,
     preferences: State<'_, LanguagePreferencesState>,
@@ -704,6 +750,8 @@ pub(crate) async fn toggle_recording_for_app(
     let transcription = app.state::<TranscriptionState>();
     let input_device = app.state::<InputDeviceState>();
     let language_preferences = app.state::<LanguagePreferencesState>();
+    let transcription_description = app.state::<TranscriptionDescriptionState>();
+    let transcription_terms = app.state::<TranscriptionTermsState>();
     let max_recording_seconds = max_recording_seconds
         .filter(|seconds| *seconds > 0)
         .unwrap_or(DEFAULT_MAX_RECORDING_SECONDS);
@@ -759,8 +807,15 @@ pub(crate) async fn toggle_recording_for_app(
             };
 
             let language_hints = language_preferences::selected_codes(&language_preferences)?;
-            let mut soniox_session =
-                SonioxSession::start(api_key, audio_format.clone(), language_hints);
+            let description = transcription_description::description(&transcription_description)?;
+            let terms = transcription_terms::terms(&transcription_terms)?;
+            let mut soniox_session = SonioxSession::start(
+                api_key,
+                audio_format.clone(),
+                language_hints,
+                description,
+                terms,
+            );
             let provider_ready_rx = soniox_session.take_ready_receiver();
 
             if let Some(partial_rx) = soniox_session.take_partial_receiver() {
@@ -1185,6 +1240,8 @@ fn run_with_options(start_hidden: bool) {
         .manage(TranscriptionState::default())
         .manage(InputDeviceState::default())
         .manage(LanguagePreferencesState::default())
+        .manage(TranscriptionDescriptionState::default())
+        .manage(TranscriptionTermsState::default())
         .manage(PendingPasteState::default())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(autostart::plugin())
@@ -1206,6 +1263,20 @@ fn run_with_options(start_hidden: bool) {
                 app.state::<LanguagePreferencesState>().inner(),
             ) {
                 eprintln!("QuickText language settings error: {error}");
+            }
+
+            if let Err(error) = transcription_description::load(
+                app.handle(),
+                app.state::<TranscriptionDescriptionState>().inner(),
+            ) {
+                eprintln!("QuickText transcription description settings error: {error}");
+            }
+
+            if let Err(error) = transcription_terms::load(
+                app.handle(),
+                app.state::<TranscriptionTermsState>().inner(),
+            ) {
+                eprintln!("QuickText transcription terms settings error: {error}");
             }
 
             setup_tray(app)?;
@@ -1240,6 +1311,10 @@ fn run_with_options(start_hidden: bool) {
             set_input_device,
             get_language_preferences,
             set_language_preferences,
+            get_transcription_description,
+            set_transcription_description,
+            get_transcription_terms,
+            set_transcription_terms,
             get_launch_on_startup,
             set_launch_on_startup
         ])

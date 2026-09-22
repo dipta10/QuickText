@@ -36,6 +36,7 @@ The app should keep running in the background after launch. Closing the main win
 - Transcript display area.
 - Copy-to-clipboard button.
 - Soniox API key configuration.
+- Optional persisted transcription description and explicit terms supplied to Soniox as session context.
 - Global shortcut for start/stop.
 - Tray/menu bar background mode after launch.
 - Basic error handling for missing API key, microphone permission failure, network failure, and provider failure.
@@ -58,7 +59,7 @@ The app should keep running in the background after launch. Closing the main win
 - Auto-copy transcript after completion.
 - Paste transcript into the currently focused app.
 - Local transcript history.
-- Custom vocabulary or context hints if supported by the provider.
+- Structured context hints beyond the transcription description and explicit terms.
 - Streaming partial transcript display while speaking.
 - Offline fallback provider.
 
@@ -80,6 +81,7 @@ The app should keep running in the background after launch. Closing the main win
 - Auto-copy default: keep manual copy as the MVP default; auto-copy can be added as an option.
 - UI after transcription: keep the UI open so the user can inspect and copy the transcript.
 - UI information architecture: use a Capture view for recording/transcripts and a Settings view for keybind/API/preferences.
+- Transcription context: Settings provides optional Description and Terms fields. Description is sent as background text; each nonblank Terms line is sent as an explicit term. Empty fields supply no corresponding context.
 - Language behavior: Settings allows one or more non-strict language preferences; the default remains automatic detection.
 
 ## Open Product Questions

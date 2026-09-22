@@ -12,6 +12,10 @@ Terms used across the product and ADR docs. Add entries here when an ADR introdu
 - **Language preferences**: Zero or more likely spoken languages selected in Settings. Empty means Automatic detection.
 - **Language hints**: The Soniox configuration generated from non-empty language preferences. Hints bias recognition but do not strictly restrict it.
 - **Session-applied settings**: Transcription settings take effect when the next recording session starts; an in-flight recording keeps its prior values.
+- **Transcription description**: Optional user-authored background text saved in Settings and snapshotted for a new transcription session. Empty means no context is supplied.
+- **Soniox context text**: Provider representation of a non-empty transcription description as `context.text`; this protocol detail remains inside the Soniox client.
+- **Transcription terms**: Optional names or phrases entered one per line in Settings and snapshotted for a new transcription session. Blank lines are ignored.
+- **Soniox context terms**: Provider representation of non-empty transcription terms as `context.terms`; this protocol detail remains inside the Soniox client.
 - **Paste-to-target**: Opt-in behavior where a finalized transcript is written to the clipboard and pasted into the application or field focused when transcription finishes.
 - **Headless take**: A recording started by plain CLI/IPC while paste-to-target is enabled; the main window is never shown or focused, and finalize pastes into the target app.
 - **Focused paste take**: A recording started by the global shortcut with focus-on-start enabled, or by `quicktext toggle focus`, while paste-to-target is enabled; QuickText shows while recording, then hides after finalization and pastes once the operating system transfers focus.

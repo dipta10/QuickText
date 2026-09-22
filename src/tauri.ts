@@ -18,6 +18,10 @@ const getLaunchOnStartupCommand = "get_launch_on_startup";
 const setLaunchOnStartupCommand = "set_launch_on_startup";
 const getLanguagePreferencesCommand = "get_language_preferences";
 const setLanguagePreferencesCommand = "set_language_preferences";
+const getTranscriptionDescriptionCommand = "get_transcription_description";
+const setTranscriptionDescriptionCommand = "set_transcription_description";
+const getTranscriptionTermsCommand = "get_transcription_terms";
+const setTranscriptionTermsCommand = "set_transcription_terms";
 const appStateChangedEvent = "app-state-changed";
 const partialTranscriptEvent = "partial-transcript";
 const deviceFallbackEvent = "device-fallback";
@@ -138,6 +142,32 @@ export const setLanguagePreferences = async (
 ): Promise<string[]> => {
   assertTauriRuntime();
   return await invoke<string[]>(setLanguagePreferencesCommand, { selectedCodes });
+};
+
+export const getTranscriptionDescription = async (): Promise<string> => {
+  assertTauriRuntime();
+  return await invoke<string>(getTranscriptionDescriptionCommand);
+};
+
+export const setTranscriptionDescription = async (
+  description: string,
+): Promise<string> => {
+  assertTauriRuntime();
+  return await invoke<string>(setTranscriptionDescriptionCommand, {
+    description,
+  });
+};
+
+export const getTranscriptionTerms = async (): Promise<string> => {
+  assertTauriRuntime();
+  return await invoke<string>(getTranscriptionTermsCommand);
+};
+
+export const setTranscriptionTerms = async (
+  termsText: string,
+): Promise<string> => {
+  assertTauriRuntime();
+  return await invoke<string>(setTranscriptionTermsCommand, { termsText });
 };
 
 export const copyTextToClipboard = async (text: string) => {

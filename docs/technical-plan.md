@@ -2,7 +2,7 @@
 
 ## Recommended Shape
 
-Build QuickText as a cross-platform desktop shell with a small frontend, a local audio capture layer, and a provider boundary around Soniox.
+Build QuickText as a cross-platform desktop shell with a small frontend, a local audio capture layer, and a provider-neutral transcription boundary implemented by Soniox and Deepgram adapters.
 
 The architecture should keep the app responsive even while audio capture, network I/O, and transcription finalization are in progress.
 
@@ -12,9 +12,11 @@ The architecture should keep the app responsive even while audio capture, networ
 - UI: record/stop control, transcript display, copy action, settings entry point, and status/error states.
 - Audio recorder: captures microphone input and emits audio in the format expected by the transcription provider.
 - Transcription service: provider-agnostic interface used by the app.
+- Provider registry: resolves the backend-persisted active provider to one adapter and exposes typed capability metadata.
 - Soniox client: Soniox-specific authentication, streaming or upload protocol, response parsing, and error mapping.
+- Deepgram client: Deepgram Nova 3 v1 authentication, streaming protocol, response parsing, keyterm mapping, and error mapping.
 - Settings store: saves non-secret user preferences locally.
-- Credential store: saves the Soniox API key in OS-backed secret storage.
+- Credential store: saves separate Soniox and Deepgram API keys in OS-backed secret storage.
 - IPC listener: local socket/named pipe inside the resident app that dispatches external `toggle`/`status` commands to the app controller and enforces single instance.
 - Diagnostics service: owns structured local events, run/session/error correlation IDs, redaction, bounded retention, and user-controlled support export.
 
@@ -61,7 +63,7 @@ The decision is recorded in [ADR 0005](adrs/0005-ipc-companion-cli.md).
 
 ## Provider Boundary
 
-Define a narrow transcription interface before implementing Soniox details:
+Use a narrow object-safe Rust transcription interface for both providers. The illustrative shape remains:
 
 ```ts
 interface TranscriptionProvider {
@@ -76,15 +78,15 @@ interface TranscriptionSession {
 }
 ```
 
-Partial updates carry provider-agnostic text fields only; token semantics and stream markers stay inside the Soniox client. The decision is recorded in [ADR 0006](adrs/0006-streaming-partial-transcripts.md).
+Partial updates carry provider-agnostic text fields plus recording and provider session IDs. Token semantics and stream markers stay inside each provider client. The partial transcript decision is recorded in [ADR 0006](adrs/0006-streaming-partial-transcripts.md), and the multi-provider boundary is recorded in [ADR 0018](adrs/0018-multi-provider-deepgram-stt.md).
 
-This keeps Soniox isolated and leaves room for later provider changes without rewriting UI and audio capture code.
+Production code must complete this extraction before Deepgram is added: shared backend state currently owns `SonioxSession` directly despite the documented interface.
 
 ## Audio Strategy
 
 Two implementation options were considered:
 
-- Streaming: send microphone audio to Soniox while recording and finalize on stop.
+- Streaming: send microphone audio to the selected provider while recording and finalize on stop.
 - Buffered upload: record locally, then send the captured clip after stop.
 
 Use streaming for MVP because it can reduce perceived wait time and enables live partial transcripts during recording (see [ADR 0006](adrs/0006-streaming-partial-transcripts.md)). Buffered upload remains the fallback if cross-platform streaming capture becomes unexpectedly expensive.
@@ -93,31 +95,34 @@ Microphone capture starts immediately on trigger while the provider connection h
 
 ## Settings
 
-MVP settings should include:
+Transcription settings should include:
 
-- Soniox API key.
+- Active provider, defaulting to Soniox.
+- Separate Soniox and Deepgram API key status and management.
+- Shared terms and phrases.
 - Optional auto-copy after transcription.
 - Optional global shortcut.
 - Optional launch on system startup (starts hidden in the tray/menu bar).
-- Optional transcription language preferences (empty by default for automatic detection).
+- Optional Soniox transcription language preferences (empty by default for automatic detection).
 
-The API key should be stored using the operating system's secure credential storage if the chosen desktop framework supports it cleanly.
+Provider API keys are stored under separate accounts in the operating system's secure credential storage. Provider selection and shared terms are backend-managed non-secret settings.
 
 Language preferences are non-secret backend-managed settings. The bundled
 Soniox catalog is available offline. At session start, selected ISO codes are
 passed through the provider boundary; the Soniox client emits
-`language_hints` only for a non-empty selection. See [ADR 0017](adrs/0017-language-preferences.md).
+`language_hints` only for a non-empty selection. Deepgram uses English and exposes no language control in its initial release. See [ADR 0017](adrs/0017-language-preferences.md) and [ADR 0018](adrs/0018-multi-provider-deepgram-stt.md).
 
 ## Error Cases
 
 Handle these explicitly:
 
-- Missing Soniox API key.
-- Invalid Soniox API key.
+- Missing selected-provider API key.
+- Invalid selected-provider API key.
 - Microphone permission denied.
 - No microphone device available.
 - Network unavailable.
 - Provider timeout or rate limit.
+- Invalid provider settings or provider protocol failure.
 - Empty or unintelligible audio.
 
 ## Support Diagnostics
@@ -161,6 +166,12 @@ wss://stt-rt.soniox.com/transcribe-websocket
 ```
 
 The first configuration should target `stt-rt-v5`, send microphone audio as binary WebSocket frames, and send an empty WebSocket frame to end the stream gracefully. The provider decision is recorded in [ADR 0002](adrs/0002-streaming-soniox-stt.md).
+
+## Deepgram Integration Decision
+
+Add Deepgram Nova 3 through the v1 live transcription WebSocket as an opt-in second provider. Enable interim results, disable pause endpointing as a product completion signal, map finalized and non-final results into the shared transcript event, and finish an explicitly stopped session through `CloseStream`.
+
+Deepgram uses English in the initial release. Shared terms and phrases map to repeated plain `keyterm` parameters; legacy weighted `keywords`, Flux, multilingual controls, and automatic fallback are outside this feature. See [Deepgram integration plan](deepgram-stt-integration-plan.md) and [ADR 0018](adrs/0018-multi-provider-deepgram-stt.md).
 
 ## First Implementation Milestones
 

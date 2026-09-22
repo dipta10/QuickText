@@ -4,14 +4,14 @@
 
 QuickText should feel like a compact desktop utility, not a settings form with a record button attached.
 
-The main UI should separate the active dictation workflow from configuration. Recording and transcript review belong in the primary Capture view. API keys, shortcut capture, and preferences belong in Settings.
+The main UI should separate the active dictation workflow from configuration. Recording and transcript review belong in the primary Capture view. Provider selection, API keys, terminology, shortcut capture, and preferences belong in Settings.
 
 ## Product Shape
 
 QuickText has two main views:
 
 - Capture: the default operational view for recording, stopping, reviewing, and copying the transcript.
-- Settings: configuration for Soniox API key, global shortcut, tray behavior, language preferences, and future preferences.
+- Settings: configuration for the transcription provider, provider credentials, shared terms, global shortcut, tray behavior, Soniox language preferences, and future preferences.
 
 The app should always open to Capture when triggered for dictation. Settings should never block the core record/stop loop unless a required setup item is missing.
 
@@ -42,6 +42,7 @@ Required elements:
 - Large primary record/stop toggle.
 - Short status label: Ready, Listening, Finalizing, Transcript ready, or Error.
 - Recording affordance: timer plus subtle activity indicator while listening.
+- Read-only active-provider label.
 - Transcript display as a readable result surface, not a textarea.
 - Copy button in the transcript toolbar.
 - Optional "New recording" action after transcript completion if the main toggle behavior is not enough.
@@ -71,7 +72,9 @@ Settings should be a separate view reached from a gear button or Settings tab in
 Recommended sections:
 
 - General: launch-on-startup preference.
+- Transcription: active-provider selector and shared `Terms and phrases` field.
 - Soniox: API key status, save/update key, delete key, and a searchable multi-select for transcription languages.
+- Deepgram: API key status, save/update key, delete key, and a clear English-only note with no language control.
 - Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
 - Behavior: manual copy default, future auto-copy option, max recording duration display.
 - App: tray/background explanation and explicit quit note.
@@ -82,6 +85,8 @@ Settings rules:
 - Do not show raw provider protocol details.
 - Do not show stored API key values.
 - Do not store API keys in frontend persistence.
+- Disable provider selection and transcription-setting changes while a recording session is active.
+- Keep the shared terms list when provider validation fails and show an actionable inline error.
 - Describe an empty language selection as Automatic detection and keep language selection available without an API key.
 - Keep settings controls visually quieter than the Capture record button.
 - Use short labels and direct status text.
@@ -105,7 +110,7 @@ Default trigger behavior:
 - If Settings is open and the trigger is pressed, switch to Capture and start recording.
 - If recording is active and the trigger is pressed, stop recording without changing the transcript view until finalization completes.
 - If finalization is active, ignore or disable repeated triggers.
-- If the required Soniox API key is missing, show/focus Settings with the Soniox section highlighted and do not start recording.
+- If the selected provider's API key is missing, show/focus Settings with that provider's section highlighted and do not start recording.
 
 ## Visual Direction
 
@@ -138,12 +143,15 @@ QuickText window
   Capture view
     Record/Stop toggle
     Timer and recording state
+    Active provider label
     Transcript result panel
     Copy action
 
   Settings view
-    Soniox API key
-    Transcription languages
+    Provider selector
+    Terms and phrases
+    Soniox API key and transcription languages
+    Deepgram API key and English-only note
     Global shortcut
     Behavior
     App/tray
@@ -165,12 +173,13 @@ QuickText window
 8. Add empty, recording, finalizing, transcript-ready, and error visual states.
 9. Add CSS tokens for spacing, colors, typography, controls, and state indicators.
 10. Validate with `npm run build` and the existing Rust checks if backend files change.
+11. Add provider status, selector, credential sections, shared terms, active-provider label, and session-correlated transcript handling without moving backend settings into `localStorage`.
 
 ## Acceptance Criteria
 
 - Opening the app shows Capture, not settings.
 - Capture has one dominant record/stop action.
-- Settings contains keybind and Soniox API key controls.
+- Settings contains keybind, provider selection, separate Soniox and Deepgram credential controls, and shared terms.
 - Settings supports multiple transcription-language preferences and a clear return to Automatic detection.
 - Pressing the global shortcut while Settings is open switches to Capture and starts recording.
 - Pressing the global shortcut while hidden shows Capture and starts recording.
@@ -178,7 +187,11 @@ QuickText window
 - With "Hide window when recording stops" on, stopping via shortcut hides the window while the app stays resident.
 - Transcript is rendered as readable selectable text, not a textarea.
 - Copy action copies the displayed transcript.
-- Missing API key sends the user to Settings with a clear setup message.
+- Missing API key sends the user to the selected provider's Settings section with a clear setup message.
+- Deepgram shows an English-only note and no language selector.
+- Provider and terminology controls cannot change an active session.
+- Capture identifies the active provider without adding a provider control to the capture workflow.
+- Transcript updates from a stale recording session are ignored.
 - UI remains compact at the minimum supported window size.
 - No Soniox protocol details appear in UI text.
 - Errors expose a compact support reference without exposing provider protocol details.

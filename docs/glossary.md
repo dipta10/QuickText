@@ -11,6 +11,13 @@ Terms used across the product and ADR docs. Add entries here when an ADR introdu
 - **Suppress (notification)**: Skip firing an OS notification because equivalent feedback is already visible in the focused main window.
 - **Language preferences**: Zero or more likely spoken languages selected in Settings. Empty means Automatic detection.
 - **Language hints**: The Soniox configuration generated from non-empty language preferences. Hints bias recognition but do not strictly restrict it.
+- **Provider selection**: Backend-persisted choice of Soniox or Deepgram for the next recording. Soniox is the default, and one recording uses exactly one provider.
+- **Provider registry**: Typed backend component that resolves a provider selection to an adapter and its capability metadata without contacting the inactive provider.
+- **Terms and phrases**: Ordered provider-neutral terminology saved as non-secret settings and mapped by each adapter to its supported prompting mechanism.
+- **Keyterm**: Plain Deepgram Nova 3 prompting term or phrase. QuickText sends one repeated `keyterm` parameter per shared term and does not attach a weight.
+- **Confirmed transcript text**: Provider output that will not be revised for its covered audio span. Deepgram marks these results with `is_final`.
+- **Revisable transcript text**: The current provider hypothesis for audio that has not been finalized. It replaces the prior hypothesis rather than appending to it.
+- **Active provider label**: Read-only Capture text identifying which provider will receive the recording; provider changes remain in Settings.
 - **Session-applied settings**: Transcription settings take effect when the next recording session starts; an in-flight recording keeps its prior values.
 - **Paste-to-target**: Opt-in behavior where a finalized transcript is written to the clipboard and pasted into the application or field focused when transcription finishes.
 - **Headless take**: A recording started by plain CLI/IPC while paste-to-target is enabled; the main window is never shown or focused, and finalize pastes into the target app.

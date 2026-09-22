@@ -7,6 +7,7 @@ export type RecordingState =
   | "error";
 export type ShortcutCaptureState = "idle" | "capturing";
 export type ActiveView = "capture" | "settings";
+export type ProviderId = "soniox" | "deepgram";
 
 export type TranscriptResult = {
   text: string;
@@ -15,18 +16,22 @@ export type TranscriptResult = {
 
 export type BackendAppError = {
   type: string;
+  provider?: ProviderId;
   message: string;
 };
 
 export type BackendAppSnapshot = {
   status: RecordingState;
+  sessionId: number | null;
   transcript: TranscriptResult | null;
   error: BackendAppError | null;
 };
 
 export type PartialTranscriptUpdate = {
-  final_text: string;
-  partial_text: string;
+  recordingSessionId: number;
+  providerSessionId: number;
+  finalText: string;
+  partialText: string;
 };
 
 export type InputDeviceOption = {
@@ -48,8 +53,10 @@ export type AppState = {
   pasteToTarget: boolean;
   launchOnStartup: boolean;
   launchOnStartupStatus: string;
-  hasApiKey: boolean;
-  apiKeyStatus: string;
+  activeProvider: ProviderId;
+  activeSessionId: number | null;
+  providerApiKeyConfigured: Record<ProviderId, boolean>;
+  providerApiKeyStatus: Record<ProviderId, string>;
   inputDevices: InputDeviceOption[];
   inputDeviceDefaultLabel: string;
   selectedInputDeviceId: string;
@@ -85,8 +92,10 @@ export const createAppState = (
   pasteToTarget,
   launchOnStartup,
   launchOnStartupStatus: "",
-  hasApiKey: false,
-  apiKeyStatus: "",
+  activeProvider: "soniox",
+  activeSessionId: null,
+  providerApiKeyConfigured: { soniox: false, deepgram: false },
+  providerApiKeyStatus: { soniox: "", deepgram: "" },
   inputDevices: [],
   inputDeviceDefaultLabel: "",
   selectedInputDeviceId,
@@ -166,6 +175,7 @@ export const applyBackendSnapshot = (
         ? "capture"
         : state.activeView,
     recording: snapshot.status,
+    activeSessionId: snapshot.sessionId,
     status: statusText(snapshot),
     transcript:
       snapshot.transcript?.text ??
@@ -173,9 +183,16 @@ export const applyBackendSnapshot = (
     partialTranscript:
       snapshot.status === "recording" ? state.partialTranscript : "",
     recordingStartedAt: recordingStartedAt(state, snapshot),
-    apiKeyStatus: isMissingApiKey
-      ? snapshot.error?.message ?? state.apiKeyStatus
-      : state.apiKeyStatus,
+    providerApiKeyStatus: isMissingApiKey
+      ? {
+          ...state.providerApiKeyStatus,
+          [snapshot.error?.provider ?? state.activeProvider]:
+            snapshot.error?.message ??
+            state.providerApiKeyStatus[
+              snapshot.error?.provider ?? state.activeProvider
+            ],
+        }
+      : state.providerApiKeyStatus,
     deviceNotice:
       snapshot.status === "starting" ? "" : state.deviceNotice,
   };
@@ -193,16 +210,19 @@ export const applyPartialTranscript = (
   state: AppState,
   update: PartialTranscriptUpdate,
 ): AppState => {
-  if (state.recording !== "recording") {
+  if (
+    state.recording !== "recording" ||
+    state.activeSessionId !== update.recordingSessionId
+  ) {
     return state;
   }
 
   return {
     ...state,
-    transcript: state.liveTranscript ? update.final_text : state.transcript,
+    transcript: state.liveTranscript ? update.finalText : state.transcript,
     partialTranscript:
       state.liveTranscript && state.showPartialTranscript
-        ? update.partial_text
+        ? update.partialText
         : "",
   };
 };
@@ -227,22 +247,41 @@ export const saveShortcut = (
   status: "Saved.",
 });
 
-export const setApiKeyPresence = (
+export const setActiveProvider = (
   state: AppState,
+  activeProvider: ProviderId,
+): AppState => ({
+  ...state,
+  activeProvider,
+});
+
+export const setProviderApiKeyPresence = (
+  state: AppState,
+  provider: ProviderId,
   hasApiKey: boolean,
   apiKeyStatus = "",
 ): AppState => ({
   ...state,
-  hasApiKey,
-  apiKeyStatus,
+  providerApiKeyConfigured: {
+    ...state.providerApiKeyConfigured,
+    [provider]: hasApiKey,
+  },
+  providerApiKeyStatus: {
+    ...state.providerApiKeyStatus,
+    [provider]: apiKeyStatus,
+  },
 });
 
-export const setApiKeyStatus = (
+export const setProviderApiKeyStatus = (
   state: AppState,
+  provider: ProviderId,
   apiKeyStatus: string,
 ): AppState => ({
   ...state,
-  apiKeyStatus,
+  providerApiKeyStatus: {
+    ...state.providerApiKeyStatus,
+    [provider]: apiKeyStatus,
+  },
 });
 
 export const setInputDeviceOptions = (

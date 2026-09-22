@@ -5,6 +5,7 @@ export type AppView = {
   settingsView: HTMLElement;
   recordButton: HTMLButtonElement;
   recordStatus: HTMLParagraphElement;
+  providerLabel: HTMLSpanElement;
   deviceNotice: HTMLParagraphElement;
   recordingTimer: HTMLSpanElement;
   activityIndicator: HTMLSpanElement;
@@ -17,10 +18,17 @@ export type AppView = {
   keybindStatus: HTMLParagraphElement;
   shortcutFocusOnStartCheckbox: HTMLInputElement;
   shortcutHideOnStopCheckbox: HTMLInputElement;
+  providerSelect: HTMLSelectElement;
+  sonioxSection: HTMLElement;
   apiKeyInput: HTMLInputElement;
   apiKeySaveButton: HTMLButtonElement;
   apiKeyDeleteButton: HTMLButtonElement;
   apiKeyStatus: HTMLParagraphElement;
+  deepgramSection: HTMLElement;
+  deepgramApiKeyInput: HTMLInputElement;
+  deepgramApiKeySaveButton: HTMLButtonElement;
+  deepgramApiKeyDeleteButton: HTMLButtonElement;
+  deepgramApiKeyStatus: HTMLParagraphElement;
   transcriptionDescriptionInput: HTMLTextAreaElement;
   transcriptionDescriptionSaveButton: HTMLButtonElement;
   transcriptionDescriptionStatus: HTMLParagraphElement;
@@ -73,6 +81,7 @@ const appTemplate = `
           </button>
           <div class="recording-meta">
             <p class="record-status">Ready</p>
+            <span class="provider-label">Provider: Soniox</span>
             <span class="recording-timer">00:00</span>
             <span class="activity-indicator" aria-hidden="true"></span>
           </div>
@@ -109,6 +118,41 @@ const appTemplate = `
         </section>
 
         <section class="settings-section">
+          <h2 class="section-title">Transcription</h2>
+          <label class="settings-field" for="transcription-provider">
+            <span class="settings-field-label">Provider</span>
+            <select class="provider-select" id="transcription-provider">
+              <option value="soniox">Soniox</option>
+              <option value="deepgram">Deepgram</option>
+            </select>
+          </label>
+          <p class="settings-note">
+            Provider changes apply to the next recording.
+          </p>
+          <label class="settings-field" for="transcription-terms">
+            <span class="settings-field-label">Terms and phrases</span>
+            <textarea
+              class="transcription-terms-input"
+              id="transcription-terms"
+              maxlength="10000"
+              rows="5"
+              placeholder="Soniox&#10;Hyprland&#10;QuickText"
+              aria-describedby="transcription-terms-status"
+            ></textarea>
+          </label>
+          <button class="transcription-terms-save-button" type="button">
+            Save terms
+          </button>
+          <p
+            class="transcription-terms-status settings-note"
+            id="transcription-terms-status"
+            role="status"
+          >
+            Enter one term or phrase per line. Blank lines are ignored.
+          </p>
+        </section>
+
+        <section class="settings-section soniox-section">
           <h2 class="section-title">Soniox</h2>
           <label class="api-key-label" for="soniox-api-key">API key</label>
           <input
@@ -144,27 +188,6 @@ const appTemplate = `
           >
             Applied to the next recording. Leave empty to send no description.
           </p>
-          <label class="settings-field" for="transcription-terms">
-            <span class="settings-field-label">Terms</span>
-            <textarea
-              class="transcription-terms-input"
-              id="transcription-terms"
-              maxlength="10000"
-              rows="5"
-              placeholder="Soniox&#10;Hyprland&#10;QuickText"
-              aria-describedby="transcription-terms-status"
-            ></textarea>
-          </label>
-          <button class="transcription-terms-save-button" type="button">
-            Save terms
-          </button>
-          <p
-            class="transcription-terms-status settings-note"
-            id="transcription-terms-status"
-            role="status"
-          >
-            Enter one term per line. Blank lines are ignored.
-          </p>
           <div class="settings-field">
             <span class="settings-field-label">Transcription languages</span>
             <details class="language-picker">
@@ -192,6 +215,27 @@ const appTemplate = `
           </div>
           <p class="language-status settings-note" role="status">
             Automatic detection is used when no language is selected.
+          </p>
+        </section>
+
+        <section class="settings-section deepgram-section">
+          <h2 class="section-title">Deepgram</h2>
+          <label class="api-key-label" for="deepgram-api-key">API key</label>
+          <input
+            class="deepgram-api-key-input"
+            id="deepgram-api-key"
+            type="password"
+            autocomplete="off"
+            placeholder="Paste key"
+          />
+          <div class="api-key-actions">
+            <button class="deepgram-api-key-save-button" type="button">Save</button>
+            <button class="deepgram-api-key-delete-button" type="button">Delete</button>
+          </div>
+          <p class="deepgram-api-key-status" role="status"></p>
+          <p class="settings-note">
+            Deepgram uses Nova 3 with English transcription in this release.
+            Language options will be added later.
           </p>
         </section>
 
@@ -339,6 +383,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     root.querySelector<HTMLButtonElement>(".record-button");
   const recordStatus =
     root.querySelector<HTMLParagraphElement>(".record-status");
+  const providerLabel =
+    root.querySelector<HTMLSpanElement>(".provider-label");
   const deviceNotice =
     root.querySelector<HTMLParagraphElement>(".device-notice");
   const recordingTimer =
@@ -365,6 +411,9 @@ export const createAppView = (root: HTMLElement): AppView => {
   const shortcutHideOnStopCheckbox = root.querySelector<HTMLInputElement>(
     ".shortcut-hide-on-stop-checkbox",
   );
+  const providerSelect =
+    root.querySelector<HTMLSelectElement>(".provider-select");
+  const sonioxSection = root.querySelector<HTMLElement>(".soniox-section");
   const apiKeyInput = root.querySelector<HTMLInputElement>(".api-key-input");
   const apiKeySaveButton = root.querySelector<HTMLButtonElement>(
     ".api-key-save-button",
@@ -374,6 +423,20 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const apiKeyStatus =
     root.querySelector<HTMLParagraphElement>(".api-key-status");
+  const deepgramSection =
+    root.querySelector<HTMLElement>(".deepgram-section");
+  const deepgramApiKeyInput = root.querySelector<HTMLInputElement>(
+    ".deepgram-api-key-input",
+  );
+  const deepgramApiKeySaveButton = root.querySelector<HTMLButtonElement>(
+    ".deepgram-api-key-save-button",
+  );
+  const deepgramApiKeyDeleteButton = root.querySelector<HTMLButtonElement>(
+    ".deepgram-api-key-delete-button",
+  );
+  const deepgramApiKeyStatus = root.querySelector<HTMLParagraphElement>(
+    ".deepgram-api-key-status",
+  );
   const transcriptionDescriptionInput =
     root.querySelector<HTMLTextAreaElement>(
       ".transcription-description-input",
@@ -465,6 +528,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     !settingsView ||
     !recordButton ||
     !recordStatus ||
+    !providerLabel ||
     !deviceNotice ||
     !recordingTimer ||
     !activityIndicator ||
@@ -477,10 +541,17 @@ export const createAppView = (root: HTMLElement): AppView => {
     !keybindStatus ||
     !shortcutFocusOnStartCheckbox ||
     !shortcutHideOnStopCheckbox ||
+    !providerSelect ||
+    !sonioxSection ||
     !apiKeyInput ||
     !apiKeySaveButton ||
     !apiKeyDeleteButton ||
     !apiKeyStatus ||
+    !deepgramSection ||
+    !deepgramApiKeyInput ||
+    !deepgramApiKeySaveButton ||
+    !deepgramApiKeyDeleteButton ||
+    !deepgramApiKeyStatus ||
     !transcriptionDescriptionInput ||
     !transcriptionDescriptionSaveButton ||
     !transcriptionDescriptionStatus ||
@@ -522,6 +593,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     settingsView,
     recordButton,
     recordStatus,
+    providerLabel,
     deviceNotice,
     recordingTimer,
     activityIndicator,
@@ -534,10 +606,17 @@ export const createAppView = (root: HTMLElement): AppView => {
     keybindStatus,
     shortcutFocusOnStartCheckbox,
     shortcutHideOnStopCheckbox,
+    providerSelect,
+    sonioxSection,
     apiKeyInput,
     apiKeySaveButton,
     apiKeyDeleteButton,
     apiKeyStatus,
+    deepgramSection,
+    deepgramApiKeyInput,
+    deepgramApiKeySaveButton,
+    deepgramApiKeyDeleteButton,
+    deepgramApiKeyStatus,
     transcriptionDescriptionInput,
     transcriptionDescriptionSaveButton,
     transcriptionDescriptionStatus,

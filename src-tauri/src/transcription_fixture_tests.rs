@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     audio_recorder::{AudioEncoding, AudioFormat},
-    soniox_provider::SonioxSession,
+    deepgram_provider::DeepgramProvider,
+    soniox_provider::SonioxProvider,
+    transcription::{TranscriptionOptions, TranscriptionProvider},
 };
 
 const FIXTURES_DIR_NAME: &str = "fixtures";
@@ -109,13 +111,18 @@ fn load_wav_pcm(wav_path: &Path) -> Result<(Vec<u8>, AudioFormat), String> {
     ))
 }
 
-fn test_api_key() -> Result<String, String> {
+fn soniox_test_api_key() -> Result<String, String> {
     std::env::var("QUICKTEXT_TEST_API_KEY")
         .or_else(|_| std::env::var("SONIOX_API_KEY"))
         .map_err(|_| {
             "Set QUICKTEXT_TEST_API_KEY (or SONIOX_API_KEY) to run transcription fixture tests."
                 .to_string()
         })
+}
+
+fn deepgram_test_api_key() -> Result<String, String> {
+    std::env::var("DEEPGRAM_API_KEY")
+        .map_err(|_| "Set DEEPGRAM_API_KEY to run the Deepgram fixture test.".to_string())
 }
 
 fn chunk_duration(audio_format: &AudioFormat) -> std::time::Duration {
@@ -130,13 +137,7 @@ fn chunk_duration(audio_format: &AudioFormat) -> std::time::Duration {
     std::time::Duration::from_micros(micros)
 }
 
-#[tokio::test]
-#[ignore = "requires network access, an API key, and recorded fixtures; run with `cargo test -- --ignored`"]
-async fn transcribes_recorded_fixtures() {
-    let api_key = match test_api_key() {
-        Ok(key) => key,
-        Err(missing_key_message) => panic!("{missing_key_message}"),
-    };
+async fn transcribe_recorded_fixtures(provider: &dyn TranscriptionProvider, api_key: String) {
     let fixtures_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(FIXTURES_DIR_NAME);
 
     for fixture in list_fixtures(&fixtures_dir).expect("valid fixture set") {
@@ -144,13 +145,15 @@ async fn transcribes_recorded_fixtures() {
             load_wav_pcm(&fixture.wav_path).expect("readable WAV fixture");
 
         let chunk_duration = chunk_duration(&audio_format);
-        let mut session = SonioxSession::start(
-            api_key.clone(),
-            audio_format,
-            Vec::new(),
-            String::new(),
-            Vec::new(),
-        );
+        let mut session = provider
+            .start_session(TranscriptionOptions {
+                api_key: api_key.clone(),
+                audio_format,
+                language_hints: Vec::new(),
+                description: String::new(),
+                terms: Vec::new(),
+            })
+            .expect("valid fixture session options");
 
         let provider_ready = session
             .take_ready_receiver()
@@ -195,6 +198,20 @@ async fn transcribes_recorded_fixtures() {
             transcript.text
         );
     }
+}
+
+#[tokio::test]
+#[ignore = "requires network access, a Soniox API key, and recorded fixtures"]
+async fn soniox_transcribes_recorded_fixtures() {
+    let api_key = soniox_test_api_key().unwrap_or_else(|message| panic!("{message}"));
+    transcribe_recorded_fixtures(&SonioxProvider, api_key).await;
+}
+
+#[tokio::test]
+#[ignore = "requires network access, a Deepgram API key, and recorded fixtures"]
+async fn deepgram_transcribes_recorded_fixtures() {
+    let api_key = deepgram_test_api_key().unwrap_or_else(|message| panic!("{message}"));
+    transcribe_recorded_fixtures(&DeepgramProvider, api_key).await;
 }
 
 #[test]

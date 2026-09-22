@@ -1,9 +1,16 @@
-use std::{sync::Mutex, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
+    time::Duration,
+};
 
 mod app_controller;
 mod audio_recorder;
 mod autostart;
 mod companion_cli;
+mod deepgram_provider;
 mod ipc;
 #[cfg(unix)]
 mod ipc_server;
@@ -12,6 +19,7 @@ mod paste_target;
 mod soniox_provider;
 mod transcription;
 mod transcription_description;
+mod transcription_settings;
 mod transcription_terms;
 
 #[cfg(test)]
@@ -19,6 +27,7 @@ mod transcription_fixture_tests;
 
 use app_controller::{AppController, AppError, AppSnapshot, AppStatus, TranscriptResult};
 use audio_recorder::{AudioCaptureStats, AudioRecorder};
+use deepgram_provider::DeepgramProvider;
 use keyring::{Entry, Error as KeyringError};
 use language_preferences::{LanguagePreferencesSnapshot, LanguagePreferencesState};
 use soniox_provider::SonioxProvider;
@@ -29,17 +38,40 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use transcription::{
-    PartialTranscript, TranscriptionOptions, TranscriptionProvider, TranscriptionSession,
+    PartialTranscript, ProviderId, TranscriptionOptions, TranscriptionProvider,
+    TranscriptionSession,
 };
 use transcription_description::TranscriptionDescriptionState;
+use transcription_settings::{TranscriptionSettingsSnapshot, TranscriptionSettingsState};
 use transcription_terms::TranscriptionTermsState;
 
-const SONIOX_KEY_SERVICE: &str = "com.dipta.stt";
+const PROVIDER_KEY_SERVICE: &str = "com.dipta.stt";
 const SONIOX_KEY_ACCOUNT: &str = "soniox-api-key";
+const DEEPGRAM_KEY_ACCOUNT: &str = "deepgram-api-key";
+const MAX_API_KEY_CHARACTERS: usize = 4_096;
 const DEFAULT_MAX_RECORDING_SECONDS: u64 = 5 * 60;
 const FOCUSED_PASTE_SETTLE_DELAY: Duration = Duration::from_millis(100);
 const BUILD_ID: &str = env!("QUICKTEXT_BUILD_ID");
 const SOURCE_REVISION: &str = env!("QUICKTEXT_SOURCE_REVISION");
+static NEXT_PROVIDER_SESSION_ID: AtomicU64 = AtomicU64::new(1);
+static SONIOX_PROVIDER: SonioxProvider = SonioxProvider;
+static DEEPGRAM_PROVIDER: DeepgramProvider = DeepgramProvider;
+
+fn transcription_provider(provider: ProviderId) -> &'static dyn TranscriptionProvider {
+    match provider {
+        ProviderId::Soniox => &SONIOX_PROVIDER,
+        ProviderId::Deepgram => &DEEPGRAM_PROVIDER,
+    }
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PartialTranscriptEvent {
+    recording_session_id: u64,
+    provider_session_id: u64,
+    final_text: String,
+    partial_text: String,
+}
 
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -93,6 +125,23 @@ mod build_info_tests {
                 "buildId": "v0.1.0-pre.42",
                 "sourceRevision": "297f58467b6f27fc3d622af7fc7788c54a171583",
             })
+        );
+    }
+}
+
+#[cfg(test)]
+mod provider_registry_tests {
+    use super::*;
+
+    #[test]
+    fn resolves_each_known_provider() {
+        assert_eq!(
+            transcription_provider(ProviderId::Soniox).id(),
+            ProviderId::Soniox
+        );
+        assert_eq!(
+            transcription_provider(ProviderId::Deepgram).id(),
+            ProviderId::Deepgram
         );
     }
 }
@@ -272,6 +321,7 @@ struct AppControllerState {
 #[derive(Default)]
 struct CredentialState {
     soniox_api_key: Mutex<Option<String>>,
+    deepgram_api_key: Mutex<Option<String>>,
 }
 
 #[derive(Default)]
@@ -289,8 +339,12 @@ struct InputDeviceState {
     selected_device: Mutex<Option<String>>,
 }
 
-fn soniox_key_entry() -> Result<Entry, String> {
-    Entry::new(SONIOX_KEY_SERVICE, SONIOX_KEY_ACCOUNT)
+fn provider_key_entry(provider: ProviderId) -> Result<Entry, String> {
+    let account = match provider {
+        ProviderId::Soniox => SONIOX_KEY_ACCOUNT,
+        ProviderId::Deepgram => DEEPGRAM_KEY_ACCOUNT,
+    };
+    Entry::new(PROVIDER_KEY_SERVICE, account)
         .map_err(|error| format!("Could not open credential store: {error}"))
 }
 
@@ -354,10 +408,20 @@ fn emit_app_snapshot(app: &tauri::AppHandle, snapshot: &AppSnapshot) {
 
 async fn forward_partial_transcripts(
     app: tauri::AppHandle,
+    recording_session_id: u64,
+    provider_session_id: u64,
     mut partial_rx: tokio::sync::mpsc::UnboundedReceiver<PartialTranscript>,
 ) {
     while let Some(update) = partial_rx.recv().await {
-        let _ = app.emit("partial-transcript", update);
+        let _ = app.emit(
+            "partial-transcript",
+            PartialTranscriptEvent {
+                recording_session_id,
+                provider_session_id,
+                final_text: update.final_text,
+                partial_text: update.partial_text,
+            },
+        );
     }
 }
 
@@ -482,9 +546,14 @@ fn paste_failed_error(message: String) -> AppError {
     AppError::PasteFailed { message }
 }
 
-fn missing_api_key_error() -> AppError {
+fn missing_api_key_error(provider: ProviderId) -> AppError {
+    let provider_name = match provider {
+        ProviderId::Soniox => "Soniox",
+        ProviderId::Deepgram => "Deepgram",
+    };
     AppError::MissingApiKey {
-        message: "Add your Soniox API key before recording.".to_string(),
+        provider: provider.as_str().to_string(),
+        message: format!("Add your {provider_name} API key before recording."),
     }
 }
 
@@ -542,37 +611,41 @@ fn lock_input_device<'a>(
         .map_err(|_| "Could not update input device state.".to_string())
 }
 
-fn cache_soniox_api_key(
+fn cached_api_key(credentials: &CredentialState, provider: ProviderId) -> &Mutex<Option<String>> {
+    match provider {
+        ProviderId::Soniox => &credentials.soniox_api_key,
+        ProviderId::Deepgram => &credentials.deepgram_api_key,
+    }
+}
+
+fn cache_api_key(
     credentials: &State<'_, CredentialState>,
+    provider: ProviderId,
     api_key: &str,
 ) -> Result<(), String> {
-    let mut cached_key = credentials
-        .soniox_api_key
+    *cached_api_key(credentials.inner(), provider)
         .lock()
-        .map_err(|_| "Could not update credential state.".to_string())?;
-
-    *cached_key = Some(api_key.to_string());
+        .map_err(|_| "Could not update credential state.".to_string())? = Some(api_key.to_string());
     Ok(())
 }
 
-fn clear_cached_soniox_api_key(credentials: &State<'_, CredentialState>) -> Result<(), String> {
-    let mut cached_key = credentials
-        .soniox_api_key
-        .lock()
-        .map_err(|_| "Could not update credential state.".to_string())?;
-
-    *cached_key = None;
-    Ok(())
-}
-
-fn get_cached_soniox_api_key(
+fn clear_cached_api_key(
     credentials: &State<'_, CredentialState>,
+    provider: ProviderId,
+) -> Result<(), String> {
+    *cached_api_key(credentials.inner(), provider)
+        .lock()
+        .map_err(|_| "Could not update credential state.".to_string())? = None;
+    Ok(())
+}
+
+fn get_cached_api_key(
+    credentials: &State<'_, CredentialState>,
+    provider: ProviderId,
 ) -> Result<Option<String>, String> {
-    let cached_key = credentials
-        .soniox_api_key
+    let cached_key = cached_api_key(credentials.inner(), provider)
         .lock()
         .map_err(|_| "Could not read credential state.".to_string())?;
-
     Ok(cached_key
         .as_ref()
         .filter(|api_key| !api_key.trim().is_empty())
@@ -587,8 +660,25 @@ fn sanitize_api_key(api_key: &str) -> String {
     api_key.chars().filter(|c| !is_invisible(*c)).collect()
 }
 
-fn read_soniox_api_key_from_store() -> Result<Option<String>, String> {
-    match soniox_key_entry()?.get_password() {
+fn validate_api_key(provider: ProviderId, api_key: String) -> Result<String, String> {
+    let api_key = sanitize_api_key(&api_key);
+    let provider_name = match provider {
+        ProviderId::Soniox => "Soniox",
+        ProviderId::Deepgram => "Deepgram",
+    };
+    if api_key.is_empty() {
+        return Err(format!("Enter a {provider_name} API key first."));
+    }
+    if api_key.chars().count() > MAX_API_KEY_CHARACTERS {
+        return Err(format!(
+            "{provider_name} API keys must be {MAX_API_KEY_CHARACTERS} characters or fewer."
+        ));
+    }
+    Ok(api_key)
+}
+
+fn read_api_key_from_store(provider: ProviderId) -> Result<Option<String>, String> {
+    match provider_key_entry(provider)?.get_password() {
         Ok(api_key) => {
             let api_key = sanitize_api_key(&api_key);
             if api_key.is_empty() {
@@ -598,24 +688,31 @@ fn read_soniox_api_key_from_store() -> Result<Option<String>, String> {
             }
         }
         Err(KeyringError::NoEntry) => Ok(None),
-        Err(error) => Err(format!("Could not read Soniox API key: {error}")),
+        Err(error) => Err(format!(
+            "Could not read {} API key: {error}",
+            provider.as_str()
+        )),
     }
 }
 
-fn has_soniox_api_key_available(credentials: &State<'_, CredentialState>) -> Result<bool, String> {
-    Ok(get_soniox_api_key_available(credentials)?.is_some())
+fn has_api_key_available(
+    credentials: &State<'_, CredentialState>,
+    provider: ProviderId,
+) -> Result<bool, String> {
+    Ok(get_api_key_available(credentials, provider)?.is_some())
 }
 
-fn get_soniox_api_key_available(
+fn get_api_key_available(
     credentials: &State<'_, CredentialState>,
+    provider: ProviderId,
 ) -> Result<Option<String>, String> {
-    if let Some(api_key) = get_cached_soniox_api_key(credentials)? {
+    if let Some(api_key) = get_cached_api_key(credentials, provider)? {
         return Ok(Some(api_key));
     }
 
-    match read_soniox_api_key_from_store()? {
+    match read_api_key_from_store(provider)? {
         Some(api_key) => {
-            cache_soniox_api_key(credentials, &api_key)?;
+            cache_api_key(credentials, provider, &api_key)?;
             Ok(Some(api_key))
         }
         None => Ok(None),
@@ -634,6 +731,39 @@ fn get_build_info(app: tauri::AppHandle) -> BuildInfo {
         build_id: resolve_build_metadata(Some(BUILD_ID)),
         source_revision: resolve_build_metadata(Some(SOURCE_REVISION)),
     }
+}
+
+#[tauri::command]
+fn get_transcription_settings(
+    settings: State<'_, TranscriptionSettingsState>,
+) -> Result<TranscriptionSettingsSnapshot, String> {
+    transcription_settings::snapshot(&settings)
+}
+
+#[tauri::command]
+fn set_active_provider(
+    app: tauri::AppHandle,
+    controller: State<'_, AppControllerState>,
+    settings: State<'_, TranscriptionSettingsState>,
+    terms: State<'_, TranscriptionTermsState>,
+    provider: ProviderId,
+) -> Result<ProviderId, String> {
+    if matches!(
+        lock_controller(&controller)?.snapshot().status,
+        AppStatus::Starting | AppStatus::Recording | AppStatus::Stopping
+    ) {
+        return Err("Stop the active recording before changing providers.".to_string());
+    }
+    if provider == ProviderId::Deepgram {
+        deepgram_provider::validate_terms(&transcription_terms::terms(&terms)?)?;
+    }
+    let previous = transcription_settings::active_provider(&settings)?;
+    transcription_settings::set_active_provider(&settings, provider)?;
+    if let Err(error) = transcription_settings::save(&app, provider) {
+        let _ = transcription_settings::set_active_provider(&settings, previous);
+        return Err(error);
+    }
+    Ok(provider)
 }
 
 #[tauri::command]
@@ -679,8 +809,13 @@ fn get_transcription_terms(terms: State<'_, TranscriptionTermsState>) -> Result<
 fn set_transcription_terms(
     app: tauri::AppHandle,
     state: State<'_, TranscriptionTermsState>,
+    settings: State<'_, TranscriptionSettingsState>,
     terms_text: String,
 ) -> Result<String, String> {
+    if transcription_settings::active_provider(&settings)? == ProviderId::Deepgram {
+        let candidate_terms = transcription_terms::parse_terms(&terms_text);
+        deepgram_provider::validate_terms(&candidate_terms)?;
+    }
     let previous_terms_text = transcription_terms::terms_text(&state)?;
     let terms_text = transcription_terms::set_terms_text(&state, terms_text)?;
     if let Err(error) = transcription_terms::save(&app, &terms_text) {
@@ -755,6 +890,7 @@ pub(crate) async fn toggle_recording_for_app(
     let input_device = app.state::<InputDeviceState>();
     let language_preferences = app.state::<LanguagePreferencesState>();
     let transcription_description = app.state::<TranscriptionDescriptionState>();
+    let transcription_settings = app.state::<TranscriptionSettingsState>();
     let transcription_terms = app.state::<TranscriptionTermsState>();
     let max_recording_seconds = max_recording_seconds
         .filter(|seconds| *seconds > 0)
@@ -770,18 +906,23 @@ pub(crate) async fn toggle_recording_for_app(
                 let mut controller = lock_controller(&controller)?;
                 controller.begin_start()
             };
+            let recording_session_id = starting
+                .session_id
+                .ok_or_else(|| "Could not allocate a recording session.".to_string())?;
+            let provider_session_id = NEXT_PROVIDER_SESSION_ID.fetch_add(1, Ordering::Relaxed);
             emit_app_snapshot(&app, &starting);
 
             if start_flow.show_on_start {
                 show_main_window(&app);
             }
 
-            let api_key = match get_soniox_api_key_available(&credentials) {
+            let active_provider = transcription_settings::active_provider(&transcription_settings)?;
+            let api_key = match get_api_key_available(&credentials, active_provider) {
                 Ok(Some(api_key)) => api_key,
                 Ok(None) => {
                     let error_snapshot = {
                         let mut controller = lock_controller(&controller)?;
-                        controller.fail_start(missing_api_key_error())
+                        controller.fail_start(missing_api_key_error(active_provider))
                     };
                     emit_app_snapshot(&app, &error_snapshot);
                     return Ok(error_snapshot);
@@ -813,17 +954,35 @@ pub(crate) async fn toggle_recording_for_app(
             let language_hints = language_preferences::selected_codes(&language_preferences)?;
             let description = transcription_description::description(&transcription_description)?;
             let terms = transcription_terms::terms(&transcription_terms)?;
-            let mut provider_session = SonioxProvider.start_session(TranscriptionOptions {
+            let options = TranscriptionOptions {
                 api_key,
                 audio_format: audio_format.clone(),
                 language_hints,
                 description,
                 terms,
-            })?;
+            };
+            let provider = transcription_provider(active_provider);
+            debug_assert_eq!(provider.id(), active_provider);
+            let mut provider_session = match provider.start_session(options) {
+                Ok(session) => session,
+                Err(error) => {
+                    let error_snapshot = {
+                        let mut controller = lock_controller(&controller)?;
+                        controller.fail_start(provider_unavailable_error(error))
+                    };
+                    emit_app_snapshot(&app, &error_snapshot);
+                    return Ok(error_snapshot);
+                }
+            };
             let provider_ready_rx = provider_session.take_ready_receiver();
 
             if let Some(partial_rx) = provider_session.take_partial_receiver() {
-                tauri::async_runtime::spawn(forward_partial_transcripts(app.clone(), partial_rx));
+                tauri::async_runtime::spawn(forward_partial_transcripts(
+                    app.clone(),
+                    recording_session_id,
+                    provider_session_id,
+                    partial_rx,
+                ));
             }
 
             // Capture starts before the provider connects; chunks buffer in
@@ -1176,7 +1335,7 @@ fn set_paste_to_target(settings: State<'_, ShortcutSettings>, enabled: bool) -> 
 
 #[tauri::command]
 fn has_soniox_api_key(credentials: State<'_, CredentialState>) -> Result<bool, String> {
-    has_soniox_api_key_available(&credentials)
+    has_api_key_available(&credentials, ProviderId::Soniox)
 }
 
 #[tauri::command]
@@ -1184,27 +1343,60 @@ fn save_soniox_api_key(
     credentials: State<'_, CredentialState>,
     api_key: String,
 ) -> Result<bool, String> {
-    let api_key = sanitize_api_key(&api_key);
+    let api_key = validate_api_key(ProviderId::Soniox, api_key)?;
 
-    if api_key.is_empty() {
-        return Err("Enter a Soniox API key first.".into());
-    }
-
-    soniox_key_entry()?
+    provider_key_entry(ProviderId::Soniox)?
         .set_password(api_key.as_str())
         .map_err(|error| format!("Could not save Soniox API key: {error}"))?;
 
-    cache_soniox_api_key(&credentials, api_key.as_str())?;
+    cache_api_key(&credentials, ProviderId::Soniox, api_key.as_str())?;
     Ok(true)
 }
 
 #[tauri::command]
 fn delete_soniox_api_key(credentials: State<'_, CredentialState>) -> Result<(), String> {
-    clear_cached_soniox_api_key(&credentials)?;
+    clear_cached_api_key(&credentials, ProviderId::Soniox)?;
 
-    match soniox_key_entry()?.delete_credential() {
+    match provider_key_entry(ProviderId::Soniox)?.delete_credential() {
         Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
         Err(error) => Err(format!("Could not delete Soniox API key: {error}")),
+    }
+}
+
+#[tauri::command]
+fn has_provider_api_key(
+    credentials: State<'_, CredentialState>,
+    provider: ProviderId,
+) -> Result<bool, String> {
+    has_api_key_available(&credentials, provider)
+}
+
+#[tauri::command]
+fn save_provider_api_key(
+    credentials: State<'_, CredentialState>,
+    provider: ProviderId,
+    api_key: String,
+) -> Result<bool, String> {
+    let api_key = validate_api_key(provider, api_key)?;
+    provider_key_entry(provider)?
+        .set_password(&api_key)
+        .map_err(|error| format!("Could not save {} API key: {error}", provider.as_str()))?;
+    cache_api_key(&credentials, provider, &api_key)?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn delete_provider_api_key(
+    credentials: State<'_, CredentialState>,
+    provider: ProviderId,
+) -> Result<(), String> {
+    clear_cached_api_key(&credentials, provider)?;
+    match provider_key_entry(provider)?.delete_credential() {
+        Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
+        Err(error) => Err(format!(
+            "Could not delete {} API key: {error}",
+            provider.as_str()
+        )),
     }
 }
 
@@ -1245,6 +1437,7 @@ fn run_with_options(start_hidden: bool) {
         .manage(InputDeviceState::default())
         .manage(LanguagePreferencesState::default())
         .manage(TranscriptionDescriptionState::default())
+        .manage(TranscriptionSettingsState::default())
         .manage(TranscriptionTermsState::default())
         .manage(PendingPasteState::default())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -1274,6 +1467,13 @@ fn run_with_options(start_hidden: bool) {
                 app.state::<TranscriptionDescriptionState>().inner(),
             ) {
                 eprintln!("QuickText transcription description settings error: {error}");
+            }
+
+            if let Err(error) = transcription_settings::load(
+                app.handle(),
+                app.state::<TranscriptionSettingsState>().inner(),
+            ) {
+                eprintln!("QuickText transcription provider settings error: {error}");
             }
 
             if let Err(error) = transcription_terms::load(
@@ -1311,12 +1511,17 @@ fn run_with_options(start_hidden: bool) {
             has_soniox_api_key,
             save_soniox_api_key,
             delete_soniox_api_key,
+            has_provider_api_key,
+            save_provider_api_key,
+            delete_provider_api_key,
             list_input_devices,
             set_input_device,
             get_language_preferences,
             set_language_preferences,
             get_transcription_description,
             set_transcription_description,
+            get_transcription_settings,
+            set_active_provider,
             get_transcription_terms,
             set_transcription_terms,
             get_launch_on_startup,

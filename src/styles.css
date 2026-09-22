@@ -113,6 +113,8 @@ button {
 .keybind-button,
 .api-key-save-button,
 .api-key-delete-button,
+.deepgram-api-key-save-button,
+.deepgram-api-key-delete-button,
 .transcription-description-save-button,
 .transcription-terms-save-button {
   min-height: 38px;
@@ -141,6 +143,8 @@ button {
 .keybind-button:hover,
 .api-key-save-button:hover,
 .api-key-delete-button:hover,
+.deepgram-api-key-save-button:hover,
+.deepgram-api-key-delete-button:hover,
 .transcription-description-save-button:hover,
 .transcription-terms-save-button:hover {
   background: rgba(255, 255, 255, 0.1);
@@ -209,6 +213,8 @@ button {
 .keybind-button:active,
 .api-key-save-button:active,
 .api-key-delete-button:active,
+.deepgram-api-key-save-button:active,
+.deepgram-api-key-delete-button:active,
 .transcription-description-save-button:active,
 .transcription-terms-save-button:active {
   transform: translateY(1px);
@@ -217,6 +223,9 @@ button {
 .record-button:disabled,
 .copy-button:disabled,
 .api-key-delete-button:disabled,
+.api-key-save-button:disabled,
+.deepgram-api-key-save-button:disabled,
+.deepgram-api-key-delete-button:disabled,
 .transcription-description-save-button:disabled,
 .transcription-terms-save-button:disabled {
   cursor: not-allowed;
@@ -237,6 +246,12 @@ button {
   margin: 0;
   font-size: 0.88rem;
   font-weight: 700;
+}
+
+.provider-label {
+  color: #8c99aa;
+  font-size: 0.78rem;
+  font-weight: 650;
 }
 
 .device-notice {
@@ -352,6 +367,8 @@ button {
 }
 
 .api-key-input,
+.deepgram-api-key-input,
+.provider-select,
 .input-device-select,
 .max-recording-seconds-input,
 .language-search-input {
@@ -388,7 +405,12 @@ button {
   text-overflow: ellipsis;
 }
 
+.provider-select {
+  max-width: 100%;
+}
+
 .api-key-input::placeholder,
+.deepgram-api-key-input::placeholder,
 .max-recording-seconds-input::placeholder,
 .language-search-input::placeholder {
   color: #687488;
@@ -516,6 +538,8 @@ button {
 
 .api-key-save-button,
 .api-key-delete-button,
+.deepgram-api-key-save-button,
+.deepgram-api-key-delete-button,
 .keybind-button,
 .transcription-description-save-button,
 .transcription-terms-save-button {
@@ -525,6 +549,7 @@ button {
 
 .keybind-status,
 .api-key-status,
+.deepgram-api-key-status,
 .transcription-description-status,
 .transcription-terms-status,
 .settings-note,
@@ -547,6 +572,8 @@ button {
 .copy-build-info-button:focus-visible,
 .keybind-button:focus-visible,
 .api-key-input:focus-visible,
+.deepgram-api-key-input:focus-visible,
+.provider-select:focus-visible,
 .transcription-description-input:focus-visible,
 .transcription-terms-input:focus-visible,
 .input-device-select:focus-visible,
@@ -554,9 +581,22 @@ button {
 .checkbox-field > input[type="checkbox"]:focus-visible,
 .api-key-save-button:focus-visible,
 .api-key-delete-button:focus-visible,
+.deepgram-api-key-save-button:focus-visible,
+.deepgram-api-key-delete-button:focus-visible,
 .transcription-description-save-button:focus-visible,
 .transcription-terms-save-button:focus-visible,
 .transcript-text:focus-visible {
   outline: 3px solid rgba(94, 179, 255, 0.48);
   outline-offset: 4px;
+}
+
+.soniox-section.is-active-provider,
+.deepgram-section.is-active-provider {
+  border-color: rgba(94, 179, 255, 0.34);
+}
+
+.language-picker.is-disabled > summary {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
 }

@@ -1,5 +1,6 @@
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -7,7 +8,8 @@ use tokio::sync::{
     mpsc::{self, UnboundedReceiver, UnboundedSender},
     oneshot,
 };
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio::{net::lookup_host, net::TcpStream};
+use tokio_tungstenite::{client_async_tls, tungstenite::Message};
 
 type SonioxWebsocket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -18,14 +20,29 @@ use crate::{
 };
 
 const SONIOX_WEBSOCKET_URL: &str = "wss://stt-rt.soniox.com/transcribe-websocket";
+const SONIOX_WEBSOCKET_HOST: &str = "stt-rt.soniox.com";
+const SONIOX_WEBSOCKET_PORT: u16 = 443;
 const SONIOX_MODEL: &str = "stt-rt-v5";
-const FINALIZATION_TIMEOUT_SECONDS: u64 = 12;
+const FINALIZATION_TIMEOUT_SECONDS: u64 = 5;
 
 // Stream-boundary control tokens Soniox emits as regular final tokens
 // ("<end>" on endpoint detection, "<fin>" after manual finalization).
 const SONIOX_STREAM_MARKERS: [&str; 2] = ["<end>", "<fin>"];
 
 type SharedErrorSlot = Arc<Mutex<Option<String>>>;
+
+macro_rules! soniox_log {
+    ($($arg:tt)*) => {{
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        eprintln!(
+            "[{timestamp}][QuickText/Soniox] {}",
+            format_args!($($arg)*)
+        );
+    }};
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PartialTranscript {
@@ -103,6 +120,7 @@ impl SonioxSession {
     // Requires that audio capture has already been stopped so the buffered
     // audio flush in the session task can observe channel closure.
     pub async fn stop(self) -> Result<TranscriptResult, String> {
+        soniox_log!("Stop requested; waiting for final transcript.");
         let (result_tx, result_rx) = oneshot::channel();
         self.command_tx
             .send(SonioxCommand::Finish(result_tx))
@@ -121,6 +139,9 @@ impl SonioxSession {
             Ok(result) => result
                 .map_err(|_| "Soniox stream ended before finalization completed.".to_string())?,
             Err(_) => {
+                soniox_log!(
+                    "Finalization timed out after {FINALIZATION_TIMEOUT_SECONDS}s; cancelling session."
+                );
                 let _ = self.command_tx.send(SonioxCommand::Cancel);
                 return Err("Soniox finalization timed out.".to_string());
             }
@@ -156,16 +177,57 @@ async fn run_configured_session(
 }
 
 async fn connect_and_configure(config_message: &str) -> Result<SonioxWebsocket, String> {
-    let (mut websocket, _) = connect_async(SONIOX_WEBSOCKET_URL)
+    soniox_log!("Resolving IPv4 endpoint.");
+    let socket = connect_ipv4(SONIOX_WEBSOCKET_HOST, SONIOX_WEBSOCKET_PORT).await?;
+    soniox_log!("IPv4 TCP connection established; starting WebSocket handshake.");
+    let (mut websocket, _) = client_async_tls(SONIOX_WEBSOCKET_URL, socket)
         .await
         .map_err(|error| format!("Could not connect to Soniox: {error}"))?;
+    soniox_log!("WebSocket handshake completed.");
 
     websocket
         .send(Message::Text(config_message.into()))
         .await
         .map_err(|error| format!("Could not configure Soniox stream: {error}"))?;
+    soniox_log!("Session configuration sent; ready for audio.");
 
     Ok(websocket)
+}
+
+async fn connect_ipv4(host: &str, port: u16) -> Result<TcpStream, String> {
+    let resolved = lookup_host((host, port))
+        .await
+        .map_err(|error| format!("Could not resolve Soniox IPv4 addresses: {error}"))?;
+    let addresses = ipv4_addresses(resolved);
+    soniox_log!(
+        "DNS returned {} usable IPv4 address(es).",
+        addresses.len()
+    );
+
+    if addresses.is_empty() {
+        return Err("Soniox did not resolve to an IPv4 address.".to_string());
+    }
+
+    let mut last_error = None;
+    for (index, address) in addresses.into_iter().enumerate() {
+        soniox_log!("Trying IPv4 endpoint {}.", index + 1);
+        match TcpStream::connect(address).await {
+            Ok(socket) => return Ok(socket),
+            Err(error) => {
+                soniox_log!("IPv4 endpoint {} failed: {error}", index + 1);
+                last_error = Some(error);
+            }
+        }
+    }
+
+    Err(format!(
+        "Could not connect to Soniox over IPv4: {}",
+        last_error.expect("at least one IPv4 connection was attempted")
+    ))
+}
+
+fn ipv4_addresses(addresses: impl IntoIterator<Item = SocketAddr>) -> Vec<SocketAddr> {
+    addresses.into_iter().filter(SocketAddr::is_ipv4).collect()
 }
 
 fn fail_queued_finishes(mut command_rx: UnboundedReceiver<SonioxCommand>, message: String) {
@@ -215,17 +277,7 @@ async fn run_soniox_session(
                                 return;
                             }
                         }
-
-                        if let Err(error) = websocket
-                            .send(Message::Text(r#"{"type":"finalize"}"#.into()))
-                            .await
-                        {
-                            let message =
-                                format!("Could not finalize Soniox stream: {error}");
-                            record_stream_error(&stream_error, &message);
-                            respond(&mut finish_tx, Err(message));
-                            return;
-                        }
+                        soniox_log!("Buffered audio flushed.");
 
                         if let Err(error) = websocket.send(Message::Text("".into())).await {
                             let message =
@@ -234,8 +286,10 @@ async fn run_soniox_session(
                             respond(&mut finish_tx, Err(message));
                             return;
                         }
+                        soniox_log!("End-of-stream message sent.");
                     }
                     SonioxCommand::Cancel => {
+                        soniox_log!("Cancelling WebSocket session.");
                         let _ = websocket.close(None).await;
                         break;
                     }
@@ -254,9 +308,11 @@ async fn run_soniox_session(
                     Some(Ok(Message::Text(text))) => {
                         match handle_soniox_text_response(text.as_str(), &mut final_text) {
                             Ok(outcome) => {
+                                soniox_log!("Response received: finished={}.", outcome.finished);
                                 if !outcome.finished {
                                     let _ = partial_tx.send(outcome.partial_update);
                                 } else {
+                                    soniox_log!("Final response received.");
                                     respond(
                                         &mut finish_tx,
                                         Ok(TranscriptResult {
@@ -275,6 +331,7 @@ async fn run_soniox_session(
                         }
                     }
                     Some(Ok(Message::Close(_))) | None => {
+                        soniox_log!("WebSocket closed by provider.");
                         respond(
                             &mut finish_tx,
                             Ok(TranscriptResult {
@@ -303,7 +360,7 @@ async fn run_soniox_session(
 }
 
 fn record_stream_error(stream_error: &SharedErrorSlot, message: &str) {
-    eprintln!("QuickText Soniox session error: {message}");
+    soniox_log!("Session error: {message}");
 
     if let Ok(mut slot) = stream_error.lock() {
         *slot = Some(message.to_string());
@@ -447,6 +504,23 @@ mod tests {
             channels: 1,
             encoding: AudioEncoding::I16,
         }
+    }
+
+    #[test]
+    fn soniox_connection_keeps_only_ipv4_addresses() {
+        let addresses = [
+            "[2606:4700::6812:16bf]:443".parse().unwrap(),
+            "104.18.23.191:443".parse().unwrap(),
+            "104.18.22.191:443".parse().unwrap(),
+        ];
+
+        assert_eq!(
+            ipv4_addresses(addresses),
+            vec![
+                "104.18.23.191:443".parse().unwrap(),
+                "104.18.22.191:443".parse().unwrap(),
+            ]
+        );
     }
 
     #[test]

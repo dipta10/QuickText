@@ -30,7 +30,7 @@ use crate::{
 };
 
 const DEEPGRAM_ENDPOINT: &str = "wss://api.deepgram.com/v1/listen";
-const FINALIZATION_TIMEOUT_SECONDS: u64 = 12;
+const FINALIZATION_TIMEOUT_SECONDS: u64 = 5;
 const KEEPALIVE_INTERVAL_SECONDS: u64 = 5;
 
 type DeepgramSocket =

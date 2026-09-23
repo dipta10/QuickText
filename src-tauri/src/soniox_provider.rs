@@ -23,7 +23,7 @@ use crate::{
 
 const SONIOX_WEBSOCKET_URL: &str = "wss://stt-rt.soniox.com/transcribe-websocket";
 const SONIOX_MODEL: &str = "stt-rt-v5";
-const FINALIZATION_TIMEOUT_SECONDS: u64 = 12;
+const FINALIZATION_TIMEOUT_SECONDS: u64 = 5;
 
 // Stream-boundary control tokens Soniox emits as regular final tokens
 // ("<end>" on endpoint detection, "<fin>" after manual finalization).

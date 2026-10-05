@@ -14,6 +14,7 @@ Reviewed `codex/deepgram-stt-plan` from committed baseline `8c6da57` against `or
 - Invalid persisted provider selection silently retained the Soniox default. An unreadable or unknown saved selection now blocks capture until the user explicitly saves a provider; missing settings still default to Soniox.
 - Missing credentials could route to Settings while leaving the named provider's credential section hidden. Frontend selection now follows the backend's missing-key provider. Provider selection errors appear next to the selector, and completed form saves respect current recording state when re-enabling controls.
 - Delayed command replies and backend events could rewind the UI to an older session or an earlier recording phase. Frontend state now rejects stale snapshots while allowing a completed transcript to remain available after a paste failure.
+- A new recording reply received before its starting event could retain the previous transcript, draft text, or recording clock. Session changes now reset those values independently of the first observed phase; repeated snapshots within the same session preserve live text and its clock.
 - Language picker controls could remain enabled when capture started. Each render now updates their disabled state, closes the picker during capture, and blocks summary activation while controls are unavailable.
 - The periodic Deepgram idle check could postpone the first keepalive to the service timeout boundary. Keepalives now use a three-second deadline measured from the latest successful audio or keepalive send.
 - README and relevant plans now describe provider choice, current task ownership, buffering, and shared terminology. The terms editor remains exact user input; the provider list removes exact duplicates in first occurrence order.
@@ -22,7 +23,7 @@ Reviewed `codex/deepgram-stt-plan` from committed baseline `8c6da57` against `or
 
 All checks passed on the local Linux host:
 
-- `npm test`: 18 tests passed.
+- `npm test`: 22 tests passed.
 - `npm run build`: TypeScript and production Vite build passed.
 - `cargo test --manifest-path src-tauri/Cargo.toml --locked`: 96 tests passed; two live-provider tests ignored.
 - `cargo check --manifest-path src-tauri/Cargo.toml --locked`: passed.

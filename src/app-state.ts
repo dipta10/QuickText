@@ -151,7 +151,9 @@ const recordingStartedAt = (
   snapshot: BackendAppSnapshot,
 ): number | null => {
   if (snapshot.status === "recording") {
-    return state.recordingStartedAt ?? Date.now();
+    return snapshot.sessionId === state.activeSessionId
+      ? state.recordingStartedAt ?? Date.now()
+      : Date.now();
   }
 
   return null;
@@ -185,8 +187,9 @@ export const applyBackendSnapshot = (
   }
 
   const isMissingApiKey = snapshot.error?.type === "missing_api_key";
+  const sessionChanged = snapshot.sessionId !== state.activeSessionId;
   const shouldClearTranscript =
-    snapshot.status === "starting" || snapshot.status === "error";
+    sessionChanged || snapshot.status === "starting" || snapshot.status === "error";
   const shouldShowCapture =
     snapshot.status !== "idle" && snapshot.status !== "error";
 
@@ -207,7 +210,7 @@ export const applyBackendSnapshot = (
       snapshot.transcript?.text ??
       (shouldClearTranscript ? "" : state.transcript),
     partialTranscript:
-      snapshot.status === "recording" ? state.partialTranscript : "",
+      snapshot.status === "recording" && !sessionChanged ? state.partialTranscript : "",
     recordingStartedAt: recordingStartedAt(state, snapshot),
     providerApiKeyStatus: isMissingApiKey
       ? {

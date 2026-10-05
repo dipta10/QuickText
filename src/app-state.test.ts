@@ -79,6 +79,58 @@ describe("recording-session transcript lifecycle", () => {
     expect(state.partialTranscript).toBe("");
   });
 
+  it.each(["recording", "stopping"] as const)(
+    "clears the previous transcript when a new %s reply precedes starting",
+    (status) => {
+      const completed = applyBackendSnapshot(
+        createAppState("", 300, false, false, false, false, false, "", false, false),
+        {
+          ...snapshot("transcribed", null, 1),
+          transcript: { text: "previous dictation", provider: "deepgram" },
+        },
+      );
+      const next = applyBackendSnapshot(completed, snapshot(status, null, 2));
+      expect(next.transcript).toBe("");
+      expect(next.partialTranscript).toBe("");
+      expect(applyBackendSnapshot(next, snapshot("starting", null, 2))).toBe(next);
+    },
+  );
+
+  it("resets live text and the clock when recording from a newer session arrives first", () => {
+    let previous = applyBackendSnapshot(
+      createAppState("", 300, false, false, false, true, true, "", false, false),
+      snapshot("recording", null, 1),
+    );
+    previous = applyPartialTranscript(previous, {
+      recordingSessionId: 1,
+      providerSessionId: 1,
+      finalText: "previous live text",
+      partialText: "previous draft",
+    });
+    previous = { ...previous, recordingStartedAt: 1 };
+    const next = applyBackendSnapshot(previous, snapshot("recording", null, 2));
+    expect(next.transcript).toBe("");
+    expect(next.partialTranscript).toBe("");
+    expect(next.recordingStartedAt).toBeGreaterThan(1);
+  });
+
+  it("preserves current live text and the clock on a repeated recording snapshot", () => {
+    let current = applyBackendSnapshot(
+      createAppState("", 300, false, false, false, true, true, "", false, false),
+      snapshot("recording", null, 1),
+    );
+    current = applyPartialTranscript(current, {
+      recordingSessionId: 1,
+      providerSessionId: 1,
+      finalText: "current live text",
+      partialText: "current draft",
+    });
+    const next = applyBackendSnapshot(current, snapshot("recording", null, 1));
+    expect(next.transcript).toBe("current live text");
+    expect(next.partialTranscript).toBe("current draft");
+    expect(next.recordingStartedAt).toBe(current.recordingStartedAt);
+  });
+
   it("ignores delayed transcript updates from an older recording", () => {
     let state = createAppState(
       "",

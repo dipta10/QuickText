@@ -22,6 +22,13 @@ impl ProviderId {
             Self::Deepgram => "deepgram",
         }
     }
+
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::Soniox => "Soniox",
+            Self::Deepgram => "Deepgram",
+        }
+    }
 }
 
 impl FromStr for ProviderId {
@@ -81,6 +88,7 @@ mod tests {
         ] {
             assert_eq!(ProviderId::from_str(value), Ok(provider));
             assert_eq!(provider.as_str(), value);
+            assert_eq!(provider.display_name().to_ascii_lowercase(), value);
         }
 
         assert!(ProviderId::from_str("other").is_err());

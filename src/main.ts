@@ -109,6 +109,7 @@ let languageSearch = "";
 let languagePreferencesSaving = false;
 let transcriptionDescriptionSaving = false;
 let transcriptionTermsSaving = false;
+let providerSelectionSaving = false;
 
 const formatElapsedTime = (startedAt: number | null): string => {
   if (!startedAt) {
@@ -285,7 +286,8 @@ const render = () => {
   view.shortcutFocusOnStartCheckbox.checked = state.shortcutFocusOnStart;
   view.shortcutHideOnStopCheckbox.checked = state.shortcutHideOnStop;
   view.providerSelect.value = state.activeProvider;
-  view.providerSelect.disabled = providerControlsDisabled;
+  view.providerSelect.disabled =
+    providerControlsDisabled || providerSelectionSaving;
   view.sonioxSection.hidden = state.activeProvider !== "soniox";
   view.deepgramSection.hidden = state.activeProvider !== "deepgram";
   view.sonioxSection.classList.toggle(
@@ -465,7 +467,12 @@ const loadTranscriptionSettings = async () => {
 };
 
 const updateActiveProvider = async (provider: ProviderId) => {
+  if (providerSelectionSaving) {
+    return;
+  }
+
   const previous = state.activeProvider;
+  providerSelectionSaving = true;
   updateState(setActiveProvider(state, provider));
   try {
     const saved = await setActiveProviderBackend(provider);
@@ -477,6 +484,9 @@ const updateActiveProvider = async (provider: ProviderId) => {
         error instanceof Error ? error.message : String(error),
       ),
     );
+  } finally {
+    providerSelectionSaving = false;
+    render();
   }
 };
 

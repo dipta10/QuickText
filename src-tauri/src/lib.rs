@@ -501,11 +501,15 @@ fn schedule_max_recording_duration(
 async fn fail_recording_when_provider_unreachable(
     app: tauri::AppHandle,
     session_id: u64,
+    provider: ProviderId,
     provider_ready_rx: tokio::sync::oneshot::Receiver<Result<(), String>>,
 ) {
-    let outcome = provider_ready_rx
-        .await
-        .unwrap_or_else(|_| Err("The Soniox connection ended unexpectedly.".to_string()));
+    let outcome = provider_ready_rx.await.unwrap_or_else(|_| {
+        Err(format!(
+            "The {} connection ended unexpectedly.",
+            provider.display_name()
+        ))
+    });
     if outcome.is_ok() {
         return;
     }
@@ -547,13 +551,12 @@ fn paste_failed_error(message: String) -> AppError {
 }
 
 fn missing_api_key_error(provider: ProviderId) -> AppError {
-    let provider_name = match provider {
-        ProviderId::Soniox => "Soniox",
-        ProviderId::Deepgram => "Deepgram",
-    };
     AppError::MissingApiKey {
         provider: provider.as_str().to_string(),
-        message: format!("Add your {provider_name} API key before recording."),
+        message: format!(
+            "Add your {} API key before recording.",
+            provider.display_name()
+        ),
     }
 }
 
@@ -662,16 +665,16 @@ fn sanitize_api_key(api_key: &str) -> String {
 
 fn validate_api_key(provider: ProviderId, api_key: String) -> Result<String, String> {
     let api_key = sanitize_api_key(&api_key);
-    let provider_name = match provider {
-        ProviderId::Soniox => "Soniox",
-        ProviderId::Deepgram => "Deepgram",
-    };
     if api_key.is_empty() {
-        return Err(format!("Enter a {provider_name} API key first."));
+        return Err(format!(
+            "Enter a {} API key first.",
+            provider.display_name()
+        ));
     }
     if api_key.chars().count() > MAX_API_KEY_CHARACTERS {
         return Err(format!(
-            "{provider_name} API keys must be {MAX_API_KEY_CHARACTERS} characters or fewer."
+            "{} API keys must be {MAX_API_KEY_CHARACTERS} characters or fewer.",
+            provider.display_name()
         ));
     }
     Ok(api_key)
@@ -1033,6 +1036,7 @@ pub(crate) async fn toggle_recording_for_app(
                     tauri::async_runtime::spawn(fail_recording_when_provider_unreachable(
                         app.clone(),
                         session_id,
+                        active_provider,
                         provider_ready_rx,
                     ));
                 }
@@ -1232,7 +1236,7 @@ async fn stop_transcription_session(
 
     match active_session {
         Some(session) => session.stop().await,
-        None => Err("No active Soniox transcription session was found.".to_string()),
+        None => Err("No active transcription session was found.".to_string()),
     }
 }
 

@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    net::SocketAddr,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -11,8 +12,9 @@ use tokio::sync::{
     mpsc::{self, UnboundedReceiver, UnboundedSender},
     oneshot,
 };
+use tokio::{net::lookup_host, net::TcpStream};
 use tokio_tungstenite::{
-    connect_async,
+    client_async_tls,
     tungstenite::{
         client::IntoClientRequest,
         http::{header::AUTHORIZATION, HeaderValue},
@@ -30,12 +32,25 @@ use crate::{
 };
 
 const DEEPGRAM_ENDPOINT: &str = "wss://api.deepgram.com/v1/listen";
+const DEEPGRAM_HOST: &str = "api.deepgram.com";
+const DEEPGRAM_PORT: u16 = 443;
 const FINALIZATION_TIMEOUT_SECONDS: u64 = 5;
 const KEEPALIVE_INTERVAL_SECONDS: u64 = 5;
 
 type DeepgramSocket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 type SharedError = Arc<Mutex<Option<String>>>;
+
+struct DeepgramSessionTask {
+    url: String,
+    api_key: String,
+    audio_format: AudioFormat,
+    audio_rx: UnboundedReceiver<Vec<u8>>,
+    command_rx: UnboundedReceiver<DeepgramCommand>,
+    partial_tx: UnboundedSender<PartialTranscript>,
+    stream_error: SharedError,
+    ready_tx: oneshot::Sender<Result<(), String>>,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 enum ResponseOutcome {
@@ -114,16 +129,16 @@ impl DeepgramSession {
         let stream_error = Arc::new(Mutex::new(None));
         let task_error = Arc::clone(&stream_error);
 
-        tauri::async_runtime::spawn(run_configured_session(
+        tauri::async_runtime::spawn(run_configured_session(DeepgramSessionTask {
             url,
-            options.api_key,
-            options.audio_format,
+            api_key: options.api_key,
+            audio_format: options.audio_format,
             audio_rx,
             command_rx,
             partial_tx,
-            task_error,
+            stream_error: task_error,
             ready_tx,
-        ));
+        }));
 
         Ok(Self {
             audio_tx,
@@ -236,22 +251,52 @@ async fn connect(url: &str, api_key: &str) -> Result<DeepgramSocket, String> {
         .map_err(|_| "Deepgram API key contains invalid header characters.".to_string())?;
     request.headers_mut().insert(AUTHORIZATION, authorization);
 
-    connect_async(request)
+    let socket = connect_ipv4(DEEPGRAM_HOST, DEEPGRAM_PORT).await?;
+
+    client_async_tls(request, socket)
         .await
         .map(|(socket, _)| socket)
         .map_err(|error| format!("Could not connect to Deepgram: {error}"))
 }
 
-async fn run_configured_session(
-    url: String,
-    api_key: String,
-    audio_format: AudioFormat,
-    audio_rx: UnboundedReceiver<Vec<u8>>,
-    command_rx: UnboundedReceiver<DeepgramCommand>,
-    partial_tx: UnboundedSender<PartialTranscript>,
-    stream_error: SharedError,
-    ready_tx: oneshot::Sender<Result<(), String>>,
-) {
+async fn connect_ipv4(host: &str, port: u16) -> Result<TcpStream, String> {
+    let resolved = lookup_host((host, port))
+        .await
+        .map_err(|error| format!("Could not resolve Deepgram IPv4 addresses: {error}"))?;
+    let addresses = ipv4_addresses(resolved);
+    if addresses.is_empty() {
+        return Err("Deepgram did not resolve to an IPv4 address.".to_string());
+    }
+
+    let mut last_error = None;
+    for address in addresses {
+        match TcpStream::connect(address).await {
+            Ok(socket) => return Ok(socket),
+            Err(error) => last_error = Some(error),
+        }
+    }
+
+    Err(format!(
+        "Could not connect to Deepgram over IPv4: {}",
+        last_error.expect("at least one IPv4 connection was attempted")
+    ))
+}
+
+fn ipv4_addresses(addresses: impl IntoIterator<Item = SocketAddr>) -> Vec<SocketAddr> {
+    addresses.into_iter().filter(SocketAddr::is_ipv4).collect()
+}
+
+async fn run_configured_session(task: DeepgramSessionTask) {
+    let DeepgramSessionTask {
+        url,
+        api_key,
+        audio_format,
+        audio_rx,
+        command_rx,
+        partial_tx,
+        stream_error,
+        ready_tx,
+    } = task;
     match connect(&url, &api_key).await {
         Ok(socket) => {
             let _ = ready_tx.send(Ok(()));
@@ -570,6 +615,23 @@ mod tests {
         assert_eq!(
             normalize_audio(vec![0, 0, 0, 128, 255, 255], &format),
             vec![0, 128, 0, 0, 255, 127]
+        );
+    }
+
+    #[test]
+    fn deepgram_connection_keeps_only_ipv4_addresses() {
+        let addresses = [
+            "[2606:4700::6812:16bf]:443".parse().unwrap(),
+            "104.18.23.191:443".parse().unwrap(),
+            "104.18.22.191:443".parse().unwrap(),
+        ];
+
+        assert_eq!(
+            ipv4_addresses(addresses),
+            vec![
+                "104.18.23.191:443".parse().unwrap(),
+                "104.18.22.191:443".parse().unwrap(),
+            ]
         );
     }
 

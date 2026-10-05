@@ -284,7 +284,6 @@ const render = () => {
     isRecording(state) ? "Stop recording" : "Start recording",
   );
   view.recordButton.disabled = !canToggleRecording(state) || providerSelectionSaving;
-  view.recordStatus.textContent = statusLabel();
   view.providerLabel.textContent = state.providerSelectionStatus === "ready"
     ? `Provider: ${providerName}`
     : "Choose a provider in Settings";

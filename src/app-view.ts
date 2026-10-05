@@ -4,7 +4,6 @@ export type AppView = {
   captureView: HTMLElement;
   settingsView: HTMLElement;
   recordButton: HTMLButtonElement;
-  recordStatus: HTMLParagraphElement;
   providerLabel: HTMLSpanElement;
   deviceNotice: HTMLParagraphElement;
   recordingTimer: HTMLSpanElement;
@@ -77,12 +76,11 @@ const appTemplate = `
     <main class="main-content">
       <section class="capture-view" aria-label="Capture">
         <div class="recording-controls">
+          <span class="provider-label">Provider: Soniox</span>
           <button class="record-button" type="button" aria-label="Start recording">
             Record
           </button>
           <div class="recording-meta">
-            <p class="record-status">Ready</p>
-            <span class="provider-label">Provider: Soniox</span>
             <span class="recording-timer">00:00</span>
             <span class="activity-indicator" aria-hidden="true"></span>
           </div>
@@ -383,8 +381,6 @@ export const createAppView = (root: HTMLElement): AppView => {
   const settingsView = root.querySelector<HTMLElement>(".settings-view");
   const recordButton =
     root.querySelector<HTMLButtonElement>(".record-button");
-  const recordStatus =
-    root.querySelector<HTMLParagraphElement>(".record-status");
   const providerLabel =
     root.querySelector<HTMLSpanElement>(".provider-label");
   const deviceNotice =
@@ -530,7 +526,6 @@ export const createAppView = (root: HTMLElement): AppView => {
     !captureView ||
     !settingsView ||
     !recordButton ||
-    !recordStatus ||
     !providerLabel ||
     !deviceNotice ||
     !recordingTimer ||
@@ -596,7 +591,6 @@ export const createAppView = (root: HTMLElement): AppView => {
     captureView,
     settingsView,
     recordButton,
-    recordStatus,
     providerLabel,
     deviceNotice,
     recordingTimer,

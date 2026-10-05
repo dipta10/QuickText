@@ -113,6 +113,9 @@ export const isRecording = (state: AppState) => state.recording === "recording";
 export const isBusy = (state: AppState) =>
   state.recording === "starting" || state.recording === "stopping";
 
+export const canChangeProvider = (state: AppState) =>
+  !isBusy(state) && !isRecording(state);
+
 export const canToggleRecording = (state: AppState) =>
   !isBusy(state) && (isRecording(state) || state.providerSelectionStatus === "ready");
 

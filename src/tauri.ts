@@ -202,7 +202,7 @@ export const copyTextToClipboard = async (text: string) => {
   await writeText(text);
 };
 
-export const onAppStateChanged = (
+export const onAppStateChanged = async (
   handler: (snapshot: BackendAppSnapshot) => void,
 ) => {
   assertTauriRuntime();
@@ -211,7 +211,7 @@ export const onAppStateChanged = (
   });
 };
 
-export const onPartialTranscript = (
+export const onPartialTranscript = async (
   handler: (update: PartialTranscriptUpdate) => void,
 ) => {
   assertTauriRuntime();
@@ -220,7 +220,7 @@ export const onPartialTranscript = (
   });
 };
 
-export const onDeviceFallback = (handler: (message: string) => void) => {
+export const onDeviceFallback = async (handler: (message: string) => void) => {
   assertTauriRuntime();
   return listen<string>(deviceFallbackEvent, (event) => {
     handler(event.payload);

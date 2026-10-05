@@ -13,6 +13,8 @@ Reviewed `codex/deepgram-stt-plan` from committed baseline `8c6da57` against `or
 - Provider selection and terms files were overwritten directly. Saves now serialize first, write a separate file, and replace the destination atomically. Provider selection becomes authoritative in memory only after its disk save succeeds.
 - Invalid persisted provider selection silently retained the Soniox default. An unreadable or unknown saved selection now blocks capture until the user explicitly saves a provider; missing settings still default to Soniox.
 - The frontend displayed Soniox as selected when provider settings failed to load, making an explicit Soniox selection unable to fire a change event. Loading and invalid selections now show an unselected provider prompt. Capture remains disabled until a selection is confirmed, and Stop remains available during an existing recording.
+- Provider event subscription wrappers could throw synchronously and abort frontend initialization before settings loaded. They now reject asynchronously through the existing error handlers. The idle provider picker remains available during loading so a pending read cannot lock it.
+- Native dropdowns could draw a light system background under white app text. Provider and microphone dropdowns now declare a light surface and dark text explicitly. Author CSS also now respects hidden elements so inactive provider sections stay out of view.
 - Missing credentials could route to Settings while leaving the named provider's credential section hidden. Frontend selection now follows the backend's missing-key provider. Provider selection errors appear next to the selector, and completed form saves respect current recording state when re-enabling controls.
 - Delayed command replies and backend events could rewind the UI to an older session or an earlier recording phase. Frontend state now rejects stale snapshots while allowing a completed transcript to remain available after a paste failure.
 - A new recording reply received before its starting event could retain the previous transcript, draft text, or recording clock. Session changes now reset those values independently of the first observed phase; repeated snapshots within the same session preserve live text and its clock.
@@ -24,12 +26,13 @@ Reviewed `codex/deepgram-stt-plan` from committed baseline `8c6da57` against `or
 
 All checks passed on the local Linux host:
 
-- `npm test`: 26 tests passed.
+- `npm test`: 37 tests passed.
 - `npm run build`: TypeScript and production Vite build passed.
 - `cargo test --manifest-path src-tauri/Cargo.toml --locked`: 96 tests passed; two live-provider tests ignored.
 - `cargo check --manifest-path src-tauri/Cargo.toml --locked`: passed.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: passed.
 - `git diff --check`: passed.
+- Browser preview: reproduced the initialization failure before the fix; verified recovery afterward. With a temporary Tauri test fixture, verified choosing either provider while the initial settings read was pending, ignoring the stale read after selection, section visibility, and readable dropdown foreground/background colors. The fixture was removed after verification.
 
 New offline tests exercise real WebSocket framing over in-memory duplex transports: ordered audio draining, trailing final results, metadata followed by graceful close, abnormal close, missing completion metadata, cancellation without finalization, blocked-drain timeout, premature Soniox close, error-content exclusion, task cancellation, settings replacement, invalid-provider recovery, and frontend credential/session isolation, stale snapshot ordering, and exact idle keepalive timing with audio resetting the deadline.
 

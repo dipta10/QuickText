@@ -2,6 +2,7 @@ import "./styles.css";
 import {
   cancelShortcutCapture,
   canToggleRecording,
+  canChangeProvider,
   createAppState,
   applyBackendSnapshot,
   applyPartialTranscript,
@@ -265,7 +266,7 @@ const renderLanguagePicker = () => {
 
 const render = () => {
   const isSettings = state.activeView === "settings";
-  const providerControlsDisabled = isBusy(state) || isRecording(state);
+  const providerControlsDisabled = !canChangeProvider(state);
   const providerName = state.activeProvider === "soniox" ? "Soniox" : "Deepgram";
   view.captureView.hidden = isSettings;
   view.settingsView.hidden = !isSettings;
@@ -308,7 +309,7 @@ const render = () => {
     ? state.activeProvider
     : "";
   view.providerSelect.disabled =
-    providerControlsDisabled || providerSelectionSaving || state.providerSelectionStatus === "loading";
+    providerControlsDisabled || providerSelectionSaving;
   view.sonioxSection.hidden = state.providerSelectionStatus !== "ready" || state.activeProvider !== "soniox";
   view.deepgramSection.hidden = state.providerSelectionStatus !== "ready" || state.activeProvider !== "deepgram";
   view.sonioxSection.classList.toggle(

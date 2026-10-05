@@ -172,6 +172,10 @@ button {
   align-content: start;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .capture-view[hidden],
 .settings-view[hidden],
 .activity-indicator[hidden] {
@@ -407,6 +411,16 @@ button {
 
 .provider-select {
   max-width: 100%;
+}
+
+/* Native dropdowns can use a light system surface even in the dark app. */
+.provider-select,
+.input-device-select,
+.provider-select option,
+.input-device-select option {
+  color-scheme: light;
+  background-color: #f5f7fa;
+  color: #18212f;
 }
 
 .api-key-input::placeholder,

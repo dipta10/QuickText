@@ -4,6 +4,7 @@ import {
   applyBackendSnapshot,
   applyPartialTranscript,
   canToggleRecording,
+  canChangeProvider,
   createAppState,
   type BackendAppSnapshot,
   setActiveProvider,
@@ -288,4 +289,28 @@ describe("provider selection recovery", () => {
     expect(canToggleRecording(setProviderSelectionStatus(state, "error"))).toBe(true);
     expect(canToggleRecording(applyBackendSnapshot(state, snapshot("stopping", null, 1)))).toBe(false);
   });
+});
+
+describe("provider picker availability", () => {
+  it.each(["loading", "ready", "error"] as const)(
+    "allows choosing a provider while idle and selection is %s",
+    (status) => {
+      const state = setProviderSelectionStatus(
+        createAppState("", 300, false, false, false, true, true, "", false, false),
+        status,
+      );
+      expect(canChangeProvider(state)).toBe(true);
+    },
+  );
+
+  it.each(["starting", "recording", "stopping"] as const)(
+    "prevents provider changes while capture is %s",
+    (status) => {
+      const state = applyBackendSnapshot(
+        createAppState("", 300, false, false, false, true, true, "", false, false),
+        snapshot(status, null, 1),
+      );
+      expect(canChangeProvider(state)).toBe(false);
+    },
+  );
 });

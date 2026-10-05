@@ -18,8 +18,8 @@ use crate::{
     app_controller::TranscriptResult,
     audio_recorder::{AudioEncoding, AudioFormat},
     transcription::{
-        PartialTranscript, ProviderId, TranscriptionOptions, TranscriptionProvider,
-        TranscriptionSession,
+        connect_with_timeout, transport_error, PartialTranscript, ProviderId, ProviderTask,
+        TranscriptionOptions, TranscriptionProvider, TranscriptionSession,
     },
 };
 
@@ -61,6 +61,8 @@ pub struct SonioxSession {
     partial_rx: Option<mpsc::UnboundedReceiver<PartialTranscript>>,
     ready_rx: Option<oneshot::Receiver<Result<(), String>>>,
     stream_error: SharedErrorSlot,
+    failure_rx: Option<oneshot::Receiver<String>>,
+    _task: ProviderTask,
 }
 
 impl SonioxSession {
@@ -75,6 +77,7 @@ impl SonioxSession {
         let (command_tx, command_rx) = mpsc::unbounded_channel();
         let (partial_tx, partial_rx) = mpsc::unbounded_channel();
         let (ready_tx, ready_rx) = oneshot::channel();
+        let (failure_tx, failure_rx) = oneshot::channel();
         let stream_error: SharedErrorSlot = Arc::new(Mutex::new(None));
 
         let config_message = soniox_config_message(
@@ -85,20 +88,29 @@ impl SonioxSession {
             &terms,
         );
 
-        tauri::async_runtime::spawn(run_configured_session(
-            config_message,
-            audio_rx,
-            command_rx,
-            partial_tx,
-            Arc::clone(&stream_error),
-            ready_tx,
-        ));
+        let task_error = Arc::clone(&stream_error);
+        let task = tauri::async_runtime::spawn(async move {
+            run_configured_session(
+                config_message,
+                audio_rx,
+                command_rx,
+                partial_tx,
+                Arc::clone(&task_error),
+                ready_tx,
+            )
+            .await;
+            if let Some(error) = stored_stream_error(&task_error) {
+                let _ = failure_tx.send(error);
+            }
+        });
 
         Self {
             audio_tx,
             command_tx,
             partial_rx: Some(partial_rx),
             ready_rx: Some(ready_rx),
+            failure_rx: Some(failure_rx),
+            _task: ProviderTask(Some(task)),
             stream_error,
         }
     }
@@ -166,6 +178,10 @@ impl TranscriptionSession for SonioxSession {
         SonioxSession::take_ready_receiver(self)
     }
 
+    fn take_failure_receiver(&mut self) -> Option<oneshot::Receiver<String>> {
+        self.failure_rx.take()
+    }
+
     fn stop(
         self: Box<Self>,
     ) -> crate::transcription::ProviderFuture<Result<TranscriptResult, String>> {
@@ -206,7 +222,7 @@ async fn run_configured_session(
     stream_error: SharedErrorSlot,
     ready_tx: oneshot::Sender<Result<(), String>>,
 ) {
-    match connect_and_configure(&config_message).await {
+    match connect_with_timeout(ProviderId::Soniox, connect_and_configure(&config_message)).await {
         Ok(websocket) => {
             let _ = ready_tx.send(Ok(()));
             run_soniox_session(websocket, audio_rx, command_rx, partial_tx, stream_error).await;
@@ -225,13 +241,13 @@ async fn connect_and_configure(config_message: &str) -> Result<SonioxWebsocket, 
     soniox_log!("IPv4 TCP connection established; starting WebSocket handshake.");
     let (mut websocket, _) = client_async_tls(SONIOX_WEBSOCKET_URL, socket)
         .await
-        .map_err(|error| format!("Could not connect to Soniox: {error}"))?;
+        .map_err(|error| transport_error(ProviderId::Soniox, &error))?;
     soniox_log!("WebSocket handshake completed.");
 
     websocket
         .send(Message::Text(config_message.into()))
         .await
-        .map_err(|error| format!("Could not configure Soniox stream: {error}"))?;
+        .map_err(|error| transport_error(ProviderId::Soniox, &error))?;
     soniox_log!("Session configuration sent; ready for audio.");
 
     Ok(websocket)
@@ -278,13 +294,15 @@ fn fail_queued_finishes(mut command_rx: UnboundedReceiver<SonioxCommand>, messag
     }
 }
 
-async fn run_soniox_session(
-    mut websocket: SonioxWebsocket,
+async fn run_soniox_session<S>(
+    mut websocket: tokio_tungstenite::WebSocketStream<S>,
     mut audio_rx: mpsc::UnboundedReceiver<Vec<u8>>,
     mut command_rx: mpsc::UnboundedReceiver<SonioxCommand>,
     partial_tx: UnboundedSender<PartialTranscript>,
     stream_error: SharedErrorSlot,
-) {
+) where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
     let mut final_text = String::new();
     let mut finish_tx: Option<oneshot::Sender<Result<TranscriptResult, String>>> = None;
 
@@ -311,7 +329,7 @@ async fn run_soniox_session(
                                 websocket.send(Message::Binary(audio.into())).await
                             {
                                 let message =
-                                    format!("Could not send audio to Soniox: {error}");
+                                    transport_error(ProviderId::Soniox, &error);
                                 record_stream_error(&stream_error, &message);
                                 respond(&mut finish_tx, Err(message));
                                 return;
@@ -321,7 +339,7 @@ async fn run_soniox_session(
 
                         if let Err(error) = websocket.send(Message::Text("".into())).await {
                             let message =
-                                format!("Could not finalize Soniox stream: {error}");
+                                transport_error(ProviderId::Soniox, &error);
                             record_stream_error(&stream_error, &message);
                             respond(&mut finish_tx, Err(message));
                             return;
@@ -337,7 +355,7 @@ async fn run_soniox_session(
             }
             Some(audio) = audio_rx.recv(), if finish_tx.is_none() => {
                 if let Err(error) = websocket.send(Message::Binary(audio.into())).await {
-                    let message = format!("Could not send audio to Soniox: {error}");
+                    let message = transport_error(ProviderId::Soniox, &error);
                     record_stream_error(&stream_error, &message);
                     respond(&mut finish_tx, Err(message));
                     break;
@@ -352,6 +370,10 @@ async fn run_soniox_session(
                                 if !outcome.finished {
                                     let _ = partial_tx.send(outcome.partial_update);
                                 } else {
+                                    if finish_tx.is_none() {
+                                        record_stream_error(&stream_error, "Soniox ended the transcription before recording stopped.");
+                                        break;
+                                    }
                                     soniox_log!("Final response received.");
                                     respond(
                                         &mut finish_tx,
@@ -372,13 +394,9 @@ async fn run_soniox_session(
                     }
                     Some(Ok(Message::Close(_))) | None => {
                         soniox_log!("WebSocket closed by provider.");
-                        respond(
-                            &mut finish_tx,
-                            Ok(TranscriptResult {
-                                text: final_text.trim().to_string(),
-                                provider: "soniox".to_string(),
-                            }),
-                        );
+                        let message = "Soniox stream closed before transcription completed.".to_string();
+                        record_stream_error(&stream_error, &message);
+                        respond(&mut finish_tx, Err(message));
                         break;
                     }
                     Some(Ok(Message::Ping(payload))) => {
@@ -388,7 +406,7 @@ async fn run_soniox_session(
                     | Some(Ok(Message::Pong(_)))
                     | Some(Ok(Message::Frame(_))) => {}
                     Some(Err(error)) => {
-                        let message = format!("Soniox stream failed: {error}");
+                        let message = transport_error(ProviderId::Soniox, &error);
                         record_stream_error(&stream_error, &message);
                         respond(&mut finish_tx, Err(message));
                         break;
@@ -430,11 +448,12 @@ fn handle_soniox_text_response(
     text: &str,
     final_text: &mut String,
 ) -> Result<TextResponseOutcome, String> {
-    let response: SonioxResponse = serde_json::from_str(text)
-        .map_err(|error| format!("Could not parse Soniox response: {error}"))?;
+    let response: SonioxResponse = serde_json::from_str(text).map_err(|_| {
+        "Soniox sent an invalid transcription response. Try recording again.".to_string()
+    })?;
 
-    if let Some(error_message) = response.error_message {
-        return Err(format!("Soniox provider error: {error_message}"));
+    if response.error_message.is_some() {
+        return Err("Soniox could not process the transcription stream. Check your API key and transcription settings.".to_string());
     }
 
     let mut partial_text = String::new();
@@ -719,6 +738,8 @@ mod tests {
             command_tx,
             partial_rx: None,
             ready_rx: None,
+            failure_rx: None,
+            _task: ProviderTask::default(),
             stream_error: Arc::new(Mutex::new(None)),
         };
 
@@ -802,7 +823,8 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error, "Soniox provider error: Bad audio");
+        assert!(!error.contains("Bad audio"));
+        assert!(error.contains("Check your API key and transcription settings"));
     }
 
     #[test]
@@ -842,5 +864,48 @@ mod tests {
         .unwrap();
 
         assert_eq!(final_text, "amén.");
+    }
+    #[tokio::test]
+    async fn premature_socket_close_is_not_a_successful_transcript() {
+        let (socket, mut server) = crate::transcription::mock_socket_pair().await;
+        let (audio_tx, audio_rx) = mpsc::unbounded_channel();
+        let (command_tx, command_rx) = mpsc::unbounded_channel();
+        let (partial_tx, _partial_rx) = mpsc::unbounded_channel();
+        let stream_error = Arc::new(Mutex::new(None));
+        let task = tokio::spawn(run_soniox_session(
+            socket,
+            audio_rx,
+            command_rx,
+            partial_tx,
+            stream_error,
+        ));
+        let (result_tx, result_rx) = oneshot::channel();
+        drop(audio_tx);
+        command_tx.send(SonioxCommand::Finish(result_tx)).unwrap();
+        assert_eq!(
+            server.next().await.unwrap().unwrap(),
+            Message::Text("".into())
+        );
+        server
+            .send(Message::Text(
+                r#"{"tokens":[{"text":"incomplete","is_final":true}]}"#.into(),
+            ))
+            .await
+            .unwrap();
+        server.close(None).await.unwrap();
+        assert!(result_rx
+            .await
+            .unwrap()
+            .unwrap_err()
+            .contains("before transcription completed"));
+        task.await.unwrap();
+    }
+    #[test]
+    fn malformed_responses_do_not_expose_payload_values() {
+        let error =
+            handle_soniox_text_response(r#"{"tokens":"private payload"}"#, &mut String::new())
+                .unwrap_err();
+        assert!(!error.contains("private payload"));
+        assert!(error.contains("invalid transcription response"));
     }
 }

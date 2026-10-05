@@ -5,6 +5,8 @@ import {
   applyPartialTranscript,
   createAppState,
   type BackendAppSnapshot,
+  setActiveProvider,
+  setProviderApiKeyPresence,
 } from "./app-state";
 
 const snapshot = (
@@ -126,9 +128,35 @@ describe("recording-session transcript lifecycle", () => {
     );
 
     expect(next.activeView).toBe("settings");
+    expect(next.activeProvider).toBe("deepgram");
     expect(next.providerApiKeyStatus.deepgram).toBe(
       "Add your Deepgram API key before recording.",
     );
     expect(next.providerApiKeyStatus.soniox).toBe("");
   });
+  it("keeps the two providers' credential status separate", () => {
+    let state = createAppState("", 300, false, false, false, true, true, "", false, false);
+    state = setProviderApiKeyPresence(state, "soniox", true, "Saved Soniox");
+    state = setProviderApiKeyPresence(state, "deepgram", true, "Saved Deepgram");
+    state = setProviderApiKeyPresence(state, "soniox", false, "Deleted Soniox");
+    state = setActiveProvider(state, "deepgram");
+    expect(state.providerApiKeyConfigured).toEqual({soniox: false, deepgram: true});
+    expect(state.providerApiKeyStatus.deepgram).toBe("Saved Deepgram");
+    expect(state.activeProvider).toBe("deepgram");
+  });
+
+  it.each(["starting", "stopping", "transcribed", "error", "idle"] as const)(
+    "ignores a partial update while %s",
+    (status) => {
+      const state = applyBackendSnapshot(
+        createAppState("", 300, false, false, false, true, true, "", false, false),
+        snapshot(status, null, 1),
+      );
+      expect(applyPartialTranscript(state, {
+        recordingSessionId: 1, providerSessionId: 1,
+        finalText: "late words", partialText: "draft",
+      })).toBe(state);
+    },
+  );
+
 });

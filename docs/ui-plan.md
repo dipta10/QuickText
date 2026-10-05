@@ -90,7 +90,7 @@ Settings rules:
 - Describe an empty language selection as Automatic detection and keep language selection available without an API key.
 - Keep settings controls visually quieter than the Capture record button.
 - Keep Description a plain multi-line text box with a 10,000-character maximum.
-- Keep Terms a plain multi-line text box with a 10,000-character maximum and explain that each line is one term. Do not add chips, presets, generated suggestions, sorting, or deduplication.
+- Keep Terms a plain multi-line text box with a 10,000-character maximum and explain that each line is one term. Do not add chips, presets, generated suggestions, sorting, or editor deduplication.
 - Use short labels and direct status text.
 - Keep diagnostics actions in Settings; Capture only shows a compact support reference alongside an error.
 - Before export confirmation, list the included categories: app/build/platform data, locale, timestamps, run/session/error IDs, trigger source, lifecycle/timing data, audio format/counts, fallback outcomes, and stable error categories/codes.
@@ -186,7 +186,7 @@ The Terms control also preserves its editor text and remains empty by default. A
 - Opening the app shows Capture, not settings.
 - Capture has one dominant record/stop action.
 - Settings contains keybind, provider selection, separate Soniox and Deepgram credential controls, and shared terms.
-- Settings contains Description and Terms textareas in the Soniox section and enforces a 10,000-character maximum on each.
+- Settings contains a Soniox Description textarea and a shared Terms textarea, with a 10,000-character maximum on each.
 - Description text persists exactly; an empty field supplies no context to a new recording.
 - Terms editor text persists exactly; each nonblank trimmed line becomes one term and an empty list supplies no terms.
 - Settings supports multiple transcription-language preferences and a clear return to Automatic detection.

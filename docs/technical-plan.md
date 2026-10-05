@@ -82,7 +82,7 @@ interface TranscriptionSession {
 
 Partial updates carry provider-agnostic text fields plus recording and provider session IDs. Token semantics and stream markers stay inside each provider client. The partial transcript decision is recorded in [ADR 0006](adrs/0006-streaming-partial-transcripts.md), and the multi-provider boundary is recorded in [ADR 0018](adrs/0018-multi-provider-deepgram-stt.md).
 
-Production code must complete this extraction before Deepgram is added: shared backend state currently owns `SonioxSession` directly despite the documented interface.
+Shared backend state owns an object-safe `TranscriptionSession`. The selected adapter owns connection, audio normalization, parsing, and completion. Each session owns its background task; cancellation, drop, and finalization timeout terminate that task even during a blocked connection or write. Readiness has a 10-second deadline, and terminal failures after readiness also notify the controller.
 
 ## Audio Strategy
 
@@ -113,7 +113,7 @@ Provider API keys are stored under separate accounts in the operating system's s
 
 The transcription description is a plain string with a 10,000-character maximum. Save and pass it through unchanged: do not trim it, generate defaults, parse terms, or derive structured context. A zero-length string means no context. Soniox's actual context limit is 8,000 tokens, so provider rejection remains possible for unusual text even within the character cap and should use the normal provider-error path. See [ADR 0018](adrs/0018-soniox-transcription-description.md).
 
-Transcription terms use a second plain multi-line string with a 10,000-character maximum. Preserve the editor text when saving; at session start, trim each line and omit blank lines to produce the provider-neutral term list. Do not generate, sort, or deduplicate terms. Soniox maps a non-empty list to `context.terms`. The description and terms share Soniox's total context allowance, and an oversized combined payload uses the normal provider-error path. See [ADR 0019](adrs/0019-soniox-transcription-terms.md).
+Transcription terms use a second plain multi-line string with a 10,000-character maximum. Preserve the editor text when saving; at session start, trim each line and omit blank lines to produce the provider-neutral term list. Do not generate or sort terms. The provider-neutral list removes exact duplicate entries while preserving first occurrence order; the saved editor text remains unchanged. Soniox maps a non-empty list to `context.terms`. The description and terms share Soniox's total context allowance, and an oversized combined payload uses the normal provider-error path. See [ADR 0019](adrs/0019-soniox-transcription-terms.md).
 
 Language preferences are non-secret backend-managed settings. The bundled
 Soniox catalog is available offline. At session start, selected ISO codes are

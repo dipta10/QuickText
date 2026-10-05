@@ -19,6 +19,7 @@ export type AppView = {
   shortcutFocusOnStartCheckbox: HTMLInputElement;
   shortcutHideOnStopCheckbox: HTMLInputElement;
   providerSelect: HTMLSelectElement;
+  providerStatus: HTMLParagraphElement;
   sonioxSection: HTMLElement;
   apiKeyInput: HTMLInputElement;
   apiKeySaveButton: HTMLButtonElement;
@@ -126,7 +127,7 @@ const appTemplate = `
               <option value="deepgram">Deepgram</option>
             </select>
           </label>
-          <p class="settings-note">
+          <p class="provider-status settings-note" role="status" aria-live="polite">
             Provider changes apply to the next recording.
           </p>
           <label class="settings-field" for="transcription-terms">
@@ -413,6 +414,7 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const providerSelect =
     root.querySelector<HTMLSelectElement>(".provider-select");
+  const providerStatus = root.querySelector<HTMLParagraphElement>(".provider-status");
   const sonioxSection = root.querySelector<HTMLElement>(".soniox-section");
   const apiKeyInput = root.querySelector<HTMLInputElement>(".api-key-input");
   const apiKeySaveButton = root.querySelector<HTMLButtonElement>(
@@ -542,6 +544,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     !shortcutFocusOnStartCheckbox ||
     !shortcutHideOnStopCheckbox ||
     !providerSelect ||
+    !providerStatus ||
     !sonioxSection ||
     !apiKeyInput ||
     !apiKeySaveButton ||
@@ -607,6 +610,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     shortcutFocusOnStartCheckbox,
     shortcutHideOnStopCheckbox,
     providerSelect,
+    providerStatus,
     sonioxSection,
     apiKeyInput,
     apiKeySaveButton,

@@ -16,6 +16,7 @@ mod ipc;
 mod ipc_server;
 mod language_preferences;
 mod paste_target;
+mod settings_file;
 mod soniox_provider;
 mod transcription;
 mod transcription_description;
@@ -503,6 +504,7 @@ async fn fail_recording_when_provider_unreachable(
     session_id: u64,
     provider: ProviderId,
     provider_ready_rx: tokio::sync::oneshot::Receiver<Result<(), String>>,
+    provider_failure_rx: Option<tokio::sync::oneshot::Receiver<String>>,
 ) {
     let outcome = provider_ready_rx.await.unwrap_or_else(|_| {
         Err(format!(
@@ -510,15 +512,25 @@ async fn fail_recording_when_provider_unreachable(
             provider.display_name()
         ))
     });
-    if outcome.is_ok() {
-        return;
-    }
+    let error_message = match outcome {
+        Err(error) => error,
+        Ok(()) => match provider_failure_rx {
+            Some(receiver) => match receiver.await {
+                Ok(error) => error,
+                Err(_) => return, // Normal completion or cancellation.
+            },
+            None => return,
+        },
+    };
 
     let controller = app.state::<AppControllerState>();
-    let still_recording = lock_controller(&controller)
-        .map(|controller| controller.is_recording_session(session_id))
-        .unwrap_or(false);
-    if !still_recording {
+    // Keep the session check, resource cleanup, and error transition together
+    // so a delayed failure cannot stop a newer recording.
+    let mut controller = match lock_controller(&controller) {
+        Ok(controller) => controller,
+        Err(_) => return,
+    };
+    if !controller.is_recording_session(session_id) {
         // The session was already stopped; the stop path surfaces the error.
         return;
     }
@@ -534,15 +546,9 @@ async fn fail_recording_when_provider_unreachable(
         session.cancel();
     }
 
-    let error_message = match outcome {
-        Ok(()) => return,
-        Err(error) => error,
-    };
     clear_pending_paste(&app);
-    let error_snapshot = match lock_controller(&controller) {
-        Ok(mut controller) => controller.fail_recording(provider_unavailable_error(error_message)),
-        Err(_) => return,
-    };
+    let error_snapshot = controller.fail_recording(provider_unavailable_error(error_message));
+    drop(controller);
     emit_app_snapshot(&app, &error_snapshot);
 }
 
@@ -743,6 +749,21 @@ fn get_transcription_settings(
     transcription_settings::snapshot(&settings)
 }
 
+fn lock_provider_settings<'a>(
+    controller: &'a State<'_, AppControllerState>,
+) -> Result<std::sync::MutexGuard<'a, AppController>, String> {
+    let controller = lock_controller(controller)?;
+    if matches!(
+        controller.snapshot().status,
+        AppStatus::Starting | AppStatus::Recording | AppStatus::Stopping
+    ) {
+        return Err(
+            "Stop the active recording before changing transcription settings.".to_string(),
+        );
+    }
+    Ok(controller)
+}
+
 #[tauri::command]
 fn set_active_provider(
     app: tauri::AppHandle,
@@ -751,22 +772,12 @@ fn set_active_provider(
     terms: State<'_, TranscriptionTermsState>,
     provider: ProviderId,
 ) -> Result<ProviderId, String> {
-    if matches!(
-        lock_controller(&controller)?.snapshot().status,
-        AppStatus::Starting | AppStatus::Recording | AppStatus::Stopping
-    ) {
-        return Err("Stop the active recording before changing providers.".to_string());
-    }
+    let _controller_guard = lock_provider_settings(&controller)?;
     if provider == ProviderId::Deepgram {
         deepgram_provider::validate_terms(&transcription_terms::terms(&terms)?)?;
     }
-    let previous = transcription_settings::active_provider(&settings)?;
-    transcription_settings::set_active_provider(&settings, provider)?;
-    if let Err(error) = transcription_settings::save(&app, provider) {
-        let _ = transcription_settings::set_active_provider(&settings, previous);
-        return Err(error);
-    }
-    Ok(provider)
+    transcription_settings::save(&app, provider)?;
+    transcription_settings::set_active_provider(&settings, provider)
 }
 
 #[tauri::command]
@@ -791,9 +802,11 @@ fn get_transcription_description(
 #[tauri::command]
 fn set_transcription_description(
     app: tauri::AppHandle,
+    controller: State<'_, AppControllerState>,
     state: State<'_, TranscriptionDescriptionState>,
     description: String,
 ) -> Result<String, String> {
+    let _controller_guard = lock_provider_settings(&controller)?;
     let previous_description = transcription_description::description(&state)?;
     let description = transcription_description::set_description(&state, description)?;
     if let Err(error) = transcription_description::save(&app, &description) {
@@ -811,10 +824,12 @@ fn get_transcription_terms(terms: State<'_, TranscriptionTermsState>) -> Result<
 #[tauri::command]
 fn set_transcription_terms(
     app: tauri::AppHandle,
+    controller: State<'_, AppControllerState>,
     state: State<'_, TranscriptionTermsState>,
     settings: State<'_, TranscriptionSettingsState>,
     terms_text: String,
 ) -> Result<String, String> {
+    let _controller_guard = lock_provider_settings(&controller)?;
     if transcription_settings::active_provider(&settings)? == ProviderId::Deepgram {
         let candidate_terms = transcription_terms::parse_terms(&terms_text);
         deepgram_provider::validate_terms(&candidate_terms)?;
@@ -831,9 +846,11 @@ fn set_transcription_terms(
 #[tauri::command]
 fn set_language_preferences(
     app: tauri::AppHandle,
+    controller: State<'_, AppControllerState>,
     preferences: State<'_, LanguagePreferencesState>,
     selected_codes: Vec<String>,
 ) -> Result<Vec<String>, String> {
+    let _controller_guard = lock_provider_settings(&controller)?;
     let previous_codes = language_preferences::selected_codes(&preferences)?;
     let selected_codes = language_preferences::set_selected_codes(&preferences, selected_codes)?;
     if let Err(error) = language_preferences::save(&app, &selected_codes) {
@@ -902,13 +919,19 @@ pub(crate) async fn toggle_recording_for_app(
 
     match current_status {
         AppStatus::Idle | AppStatus::Transcribed | AppStatus::Error => {
-            clear_pending_paste(&app);
             let paste_delivery = paste_delivery_for_start(&app, trigger, &settings);
             let start_flow = window_flow(trigger, paste_delivery.is_headless(), &settings);
             let starting = {
                 let mut controller = lock_controller(&controller)?;
+                if !matches!(
+                    controller.snapshot().status,
+                    AppStatus::Idle | AppStatus::Transcribed | AppStatus::Error
+                ) {
+                    return Ok(controller.snapshot());
+                }
                 controller.begin_start()
             };
+            clear_pending_paste(&app);
             let recording_session_id = starting
                 .session_id
                 .ok_or_else(|| "Could not allocate a recording session.".to_string())?;
@@ -919,7 +942,16 @@ pub(crate) async fn toggle_recording_for_app(
                 show_main_window(&app);
             }
 
-            let active_provider = transcription_settings::active_provider(&transcription_settings)?;
+            let active_provider =
+                match transcription_settings::active_provider(&transcription_settings) {
+                    Ok(provider) => provider,
+                    Err(error) => {
+                        let error_snapshot = lock_controller(&controller)?
+                            .fail_start(provider_unavailable_error(error));
+                        emit_app_snapshot(&app, &error_snapshot);
+                        return Ok(error_snapshot);
+                    }
+                };
             let api_key = match get_api_key_available(&credentials, active_provider) {
                 Ok(Some(api_key)) => api_key,
                 Ok(None) => {
@@ -978,6 +1010,7 @@ pub(crate) async fn toggle_recording_for_app(
                 }
             };
             let provider_ready_rx = provider_session.take_ready_receiver();
+            let provider_failure_rx = provider_session.take_failure_receiver();
 
             if let Some(partial_rx) = provider_session.take_partial_receiver() {
                 tauri::async_runtime::spawn(forward_partial_transcripts(
@@ -1038,6 +1071,7 @@ pub(crate) async fn toggle_recording_for_app(
                         session_id,
                         active_provider,
                         provider_ready_rx,
+                        provider_failure_rx,
                     ));
                 }
             }
@@ -1120,6 +1154,9 @@ async fn finalize_recording(app: &tauri::AppHandle) -> Result<AppSnapshot, Strin
 
     let stopping = {
         let mut controller = lock_controller(&controller)?;
+        if controller.snapshot().status != AppStatus::Recording {
+            return Ok(controller.snapshot());
+        }
         controller.begin_stop()
     };
     emit_app_snapshot(app, &stopping);
@@ -1377,10 +1414,12 @@ fn has_provider_api_key(
 
 #[tauri::command]
 fn save_provider_api_key(
+    controller: State<'_, AppControllerState>,
     credentials: State<'_, CredentialState>,
     provider: ProviderId,
     api_key: String,
 ) -> Result<bool, String> {
+    let _controller_guard = lock_provider_settings(&controller)?;
     let api_key = validate_api_key(provider, api_key)?;
     provider_key_entry(provider)?
         .set_password(&api_key)
@@ -1391,9 +1430,11 @@ fn save_provider_api_key(
 
 #[tauri::command]
 fn delete_provider_api_key(
+    controller: State<'_, AppControllerState>,
     credentials: State<'_, CredentialState>,
     provider: ProviderId,
 ) -> Result<(), String> {
+    let _controller_guard = lock_provider_settings(&controller)?;
     clear_cached_api_key(&credentials, provider)?;
     match provider_key_entry(provider)?.delete_credential() {
         Ok(()) | Err(KeyringError::NoEntry) => Ok(()),

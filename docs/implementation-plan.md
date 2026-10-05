@@ -75,8 +75,9 @@ The app should have one source of truth for recording state.
 State transitions:
 
 - `idle` -> `starting` when trigger is pressed.
-- `starting` -> `recording` when the microphone is active and the selected provider session is ready.
+- `starting` -> `recording` when the microphone is active; audio buffers while the selected provider connects.
 - `starting` -> `error` when setup fails.
+- `recording` -> `error` when provider connection or streaming fails.
 - `recording` -> `stopping` when trigger is pressed.
 - `recording` -> `stopping` automatically when the 5 minute MVP duration limit is reached.
 - `stopping` -> `transcribed` when final transcript is available.

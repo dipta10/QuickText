@@ -265,7 +265,7 @@ const render = () => {
     "aria-label",
     isRecording(state) ? "Stop recording" : "Start recording",
   );
-  view.recordButton.disabled = isBusy(state);
+  view.recordButton.disabled = isBusy(state) || providerSelectionSaving;
   view.recordStatus.textContent = statusLabel();
   view.providerLabel.textContent = `Provider: ${providerName}`;
   view.deviceNotice.textContent = state.deviceNotice;
@@ -460,6 +460,7 @@ const loadTranscriptionSettings = async () => {
     const settings = await getTranscriptionSettings();
     updateState(setActiveProvider(state, settings.activeProvider));
   } catch (error) {
+    view.providerStatus.textContent = error instanceof Error ? error.message : String(error);
     updateState(
       setStatus(state, error instanceof Error ? error.message : String(error)),
     );
@@ -473,11 +474,14 @@ const updateActiveProvider = async (provider: ProviderId) => {
 
   const previous = state.activeProvider;
   providerSelectionSaving = true;
+  view.providerStatus.textContent = "Saving provider...";
   updateState(setActiveProvider(state, provider));
   try {
     const saved = await setActiveProviderBackend(provider);
     updateState(setActiveProvider(state, saved));
+    view.providerStatus.textContent = "Provider saved. It applies to the next recording.";
   } catch (error) {
+    view.providerStatus.textContent = error instanceof Error ? error.message : String(error);
     updateState(
       setStatus(
         setActiveProvider(state, previous),
@@ -563,7 +567,7 @@ const saveTranscriptionDescription = async () => {
       error instanceof Error ? error.message : String(error);
   } finally {
     transcriptionDescriptionSaving = false;
-    view.transcriptionDescriptionSaveButton.disabled = false;
+    render();
   }
 };
 
@@ -601,7 +605,7 @@ const saveTranscriptionTerms = async () => {
       error instanceof Error ? error.message : String(error);
   } finally {
     transcriptionTermsSaving = false;
-    view.transcriptionTermsSaveButton.disabled = false;
+    render();
   }
 };
 

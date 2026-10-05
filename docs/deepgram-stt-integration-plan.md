@@ -93,7 +93,7 @@ QuickText stores a trimmed, ordered, de-duplicated list of non-empty terms and p
 - Deepgram repeats the `keyterm` query parameter once for each entry.
 - QuickText never appends weights, joins entries with commas or semicolons, or sends the list through Deepgram's legacy `keywords` parameter.
 
-The active provider validates the list when Settings saves it and every provider validates its session snapshot before connecting. For Deepgram, validation enforces no more than 100 entries and no more than 500 provider tokens across the request. If a list valid for Soniox exceeds Deepgram's limits, selecting or starting Deepgram produces an actionable settings error without deleting any entries.
+The active provider validates the list when Settings saves it and every provider validates its session snapshot before connecting. For Deepgram, local validation enforces no more than 100 entries and rejects lists with more than 500 whitespace-delimited words. Deepgram enforces its exact 500-token limit because its tokenizer is not exposed locally; a list below the local estimate can still be rejected with a settings error. If a list valid for Soniox exceeds Deepgram's limits, selecting or starting Deepgram produces an actionable settings error without deleting any entries.
 
 ## Provider Capability Mapping
 
@@ -204,7 +204,7 @@ The shared recorder remains provider-neutral. Any conversion should be bounded, 
 
 The session returns its audio sender immediately. The recorder starts and queues chunks while the WebSocket handshake proceeds. The adapter reports ready only after the connection is established and configuration is accepted far enough to stream safely.
 
-If readiness fails, shared orchestration stops the recorder, cancels the session, clears partial text, and surfaces a stable provider error. Buffered audio is dropped in memory and never sent to Soniox as a fallback.
+Connection readiness has a 10-second deadline. If readiness fails, shared orchestration stops the recorder, cancels the session, clears partial text, and surfaces a stable provider error. Terminal failures after readiness notify the same controller path. Buffered audio is dropped in memory and never sent to Soniox as a fallback.
 
 ### Interim and final results
 
@@ -233,7 +233,7 @@ The adapter must not rely on `from_finalize=true`, because Deepgram does not gua
 
 ### Cancel
 
-Cancel drops queued audio, terminates the connection, stops update forwarding, and returns no transcript. It does not send `CloseStream` or wait for provider completion.
+Cancel aborts the owned background task, drops queued audio, terminates the connection, stops update forwarding, and returns no transcript, including when connection or audio transmission is blocked. It does not send `CloseStream` or wait for provider completion.
 
 ### Keepalive
 

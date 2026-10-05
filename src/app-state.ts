@@ -174,6 +174,9 @@ export const applyBackendSnapshot = (
       : shouldShowCapture
         ? "capture"
         : state.activeView,
+    activeProvider: isMissingApiKey
+      ? snapshot.error?.provider ?? state.activeProvider
+      : state.activeProvider,
     recording: snapshot.status,
     activeSessionId: snapshot.sessionId,
     status: statusText(snapshot),

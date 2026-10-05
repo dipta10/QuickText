@@ -11,9 +11,17 @@ use crate::transcription::ProviderId;
 
 const SETTINGS_FILE_NAME: &str = "transcription-provider.json";
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TranscriptionSettingsState {
-    active_provider: Mutex<ProviderId>,
+    active_provider: Mutex<Option<ProviderId>>,
+}
+
+impl Default for TranscriptionSettingsState {
+    fn default() -> Self {
+        Self {
+            active_provider: Mutex::new(Some(ProviderId::Soniox)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -33,41 +41,44 @@ pub fn snapshot(
     state: &TranscriptionSettingsState,
 ) -> Result<TranscriptionSettingsSnapshot, String> {
     Ok(TranscriptionSettingsSnapshot {
-        active_provider: *lock(state)?,
+        active_provider: active_provider(state)?,
     })
 }
 
 pub fn active_provider(state: &TranscriptionSettingsState) -> Result<ProviderId, String> {
-    Ok(*lock(state)?)
+    (*lock(state)?).ok_or_else(|| "Could not load your transcription provider. Choose a provider in Settings before recording.".to_string())
 }
 
 pub fn set_active_provider(
     state: &TranscriptionSettingsState,
     provider: ProviderId,
 ) -> Result<ProviderId, String> {
-    *lock(state)? = provider;
+    *lock(state)? = Some(provider);
     Ok(provider)
 }
 
 pub fn load(app: &AppHandle, state: &TranscriptionSettingsState) -> Result<(), String> {
-    let stored = read(&settings_path(app)?)?;
-    set_active_provider(state, stored.active_provider)?;
+    // A present but unreadable/invalid selection must not silently send the
+    // next recording to the default provider.
+    *lock(state)? = None;
+    load_from_path(state, &settings_path(app)?)
+}
+
+fn load_from_path(state: &TranscriptionSettingsState, path: &Path) -> Result<(), String> {
+    let mut selection = lock(state)?;
+    *selection = None;
+    let stored = read(path)?;
+    *selection = Some(stored.active_provider);
     Ok(())
 }
 
 pub fn save(app: &AppHandle, provider: ProviderId) -> Result<(), String> {
-    let path = settings_path(app)?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| "Could not resolve the transcription settings folder.".to_string())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("Could not create the settings folder: {error}"))?;
-    let contents = serde_json::to_vec_pretty(&StoredTranscriptionSettings {
-        active_provider: provider,
-    })
-    .map_err(|error| format!("Could not serialize transcription settings: {error}"))?;
-    fs::write(path, contents)
-        .map_err(|error| format!("Could not save transcription settings: {error}"))
+    crate::settings_file::write_json(
+        &settings_path(app)?,
+        &StoredTranscriptionSettings {
+            active_provider: provider,
+        },
+    )
 }
 
 fn read(path: &Path) -> Result<StoredTranscriptionSettings, String> {
@@ -88,7 +99,7 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| format!("Could not resolve the settings folder: {error}"))
 }
 
-fn lock(state: &TranscriptionSettingsState) -> Result<MutexGuard<'_, ProviderId>, String> {
+fn lock(state: &TranscriptionSettingsState) -> Result<MutexGuard<'_, Option<ProviderId>>, String> {
     state
         .active_provider
         .lock()
@@ -122,5 +133,19 @@ mod tests {
         let stored: StoredTranscriptionSettings =
             serde_json::from_str(r#"{"activeProvider":"deepgram"}"#).unwrap();
         assert_eq!(stored.active_provider, ProviderId::Deepgram);
+    }
+    #[test]
+    fn invalid_saved_selection_blocks_capture_until_the_user_selects_a_provider() {
+        let path = std::env::temp_dir().join(format!(
+            "quicktext-invalid-provider-{}.json",
+            std::process::id()
+        ));
+        fs::write(&path, r#"{"activeProvider":"unknown"}"#).unwrap();
+        let state = TranscriptionSettingsState::default();
+        assert!(load_from_path(&state, &path).is_err());
+        assert!(active_provider(&state).is_err());
+        set_active_provider(&state, ProviderId::Deepgram).unwrap();
+        assert_eq!(active_provider(&state).unwrap(), ProviderId::Deepgram);
+        fs::remove_file(path).unwrap();
     }
 }

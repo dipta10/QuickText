@@ -26,8 +26,8 @@ use crate::{
     app_controller::TranscriptResult,
     audio_recorder::{AudioEncoding, AudioFormat},
     transcription::{
-        PartialTranscript, ProviderId, TranscriptionOptions, TranscriptionProvider,
-        TranscriptionSession,
+        connect_with_timeout, transport_error, PartialTranscript, ProviderId, ProviderTask,
+        TranscriptionOptions, TranscriptionProvider, TranscriptionSession,
     },
 };
 
@@ -117,6 +117,8 @@ pub struct DeepgramSession {
     partial_rx: Option<UnboundedReceiver<PartialTranscript>>,
     ready_rx: Option<oneshot::Receiver<Result<(), String>>>,
     stream_error: SharedError,
+    failure_rx: Option<oneshot::Receiver<String>>,
+    _task: ProviderTask,
 }
 
 impl DeepgramSession {
@@ -126,25 +128,34 @@ impl DeepgramSession {
         let (command_tx, command_rx) = mpsc::unbounded_channel();
         let (partial_tx, partial_rx) = mpsc::unbounded_channel();
         let (ready_tx, ready_rx) = oneshot::channel();
+        let (failure_tx, failure_rx) = oneshot::channel();
         let stream_error = Arc::new(Mutex::new(None));
         let task_error = Arc::clone(&stream_error);
 
-        tauri::async_runtime::spawn(run_configured_session(DeepgramSessionTask {
-            url,
-            api_key: options.api_key,
-            audio_format: options.audio_format,
-            audio_rx,
-            command_rx,
-            partial_tx,
-            stream_error: task_error,
-            ready_tx,
-        }));
+        let task = tauri::async_runtime::spawn(async move {
+            run_configured_session(DeepgramSessionTask {
+                url,
+                api_key: options.api_key,
+                audio_format: options.audio_format,
+                audio_rx,
+                command_rx,
+                partial_tx,
+                stream_error: Arc::clone(&task_error),
+                ready_tx,
+            })
+            .await;
+            if let Some(error) = stored_error(&task_error) {
+                let _ = failure_tx.send(error);
+            }
+        });
 
         Ok(Self {
             audio_tx,
             command_tx,
             partial_rx: Some(partial_rx),
             ready_rx: Some(ready_rx),
+            failure_rx: Some(failure_rx),
+            _task: ProviderTask(Some(task)),
             stream_error,
         })
     }
@@ -183,6 +194,10 @@ impl TranscriptionSession for DeepgramSession {
 
     fn take_ready_receiver(&mut self) -> Option<oneshot::Receiver<Result<(), String>>> {
         self.ready_rx.take()
+    }
+
+    fn take_failure_receiver(&mut self) -> Option<oneshot::Receiver<String>> {
+        self.failure_rx.take()
     }
 
     fn stop(
@@ -246,7 +261,7 @@ fn normalize_audio(audio: Vec<u8>, audio_format: &AudioFormat) -> Vec<u8> {
 async fn connect(url: &str, api_key: &str) -> Result<DeepgramSocket, String> {
     let mut request = url
         .into_client_request()
-        .map_err(|error| format!("Could not configure Deepgram request: {error}"))?;
+        .map_err(|error| transport_error(ProviderId::Deepgram, &error))?;
     let authorization = HeaderValue::from_str(&format!("Token {api_key}"))
         .map_err(|_| "Deepgram API key contains invalid header characters.".to_string())?;
     request.headers_mut().insert(AUTHORIZATION, authorization);
@@ -256,7 +271,7 @@ async fn connect(url: &str, api_key: &str) -> Result<DeepgramSocket, String> {
     client_async_tls(request, socket)
         .await
         .map(|(socket, _)| socket)
-        .map_err(|error| format!("Could not connect to Deepgram: {error}"))
+        .map_err(|error| transport_error(ProviderId::Deepgram, &error))
 }
 
 async fn connect_ipv4(host: &str, port: u16) -> Result<TcpStream, String> {
@@ -297,7 +312,7 @@ async fn run_configured_session(task: DeepgramSessionTask) {
         stream_error,
         ready_tx,
     } = task;
-    match connect(&url, &api_key).await {
+    match connect_with_timeout(ProviderId::Deepgram, connect(&url, &api_key)).await {
         Ok(socket) => {
             let _ = ready_tx.send(Ok(()));
             run_session(
@@ -318,14 +333,16 @@ async fn run_configured_session(task: DeepgramSessionTask) {
     }
 }
 
-async fn run_session(
-    mut socket: DeepgramSocket,
+async fn run_session<S>(
+    mut socket: tokio_tungstenite::WebSocketStream<S>,
     audio_format: AudioFormat,
     mut audio_rx: UnboundedReceiver<Vec<u8>>,
     mut command_rx: UnboundedReceiver<DeepgramCommand>,
     partial_tx: UnboundedSender<PartialTranscript>,
     stream_error: SharedError,
-) {
+) where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
     let mut transcript = TranscriptAccumulator::default();
     let mut finish_tx = None;
     let mut completion_metadata_received = false;
@@ -351,7 +368,7 @@ async fn run_session(
                     while let Some(audio) = audio_rx.recv().await {
                         let audio = normalize_audio(audio, &audio_format);
                         if let Err(error) = socket.send(Message::Binary(audio.into())).await {
-                            fail(&stream_error, &mut finish_tx, format!("Could not send audio to Deepgram: {error}"));
+                            fail(&stream_error, &mut finish_tx, transport_error(ProviderId::Deepgram, &error));
                             return;
                         }
                     }
@@ -359,7 +376,7 @@ async fn run_session(
                         .send(Message::Text(r#"{"type":"CloseStream"}"#.into()))
                         .await
                     {
-                        fail(&stream_error, &mut finish_tx, format!("Could not finalize Deepgram stream: {error}"));
+                        fail(&stream_error, &mut finish_tx, transport_error(ProviderId::Deepgram, &error));
                         return;
                     }
                 }
@@ -371,7 +388,7 @@ async fn run_session(
             Some(audio) = audio_rx.recv(), if finish_tx.is_none() => {
                 let audio = normalize_audio(audio, &audio_format);
                 if let Err(error) = socket.send(Message::Binary(audio.into())).await {
-                    fail(&stream_error, &mut finish_tx, format!("Could not send audio to Deepgram: {error}"));
+                    fail(&stream_error, &mut finish_tx, transport_error(ProviderId::Deepgram, &error));
                     return;
                 }
                 last_audio_sent = tokio::time::Instant::now();
@@ -382,7 +399,7 @@ async fn run_session(
                         .send(Message::Text(r#"{"type":"KeepAlive"}"#.into()))
                         .await
                     {
-                        fail(&stream_error, &mut finish_tx, format!("Could not keep the Deepgram stream open: {error}"));
+                        fail(&stream_error, &mut finish_tx, transport_error(ProviderId::Deepgram, &error));
                         return;
                     }
                 }
@@ -402,20 +419,25 @@ async fn run_session(
                     }
                 },
                 Some(Ok(Message::Ping(payload))) => { let _ = socket.send(Message::Pong(payload)).await; }
-                Some(Ok(Message::Close(_))) | None => {
-                    if completion_metadata_received {
+                Some(Ok(Message::Close(frame))) => {
+                    let graceful = frame.as_ref().is_none_or(|frame| frame.code == tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal);
+                    if completion_metadata_received && graceful {
                         respond(&mut finish_tx, Ok(TranscriptResult {
                             text: transcript.final_text().trim().to_string(),
                             provider: ProviderId::Deepgram.as_str().to_string(),
                         }));
                     } else {
-                        respond(&mut finish_tx, Err("Deepgram stream closed before completion metadata arrived.".to_string()));
+                        fail(&stream_error, &mut finish_tx, "Deepgram stream closed before successful completion.".to_string());
                     }
+                    return;
+                }
+                None => {
+                    fail(&stream_error, &mut finish_tx, "Deepgram stream ended before successful completion.".to_string());
                     return;
                 }
                 Some(Ok(Message::Binary(_))) | Some(Ok(Message::Pong(_))) | Some(Ok(Message::Frame(_))) => {}
                 Some(Err(error)) => {
-                    fail(&stream_error, &mut finish_tx, format!("Deepgram stream failed: {error}"));
+                    fail(&stream_error, &mut finish_tx, transport_error(ProviderId::Deepgram, &error));
                     return;
                 }
             }
@@ -427,8 +449,9 @@ fn handle_text_response(
     text: &str,
     accumulator: &mut TranscriptAccumulator,
 ) -> Result<ResponseOutcome, String> {
-    let response: DeepgramResponse = serde_json::from_str(text)
-        .map_err(|error| format!("Could not parse Deepgram response: {error}"))?;
+    let response: DeepgramResponse = serde_json::from_str(text).map_err(|_| {
+        "Deepgram sent an invalid transcription response. Try recording again.".to_string()
+    })?;
 
     match response.message_type.as_deref() {
         Some("Metadata") => Ok(ResponseOutcome::Complete),
@@ -644,5 +667,143 @@ mod tests {
     fn rejects_more_than_five_hundred_keyterm_tokens() {
         let oversized_phrase = vec!["word"; 501].join(" ");
         assert!(deepgram_url(&i16_format(), &[oversized_phrase]).is_err());
+    }
+    async fn mock_session() -> (
+        DeepgramSession,
+        tokio_tungstenite::WebSocketStream<tokio::io::DuplexStream>,
+    ) {
+        let (socket, server) = crate::transcription::mock_socket_pair().await;
+        let (audio_tx, audio_rx) = mpsc::unbounded_channel();
+        let (command_tx, command_rx) = mpsc::unbounded_channel();
+        let (partial_tx, partial_rx) = mpsc::unbounded_channel();
+        let stream_error = Arc::new(Mutex::new(None));
+        let error = Arc::clone(&stream_error);
+        let task = tokio::spawn(run_session(
+            socket,
+            i16_format(),
+            audio_rx,
+            command_rx,
+            partial_tx,
+            error,
+        ));
+        (
+            DeepgramSession {
+                audio_tx,
+                command_tx,
+                partial_rx: Some(partial_rx),
+                ready_rx: None,
+                stream_error,
+                failure_rx: None,
+                _task: ProviderTask(Some(tauri::async_runtime::JoinHandle::Tokio(task))),
+            },
+            server,
+        )
+    }
+
+    #[tokio::test]
+    async fn stop_drains_audio_and_collects_trailing_results_before_graceful_close() {
+        let (session, mut server) = mock_session().await;
+        let sender = session.audio_sender();
+        sender.send(vec![1, 2]).unwrap();
+        sender.send(vec![3, 4]).unwrap();
+        drop(sender);
+        let stop = tokio::spawn(session.finish());
+        assert_eq!(
+            server.next().await.unwrap().unwrap(),
+            Message::Binary(vec![1, 2].into())
+        );
+        assert_eq!(
+            server.next().await.unwrap().unwrap(),
+            Message::Binary(vec![3, 4].into())
+        );
+        assert_eq!(
+            server.next().await.unwrap().unwrap(),
+            Message::Text(r#"{"type":"CloseStream"}"#.into())
+        );
+        server.send(Message::Text(r#"{"type":"Results","is_final":true,"start":0,"channel":{"alternatives":[{"transcript":"last words"}]}}"#.into())).await.unwrap();
+        server
+            .send(Message::Text(r#"{"type":"Metadata"}"#.into()))
+            .await
+            .unwrap();
+        // Metadata alone must not publish a transcript before closure.
+        tokio::task::yield_now().await;
+        assert!(!stop.is_finished());
+        server.close(None).await.unwrap();
+        let result = stop.await.unwrap().unwrap();
+        assert_eq!(result.text, "last words");
+        assert_eq!(result.provider, "deepgram");
+    }
+
+    #[tokio::test]
+    async fn abnormal_close_after_metadata_is_an_error() {
+        use tokio_tungstenite::tungstenite::protocol::{frame::coding::CloseCode, CloseFrame};
+        let (session, mut server) = mock_session().await;
+        let stop = tokio::spawn(session.finish());
+        server.next().await.unwrap().unwrap();
+        server
+            .send(Message::Text(r#"{"type":"Metadata"}"#.into()))
+            .await
+            .unwrap();
+        server
+            .close(Some(CloseFrame {
+                code: CloseCode::Error,
+                reason: "private provider detail".into(),
+            }))
+            .await
+            .unwrap();
+        let error = stop.await.unwrap().unwrap_err();
+        assert!(error.contains("before successful completion"));
+        assert!(!error.contains("private provider detail"));
+    }
+
+    #[tokio::test]
+    async fn close_without_metadata_never_returns_partial_text_as_success() {
+        let (session, mut server) = mock_session().await;
+        let stop = tokio::spawn(session.finish());
+        server.next().await.unwrap().unwrap();
+        server.send(Message::Text(r#"{"type":"Results","is_final":true,"start":0,"channel":{"alternatives":[{"transcript":"incomplete"}]}}"#.into())).await.unwrap();
+        server.close(None).await.unwrap();
+        assert!(stop.await.unwrap().is_err());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn timeout_drops_the_socket_even_when_audio_drain_is_blocked() {
+        let (session, mut server) = mock_session().await;
+        let _held_sender = session.audio_sender(); // Prevent drain from completing.
+        let error = session.finish().await.unwrap_err();
+        assert!(error.contains("finalization timed out"));
+        assert!(matches!(server.next().await, Some(Err(_)) | None));
+    }
+
+    #[tokio::test]
+    async fn cancel_drops_the_socket_without_finalizing_or_publishing_text() {
+        let (mut session, mut server) = mock_session().await;
+        let mut updates = session.take_partial_receiver().unwrap();
+        Box::new(session).cancel();
+        assert!(matches!(server.next().await, Some(Err(_)) | None));
+        assert!(updates.recv().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn failure_while_recording_is_retained_for_the_stop_path() {
+        let (session, mut server) = mock_session().await;
+        let error = Arc::clone(&session.stream_error);
+        server.close(None).await.unwrap();
+        // The task exits and closes its audio receiver on failure.
+        session.audio_tx.closed().await;
+        assert!(stored_error(&error)
+            .unwrap()
+            .contains("before successful completion"));
+        assert!(session.finish().await.is_err());
+    }
+    #[test]
+    fn malformed_responses_do_not_expose_payload_values() {
+        let error = handle_text_response(
+            r#"{"type":"Results","is_final":"private payload"}"#,
+            &mut TranscriptAccumulator::default(),
+        )
+        .unwrap_err();
+        assert!(!error.contains("private payload"));
+        assert!(error.contains("invalid transcription response"));
     }
 }

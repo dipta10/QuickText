@@ -5,6 +5,57 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::{app_controller::TranscriptResult, audio_recorder::AudioFormat};
 
+pub const CONNECTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+// Dropping a session must also drop its socket, buffered audio, and pending
+// connection. A queued Cancel cannot interrupt a stalled connect or send.
+#[derive(Debug, Default)]
+pub struct ProviderTask(pub Option<tauri::async_runtime::JoinHandle<()>>);
+
+impl Drop for ProviderTask {
+    fn drop(&mut self) {
+        if let Some(task) = &self.0 {
+            task.abort();
+        }
+    }
+}
+
+pub async fn connect_with_timeout<T>(
+    provider: ProviderId,
+    connect: impl Future<Output = Result<T, String>>,
+) -> Result<T, String> {
+    tokio::time::timeout(CONNECTION_TIMEOUT, connect)
+        .await
+        .unwrap_or_else(|_| {
+            Err(format!(
+                "{} connection timed out. Check your network and try again.",
+                provider.display_name()
+            ))
+        })
+}
+
+// Generate user guidance from bounded categories. WebSocket and provider
+// errors can contain response bodies, headers, URLs, or user-authored context.
+pub fn transport_error(
+    provider: ProviderId,
+    error: &tokio_tungstenite::tungstenite::Error,
+) -> String {
+    use tokio_tungstenite::tungstenite::Error;
+    let guidance = match error {
+        Error::Http(response) => match response.status().as_u16() {
+            401 | 403 => "rejected the API key. Check the key and its permissions in Settings.",
+            400 | 413 | 422 => {
+                "rejected the transcription settings. Check your terms and provider settings."
+            }
+            429 => "is rate limited. Wait a moment and try again.",
+            _ => "is unavailable. Try again later.",
+        },
+        Error::Io(_) | Error::Tls(_) => "connection failed. Check your network and try again.",
+        _ => "stream failed. Try recording again.",
+    };
+    format!("{} {guidance}", provider.display_name())
+}
+
 pub type ProviderFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -62,6 +113,7 @@ pub trait TranscriptionSession: Send {
     fn audio_sender(&self) -> mpsc::UnboundedSender<Vec<u8>>;
     fn take_partial_receiver(&mut self) -> Option<mpsc::UnboundedReceiver<PartialTranscript>>;
     fn take_ready_receiver(&mut self) -> Option<oneshot::Receiver<Result<(), String>>>;
+    fn take_failure_receiver(&mut self) -> Option<oneshot::Receiver<String>>;
     fn stop(self: Box<Self>) -> ProviderFuture<Result<TranscriptResult, String>>;
     fn cancel(self: Box<Self>);
 }
@@ -92,5 +144,73 @@ mod tests {
         }
 
         assert!(ProviderId::from_str("other").is_err());
+    }
+}
+
+#[cfg(test)]
+pub(crate) async fn mock_socket_pair() -> (
+    tokio_tungstenite::WebSocketStream<tokio::io::DuplexStream>,
+    tokio_tungstenite::WebSocketStream<tokio::io::DuplexStream>,
+) {
+    use tokio_tungstenite::{tungstenite::protocol::Role, WebSocketStream};
+    let (client, server) = tokio::io::duplex(65_536);
+    (
+        WebSocketStream::from_raw_socket(client, Role::Client, None).await,
+        WebSocketStream::from_raw_socket(server, Role::Server, None).await,
+    )
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn stalled_connection_has_a_deadline() {
+        let before = tokio::time::Instant::now();
+        let result = connect_with_timeout(
+            ProviderId::Deepgram,
+            std::future::pending::<Result<(), String>>(),
+        )
+        .await;
+        assert!(result
+            .unwrap_err()
+            .contains("Deepgram connection timed out"));
+        assert_eq!(before.elapsed(), CONNECTION_TIMEOUT);
+    }
+
+    #[tokio::test]
+    async fn dropping_the_task_owner_cancels_pending_work() {
+        let (dropped_tx, dropped_rx) = oneshot::channel();
+        struct OnDrop(Option<oneshot::Sender<()>>);
+        impl Drop for OnDrop {
+            fn drop(&mut self) {
+                let _ = self.0.take().unwrap().send(());
+            }
+        }
+        let guard = OnDrop(Some(dropped_tx));
+        let task = tokio::spawn(async move {
+            let _guard = guard;
+            std::future::pending::<()>().await;
+        });
+        drop(ProviderTask(Some(tauri::async_runtime::JoinHandle::Tokio(
+            task,
+        ))));
+        dropped_rx.await.unwrap();
+    }
+    #[test]
+    fn transport_errors_discard_headers_and_bodies() {
+        use tokio_tungstenite::tungstenite::{http::Response, Error};
+        let error = Error::Http(Box::new(
+            Response::builder()
+                .status(401)
+                .header("private-header", "private value")
+                .body(Some(b"private provider body".to_vec()))
+                .unwrap(),
+        ));
+        let message = transport_error(ProviderId::Deepgram, &error);
+        assert_eq!(
+            message,
+            "Deepgram rejected the API key. Check the key and its permissions in Settings."
+        );
     }
 }

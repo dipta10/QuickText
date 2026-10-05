@@ -123,6 +123,7 @@ const appTemplate = `
           <label class="settings-field" for="transcription-provider">
             <span class="settings-field-label">Provider</span>
             <select class="provider-select" id="transcription-provider">
+              <option value="" disabled>Choose a provider</option>
               <option value="soniox">Soniox</option>
               <option value="deepgram">Deepgram</option>
             </select>

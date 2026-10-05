@@ -8,6 +8,7 @@ export type RecordingState =
 export type ShortcutCaptureState = "idle" | "capturing";
 export type ActiveView = "capture" | "settings";
 export type ProviderId = "soniox" | "deepgram";
+export type ProviderSelectionStatus = "loading" | "ready" | "error";
 
 export type TranscriptResult = {
   text: string;
@@ -54,6 +55,7 @@ export type AppState = {
   launchOnStartup: boolean;
   launchOnStartupStatus: string;
   activeProvider: ProviderId;
+  providerSelectionStatus: ProviderSelectionStatus;
   activeSessionId: number | null;
   providerApiKeyConfigured: Record<ProviderId, boolean>;
   providerApiKeyStatus: Record<ProviderId, string>;
@@ -93,6 +95,7 @@ export const createAppState = (
   launchOnStartup,
   launchOnStartupStatus: "",
   activeProvider: "soniox",
+  providerSelectionStatus: "loading",
   activeSessionId: null,
   providerApiKeyConfigured: { soniox: false, deepgram: false },
   providerApiKeyStatus: { soniox: "", deepgram: "" },
@@ -109,6 +112,9 @@ export const createAppState = (
 export const isRecording = (state: AppState) => state.recording === "recording";
 export const isBusy = (state: AppState) =>
   state.recording === "starting" || state.recording === "stopping";
+
+export const canToggleRecording = (state: AppState) =>
+  !isBusy(state) && (isRecording(state) || state.providerSelectionStatus === "ready");
 
 export const isCapturingShortcut = (state: AppState) =>
   state.shortcutCapture === "capturing";
@@ -200,6 +206,7 @@ export const applyBackendSnapshot = (
       : shouldShowCapture
         ? "capture"
         : state.activeView,
+    providerSelectionStatus: isMissingApiKey ? "ready" : state.providerSelectionStatus,
     activeProvider: isMissingApiKey
       ? snapshot.error?.provider ?? state.activeProvider
       : state.activeProvider,
@@ -282,7 +289,13 @@ export const setActiveProvider = (
 ): AppState => ({
   ...state,
   activeProvider,
+  providerSelectionStatus: "ready",
 });
+
+export const setProviderSelectionStatus = (
+  state: AppState,
+  providerSelectionStatus: ProviderSelectionStatus,
+): AppState => ({ ...state, providerSelectionStatus });
 
 export const setProviderApiKeyPresence = (
   state: AppState,

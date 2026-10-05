@@ -12,6 +12,7 @@ Reviewed `codex/deepgram-stt-plan` from committed baseline `8c6da57` against `or
 - Provider setting validation and writes could race capture, while related backend commands relied on frontend disabling. The controller lock now protects provider-related settings changes and rejects them throughout an active session. Duplicate start/stop dispatch also rechecks the state under that lock.
 - Provider selection and terms files were overwritten directly. Saves now serialize first, write a separate file, and replace the destination atomically. Provider selection becomes authoritative in memory only after its disk save succeeds.
 - Invalid persisted provider selection silently retained the Soniox default. An unreadable or unknown saved selection now blocks capture until the user explicitly saves a provider; missing settings still default to Soniox.
+- The frontend displayed Soniox as selected when provider settings failed to load, making an explicit Soniox selection unable to fire a change event. Loading and invalid selections now show an unselected provider prompt. Capture remains disabled until a selection is confirmed, and Stop remains available during an existing recording.
 - Missing credentials could route to Settings while leaving the named provider's credential section hidden. Frontend selection now follows the backend's missing-key provider. Provider selection errors appear next to the selector, and completed form saves respect current recording state when re-enabling controls.
 - Delayed command replies and backend events could rewind the UI to an older session or an earlier recording phase. Frontend state now rejects stale snapshots while allowing a completed transcript to remain available after a paste failure.
 - A new recording reply received before its starting event could retain the previous transcript, draft text, or recording clock. Session changes now reset those values independently of the first observed phase; repeated snapshots within the same session preserve live text and its clock.
@@ -23,7 +24,7 @@ Reviewed `codex/deepgram-stt-plan` from committed baseline `8c6da57` against `or
 
 All checks passed on the local Linux host:
 
-- `npm test`: 22 tests passed.
+- `npm test`: 26 tests passed.
 - `npm run build`: TypeScript and production Vite build passed.
 - `cargo test --manifest-path src-tauri/Cargo.toml --locked`: 96 tests passed; two live-provider tests ignored.
 - `cargo check --manifest-path src-tauri/Cargo.toml --locked`: passed.

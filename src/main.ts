@@ -1,6 +1,7 @@
 import "./styles.css";
 import {
   cancelShortcutCapture,
+  canToggleRecording,
   createAppState,
   applyBackendSnapshot,
   applyPartialTranscript,
@@ -11,6 +12,7 @@ import {
   setActiveProvider,
   setProviderApiKeyPresence,
   setProviderApiKeyStatus,
+  setProviderSelectionStatus,
   setAutoCopyTranscript,
   setDeviceNotice,
   setInputDeviceOptions,
@@ -280,9 +282,11 @@ const render = () => {
     "aria-label",
     isRecording(state) ? "Stop recording" : "Start recording",
   );
-  view.recordButton.disabled = isBusy(state) || providerSelectionSaving;
+  view.recordButton.disabled = !canToggleRecording(state) || providerSelectionSaving;
   view.recordStatus.textContent = statusLabel();
-  view.providerLabel.textContent = `Provider: ${providerName}`;
+  view.providerLabel.textContent = state.providerSelectionStatus === "ready"
+    ? `Provider: ${providerName}`
+    : "Choose a provider in Settings";
   view.deviceNotice.textContent = state.deviceNotice;
   view.recordingTimer.textContent = formatElapsedTime(state.recordingStartedAt);
   view.activityIndicator.hidden = !isRecording(state);
@@ -300,11 +304,13 @@ const render = () => {
   view.keybindStatus.textContent = state.status;
   view.shortcutFocusOnStartCheckbox.checked = state.shortcutFocusOnStart;
   view.shortcutHideOnStopCheckbox.checked = state.shortcutHideOnStop;
-  view.providerSelect.value = state.activeProvider;
+  view.providerSelect.value = state.providerSelectionStatus === "ready"
+    ? state.activeProvider
+    : "";
   view.providerSelect.disabled =
-    providerControlsDisabled || providerSelectionSaving;
-  view.sonioxSection.hidden = state.activeProvider !== "soniox";
-  view.deepgramSection.hidden = state.activeProvider !== "deepgram";
+    providerControlsDisabled || providerSelectionSaving || state.providerSelectionStatus === "loading";
+  view.sonioxSection.hidden = state.providerSelectionStatus !== "ready" || state.activeProvider !== "soniox";
+  view.deepgramSection.hidden = state.providerSelectionStatus !== "ready" || state.activeProvider !== "deepgram";
   view.sonioxSection.classList.toggle(
     "is-active-provider",
     state.activeProvider === "soniox",
@@ -473,11 +479,20 @@ const loadApiKeyStatus = async (provider: ProviderId) => {
 const loadTranscriptionSettings = async () => {
   try {
     const settings = await getTranscriptionSettings();
+    if (state.providerSelectionStatus !== "loading") {
+      return;
+    }
     updateState(setActiveProvider(state, settings.activeProvider));
   } catch (error) {
+    if (state.providerSelectionStatus !== "loading") {
+      return;
+    }
     view.providerStatus.textContent = error instanceof Error ? error.message : String(error);
     updateState(
-      setStatus(state, error instanceof Error ? error.message : String(error)),
+      setStatus(
+        showSettings(setProviderSelectionStatus(state, "error")),
+        error instanceof Error ? error.message : String(error),
+      ),
     );
   }
 };
@@ -488,6 +503,7 @@ const updateActiveProvider = async (provider: ProviderId) => {
   }
 
   const previous = state.activeProvider;
+  const previousSelectionStatus = state.providerSelectionStatus;
   providerSelectionSaving = true;
   view.providerStatus.textContent = "Saving provider...";
   updateState(setActiveProvider(state, provider));
@@ -499,7 +515,7 @@ const updateActiveProvider = async (provider: ProviderId) => {
     view.providerStatus.textContent = error instanceof Error ? error.message : String(error);
     updateState(
       setStatus(
-        setActiveProvider(state, previous),
+        setProviderSelectionStatus(setActiveProvider(state, previous), previousSelectionStatus),
         error instanceof Error ? error.message : String(error),
       ),
     );

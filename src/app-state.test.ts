@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   applyBackendSnapshot,
   applyPartialTranscript,
+  canToggleRecording,
   createAppState,
   type BackendAppSnapshot,
   setActiveProvider,
   setProviderApiKeyPresence,
+  setProviderSelectionStatus,
 } from "./app-state";
 
 const snapshot = (
@@ -181,6 +183,7 @@ describe("recording-session transcript lifecycle", () => {
 
     expect(next.activeView).toBe("settings");
     expect(next.activeProvider).toBe("deepgram");
+    expect(next.providerSelectionStatus).toBe("ready");
     expect(next.providerApiKeyStatus.deepgram).toBe(
       "Add your Deepgram API key before recording.",
     );
@@ -253,4 +256,36 @@ describe("recording-session transcript lifecycle", () => {
     expect(applyBackendSnapshot(state, snapshot("starting", null, 2)).recording).toBe("starting");
   });
 
+});
+
+describe("provider selection recovery", () => {
+  it("blocks capture until the saved provider has loaded", () => {
+    const state = createAppState("", 300, false, false, false, true, true, "", false, false);
+    expect(canToggleRecording(state)).toBe(false);
+    expect(canToggleRecording(setActiveProvider(state, "deepgram"))).toBe(true);
+  });
+
+  it.each(["soniox", "deepgram"] as const)(
+    "recovers an invalid selection by explicitly choosing %s",
+    (provider) => {
+      const failed = setProviderSelectionStatus(
+        createAppState("", 300, false, false, false, true, true, "", false, false),
+        "error",
+      );
+      expect(canToggleRecording(failed)).toBe(false);
+      const recovered = setActiveProvider(failed, provider);
+      expect(recovered.activeProvider).toBe(provider);
+      expect(recovered.providerSelectionStatus).toBe("ready");
+      expect(canToggleRecording(recovered)).toBe(true);
+    },
+  );
+
+  it("keeps Stop available if provider loading fails during an existing recording", () => {
+    const state = applyBackendSnapshot(
+      createAppState("", 300, false, false, false, true, true, "", false, false),
+      snapshot("recording", null, 1),
+    );
+    expect(canToggleRecording(setProviderSelectionStatus(state, "error"))).toBe(true);
+    expect(canToggleRecording(applyBackendSnapshot(state, snapshot("stopping", null, 1)))).toBe(false);
+  });
 });

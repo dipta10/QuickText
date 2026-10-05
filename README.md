@@ -2,12 +2,13 @@
 
 Fast speech-to-text dictation for your desktop. Press a key, speak, get text.
 
-QuickText is a lightweight desktop app that turns your voice into text in seconds: trigger it with the primary button or a global shortcut, speak, trigger again to stop, and copy the transcript. Transcription streams through [Soniox](https://soniox.com) in real time, so results appear the moment you stop talking.
+QuickText is a lightweight desktop app that turns your voice into text in seconds: trigger it with the primary button or a global shortcut, speak, trigger again to stop, and copy the transcript. Transcription streams through your selected provider, [Soniox](https://soniox.com) or [Deepgram](https://deepgram.com), while you speak.
 
 ## Features
 
 - One-key dictation: start and stop with a single action.
-- Real-time transcription via Soniox streaming STT.
+- Real-time transcription through Soniox (default) or Deepgram.
+- Shared terms and phrases to improve recognition; Deepgram currently supports English.
 - Instant copy-to-clipboard for the latest transcript.
 - Lives in the system tray; closing the window keeps the app running.
 - Capture-first UI with settings (API key, shortcuts) kept out of the way.
@@ -49,7 +50,7 @@ Launch `quicktext` to start the app. It stays resident in the tray until you qui
 2. Press again to stop.
 3. Copy the transcript from the window.
 
-Set your Soniox API key from the in-app Settings view; it is stored in the system keyring, never in plain files.
+Choose a provider and save its API key in Settings. Keys are stored separately in the system keyring, never in plain files. Soniox supports automatic detection and language preferences; Deepgram uses English in this release.
 
 ## CLI On Linux
 
@@ -95,4 +96,4 @@ bindsym F10 exec quicktext toggle focus
 
 ## License
 
-[MIT](LICENSE). QuickText is free to use; transcription runs through your own Soniox account and API key, so Soniox usage and billing are between you and Soniox.
+[MIT](LICENSE). QuickText is free to use; transcription runs through your own selected-provider account and API key; provider usage and billing apply.

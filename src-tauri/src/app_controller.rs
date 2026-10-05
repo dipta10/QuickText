@@ -22,7 +22,7 @@ pub struct TranscriptResult {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AppError {
-    MissingApiKey { message: String },
+    MissingApiKey { provider: String, message: String },
     CredentialStore { message: String },
     MicrophoneUnavailable { message: String },
     ProviderUnavailable { message: String },
@@ -33,6 +33,7 @@ pub enum AppError {
 #[serde(rename_all = "camelCase")]
 pub struct AppSnapshot {
     pub status: AppStatus,
+    pub session_id: Option<u64>,
     pub transcript: Option<TranscriptResult>,
     pub error: Option<AppError>,
     pub audio_format: Option<AudioFormat>,
@@ -51,6 +52,7 @@ impl Default for AppController {
         Self {
             snapshot: AppSnapshot {
                 status: AppStatus::Idle,
+                session_id: None,
                 transcript: None,
                 error: None,
                 audio_format: None,
@@ -83,6 +85,7 @@ impl AppController {
                 self.active_session_id = Some(session_id);
                 self.snapshot = AppSnapshot {
                     status: AppStatus::Starting,
+                    session_id: self.active_session_id,
                     transcript: None,
                     error: None,
                     audio_format: None,
@@ -99,6 +102,7 @@ impl AppController {
         if self.snapshot.status == AppStatus::Starting {
             self.snapshot = AppSnapshot {
                 status: AppStatus::Recording,
+                session_id: self.active_session_id,
                 transcript: None,
                 error: None,
                 audio_format: Some(audio_format),
@@ -113,6 +117,7 @@ impl AppController {
         if self.snapshot.status == AppStatus::Starting {
             self.snapshot = AppSnapshot {
                 status: AppStatus::Error,
+                session_id: self.active_session_id,
                 transcript: None,
                 error: Some(error),
                 audio_format: None,
@@ -128,6 +133,7 @@ impl AppController {
         if self.snapshot.status == AppStatus::Recording {
             self.snapshot = AppSnapshot {
                 status: AppStatus::Error,
+                session_id: self.active_session_id,
                 transcript: None,
                 error: Some(error),
                 audio_format: self.snapshot.audio_format.clone(),
@@ -143,6 +149,7 @@ impl AppController {
         if self.snapshot.status == AppStatus::Stopping {
             self.snapshot = AppSnapshot {
                 status: AppStatus::Error,
+                session_id: self.active_session_id,
                 transcript: None,
                 error: Some(error),
                 audio_format: self.snapshot.audio_format.clone(),
@@ -158,6 +165,7 @@ impl AppController {
         if self.snapshot.status == AppStatus::Recording {
             self.snapshot = AppSnapshot {
                 status: AppStatus::Stopping,
+                session_id: self.active_session_id,
                 transcript: None,
                 error: None,
                 audio_format: self.snapshot.audio_format.clone(),
@@ -176,6 +184,7 @@ impl AppController {
         if self.snapshot.status == AppStatus::Stopping {
             self.snapshot = AppSnapshot {
                 status: AppStatus::Transcribed,
+                session_id: self.active_session_id,
                 transcript: Some(transcript),
                 error: None,
                 audio_format: self.snapshot.audio_format.clone(),
@@ -278,6 +287,7 @@ mod tests {
 
         controller.begin_start();
         let snapshot = controller.fail_start(AppError::MissingApiKey {
+            provider: "soniox".to_string(),
             message: "Add your Soniox API key before recording.".to_string(),
         });
 

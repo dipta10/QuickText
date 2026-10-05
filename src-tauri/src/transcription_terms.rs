@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
     sync::{Mutex, MutexGuard},
@@ -47,25 +48,21 @@ pub fn load(app: &AppHandle, state: &TranscriptionTermsState) -> Result<(), Stri
 
 pub fn save(app: &AppHandle, terms_text: &str) -> Result<(), String> {
     validate(terms_text)?;
-    let path = settings_path(app)?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| "Could not resolve the transcription terms folder.".to_string())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("Could not create the settings folder: {error}"))?;
-    let contents = serde_json::to_vec_pretty(&StoredTranscriptionTerms {
-        terms_text: terms_text.to_string(),
-    })
-    .map_err(|error| format!("Could not serialize the transcription terms: {error}"))?;
-    fs::write(path, contents)
-        .map_err(|error| format!("Could not save the transcription terms: {error}"))
+    crate::settings_file::write_json(
+        &settings_path(app)?,
+        &StoredTranscriptionTerms {
+            terms_text: terms_text.to_string(),
+        },
+    )
 }
 
-fn parse_terms(terms_text: &str) -> Vec<String> {
+pub(crate) fn parse_terms(terms_text: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
     terms_text
         .lines()
         .map(str::trim)
         .filter(|term| !term.is_empty())
+        .filter(|term| seen.insert((*term).to_string()))
         .map(str::to_string)
         .collect()
 }
@@ -122,7 +119,7 @@ mod tests {
     fn parses_one_trimmed_term_per_nonblank_line() {
         assert_eq!(
             parse_terms(" Soniox \n\n  Hyprland compositor  \r\nSoniox"),
-            vec!["Soniox", "Hyprland compositor", "Soniox"]
+            vec!["Soniox", "Hyprland compositor"]
         );
     }
 

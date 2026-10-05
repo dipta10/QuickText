@@ -4032,6 +4032,7 @@ dependencies = [
  "futures-util",
  "hound",
  "keyring",
+ "percent-encoding",
  "serde",
  "serde_json",
  "tauri",

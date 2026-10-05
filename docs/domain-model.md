@@ -8,25 +8,27 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 - IPC command: An external request, such as from the companion CLI, delivered to the resident app over a local socket and dispatched to the same app controller path as UI triggers.
 - Companion CLI: The command-line mode of the app binary (`quicktext toggle`, `quicktext status`) that forwards IPC commands to the resident app for compositor bindings and scripts.
 - Capture view: The primary UI view for recording, stopping, viewing transcripts, and copying text.
-- Settings view: The secondary UI view for keybinds, Soniox API key setup, and app preferences.
+- Settings view: The secondary UI view for provider selection, provider credentials, keybinds, terminology, and app preferences.
 - Tray/menu bar resident app: The long-running app process after launch, even when the main window is hidden.
 - Recording session: One accepted dictation attempt from the backend start transition through setup, capture, finalization, cancellation, or failure.
 - Transcription session: The logical operation that turns one recording session's audio into text; it may contain more than one provider connection attempt if retry or reconnect behavior is used.
 - Transcript: The final user-visible text produced from a transcription session.
-- Partial transcript: Non-final text emitted while audio is still being processed.
+- Partial transcript: Provider-neutral confirmed text plus revisable text emitted while audio is still being processed and correlated to one recording and provider session.
 - Hypothesis tokens: The provider's revisable non-final tokens for un-finalized audio; rendered dimmed and replaced as more audio arrives.
-- Provider: A service that converts audio into text.
+- Provider: A selected service that converts audio into text. Exactly one provider receives a recording.
+- Provider selection: The backend-persisted provider used by every trigger path for the next recording session. Soniox is the default.
 - Soniox client: The provider implementation that speaks Soniox API/protocol details.
+- Deepgram client: The provider implementation that speaks Deepgram Nova 3 v1 streaming protocol details.
 - Audio chunk: A small unit of captured microphone data sent to the transcription session.
 - Connect buffer: Audio chunks captured before the provider connection completes; held in the transcription session's channel and flushed in order once connected.
 - Finalization: The period after stop where audio capture has ended but the provider is still returning final results.
 - Copy action: User command that writes the latest transcript to the system clipboard.
 - Auto-copy: Optional behavior that copies the transcript immediately when finalization succeeds.
-- Credential store: OS-backed secret storage for the Soniox API key.
+- Credential store: OS-backed secret storage with a separate account for each provider API key.
 - Settings store: Local non-secret preferences such as shortcut and auto-copy.
+- Language preferences: Soniox-specific likely spoken languages. An empty selection means Soniox automatic detection. Deepgram has no language setting in its first release and uses English.
+- Terms and phrases: A provider-neutral ordered list of important terminology. Each provider validates and maps the list to its own prompting mechanism.
 - Transcription description: Optional user-authored background text supplied to a new transcription session to help recognition. An empty description means no context is supplied.
-- Transcription terms: Optional user-authored names or phrases supplied to a new transcription session as explicit recognition hints. Each nonblank editor line becomes one term.
-- Language preferences: Zero or more likely spoken languages selected by the user. An empty selection means automatic detection.
 - Input device selection: The user-chosen microphone, persisted as a stable device ID; "System default" tracks the OS default microphone.
 - Device fallback: Behavior when the configured input device is missing at record start; capture uses the OS default instead.
 - App run: One lifetime of the resident QuickText process, identified by a `run_id` generated at process start.
@@ -84,6 +86,19 @@ Responsibilities:
 - Map the app-level transcription description to Soniox `context.text`, omitting that field when the description is empty.
 - Map non-empty app-level transcription terms to Soniox `context.terms`; omit context only when both description and terms are empty.
 
+### DeepgramTranscriptionProvider
+
+Concrete transcription provider that opens Deepgram's v1 live WebSocket with Nova 3.
+
+Responsibilities:
+
+- Read the Deepgram credential through the backend credential service.
+- Map normalized raw audio to a supported Deepgram encoding.
+- Enable interim results and convert `is_final` segments into provider-neutral confirmed and revisable text.
+- Map shared terms and phrases to repeated plain `keyterm` parameters.
+- Finalize an explicitly stopped session through `CloseStream` and wait for remaining results and completion metadata.
+- Map Deepgram and network failures into app-level errors without exposing raw payloads.
+
 ### TranscriptResult
 
 Final output from a transcription session.
@@ -120,6 +135,9 @@ Minimum categories:
 - `network_unavailable`
 - `provider_unavailable`
 - `provider_timeout`
+- `rate_limited`
+- `invalid_provider_settings`
+- `provider_protocol_failure`
 - `empty_audio`
 - `internal_error`
 
@@ -134,11 +152,13 @@ Non-secret user preferences.
 Minimum fields:
 
 - `global_shortcut`
+- `active_provider` (defaults to Soniox)
+- `terms_and_phrases` (ordered non-secret list; empty by default)
 - `auto_copy`
 - `input_device_id` (stable device ID; absent means system default)
+- `language_preferences` (Soniox ISO codes; empty means Soniox automatic detection)
 - `transcription_description` (default empty; maximum 10,000 characters)
 - `transcription_terms_text` (default empty; maximum 10,000 characters; one term per line)
-- `language_preferences` (ISO codes; empty means automatic detection)
 - `max_recording_seconds`
 - `live_transcript` (default on)
 - `show_partial_transcript` (default on, only meaningful when `live_transcript` is on)
@@ -219,10 +239,12 @@ A ZIP archive created only after explicit user confirmation. It contains the cur
 
 ## Boundaries
 
-- UI must not know Soniox protocol details.
-- UI must not read the Soniox API key directly.
+- UI must not know Soniox or Deepgram protocol details.
+- UI must not read any provider API key directly.
 - Audio capture must not write provider-specific JSON.
-- Soniox client must not own window behavior.
+- Provider clients must not own window behavior.
+- Shared backend orchestration must depend on provider-neutral traits rather than concrete Soniox or Deepgram sessions.
+- A recording session creates exactly one selected provider session; there is no automatic cross-provider fallback.
 - Clipboard writes must use the transcript currently displayed by app state.
 - Partial transcripts are ephemeral: they must be cleared on stop, error, and cancel, never persisted.
 - Global shortcuts, UI button presses, and IPC commands must call the same app-controller trigger path.
@@ -231,11 +253,14 @@ A ZIP archive created only after explicit user confirmation. It contains the cur
 - Window visibility must not be treated as app lifetime; explicit quit is required to stop the resident process.
 - Settings controls must stay out of the Capture view.
 - Input device picking belongs to Settings; Capture may only surface device-fallback notices.
-- Language preferences belong to Settings, are snapshotted at recording start, and reach Soniox only through the provider boundary.
+- Provider selection and transcription settings belong to Settings, are snapshotted at recording start, and cannot change an active recording.
+- Soniox language preferences reach Soniox only through the provider boundary and never configure Deepgram implicitly.
+- Terms and phrases reach providers only through adapter-owned validation and mapping.
 - Capture should render transcript text as output, not as an editable input.
 - Diagnostic writes, retention, export, and deletion are backend responsibilities; the frontend never receives raw log paths.
 - Logs must use allowlisted structured events rather than arbitrary console forwarding.
 - Recording sessions keep one ID across their lifecycle; each provider connection attempt receives its own ID.
+- Live transcript events carry recording and provider session IDs so stale events can be rejected.
 - Normal and debug logs must preserve the same secret and user-content exclusions.
 - The transcription description is snapshotted when recording starts; changes never alter an in-flight provider session.
 - The transcription description is user content and must never be written to diagnostics.

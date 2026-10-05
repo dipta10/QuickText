@@ -13,20 +13,23 @@ Reviewed `codex/deepgram-stt-plan` from committed baseline `8c6da57` against `or
 - Provider selection and terms files were overwritten directly. Saves now serialize first, write a separate file, and replace the destination atomically. Provider selection becomes authoritative in memory only after its disk save succeeds.
 - Invalid persisted provider selection silently retained the Soniox default. An unreadable or unknown saved selection now blocks capture until the user explicitly saves a provider; missing settings still default to Soniox.
 - Missing credentials could route to Settings while leaving the named provider's credential section hidden. Frontend selection now follows the backend's missing-key provider. Provider selection errors appear next to the selector, and completed form saves respect current recording state when re-enabling controls.
+- Delayed command replies and backend events could rewind the UI to an older session or an earlier recording phase. Frontend state now rejects stale snapshots while allowing a completed transcript to remain available after a paste failure.
+- Language picker controls could remain enabled when capture started. Each render now updates their disabled state, closes the picker during capture, and blocks summary activation while controls are unavailable.
+- The periodic Deepgram idle check could postpone the first keepalive to the service timeout boundary. Keepalives now use a three-second deadline measured from the latest successful audio or keepalive send.
 - README and relevant plans now describe provider choice, current task ownership, buffering, and shared terminology. The terms editor remains exact user input; the provider list removes exact duplicates in first occurrence order.
 
 ## Validation
 
 All checks passed on the local Linux host:
 
-- `npm test`: 10 tests passed.
+- `npm test`: 18 tests passed.
 - `npm run build`: TypeScript and production Vite build passed.
-- `cargo test --manifest-path src-tauri/Cargo.toml --locked`: 95 tests passed; two live-provider tests ignored.
+- `cargo test --manifest-path src-tauri/Cargo.toml --locked`: 96 tests passed; two live-provider tests ignored.
 - `cargo check --manifest-path src-tauri/Cargo.toml --locked`: passed.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: passed.
 - `git diff --check`: passed.
 
-New offline tests exercise real WebSocket framing over in-memory duplex transports: ordered audio draining, trailing final results, metadata followed by graceful close, abnormal close, missing completion metadata, cancellation without finalization, blocked-drain timeout, premature Soniox close, error-content exclusion, task cancellation, settings replacement, invalid-provider recovery, and frontend credential/session isolation.
+New offline tests exercise real WebSocket framing over in-memory duplex transports: ordered audio draining, trailing final results, metadata followed by graceful close, abnormal close, missing completion metadata, cancellation without finalization, blocked-drain timeout, premature Soniox close, error-content exclusion, task cancellation, settings replacement, invalid-provider recovery, and frontend credential/session isolation, stale snapshot ordering, and exact idle keepalive timing with audio resetting the deadline.
 
 ## Remaining verification
 
@@ -44,6 +47,7 @@ No remaining code blocker was found in the reviewed paths after these fixes. Rec
 The adapter contract was checked against Deepgram's primary documentation:
 
 - [Live Audio API](https://developers.deepgram.com/reference/speech-to-text/listen-streaming).
+- [KeepAlive](https://developers.deepgram.com/docs/audio-keep-alive).
 - [Close Stream](https://developers.deepgram.com/docs/close-stream).
 - [Encoding](https://developers.deepgram.com/docs/encoding).
 - [Keyterm Prompting](https://developers.deepgram.com/docs/keyterm).

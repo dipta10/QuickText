@@ -35,7 +35,7 @@ const DEEPGRAM_ENDPOINT: &str = "wss://api.deepgram.com/v1/listen";
 const DEEPGRAM_HOST: &str = "api.deepgram.com";
 const DEEPGRAM_PORT: u16 = 443;
 const FINALIZATION_TIMEOUT_SECONDS: u64 = 5;
-const KEEPALIVE_INTERVAL_SECONDS: u64 = 5;
+const KEEPALIVE_INTERVAL_SECONDS: u64 = 3;
 
 type DeepgramSocket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -347,12 +347,7 @@ async fn run_session<S>(
     let mut finish_tx = None;
     let mut completion_metadata_received = false;
     let keepalive_period = Duration::from_secs(KEEPALIVE_INTERVAL_SECONDS);
-    let mut keepalive = tokio::time::interval_at(
-        tokio::time::Instant::now() + keepalive_period,
-        keepalive_period,
-    );
-    keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    let mut last_audio_sent = tokio::time::Instant::now();
+    let mut last_activity_sent = tokio::time::Instant::now();
 
     loop {
         tokio::select! {
@@ -391,18 +386,17 @@ async fn run_session<S>(
                     fail(&stream_error, &mut finish_tx, transport_error(ProviderId::Deepgram, &error));
                     return;
                 }
-                last_audio_sent = tokio::time::Instant::now();
+                last_activity_sent = tokio::time::Instant::now();
             },
-            _ = keepalive.tick(), if finish_tx.is_none() => {
-                if last_audio_sent.elapsed() >= keepalive_period {
-                    if let Err(error) = socket
-                        .send(Message::Text(r#"{"type":"KeepAlive"}"#.into()))
-                        .await
-                    {
-                        fail(&stream_error, &mut finish_tx, transport_error(ProviderId::Deepgram, &error));
-                        return;
-                    }
+            _ = tokio::time::sleep_until(last_activity_sent + keepalive_period), if finish_tx.is_none() => {
+                if let Err(error) = socket
+                    .send(Message::Text(r#"{"type":"KeepAlive"}"#.into()))
+                    .await
+                {
+                    fail(&stream_error, &mut finish_tx, transport_error(ProviderId::Deepgram, &error));
+                    return;
                 }
+                last_activity_sent = tokio::time::Instant::now();
             },
             message = socket.next() => match message {
                 Some(Ok(Message::Text(text))) => match handle_text_response(text.as_str(), &mut transcript) {
@@ -805,5 +799,36 @@ mod tests {
         .unwrap_err();
         assert!(!error.contains("private payload"));
         assert!(error.contains("invalid transcription response"));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sends_keepalives_at_the_idle_deadline_and_resets_after_audio() {
+        let (session, mut server) = mock_session().await;
+        let sender = session.audio_sender();
+        // Start the socket task before advancing its virtual clock.
+        tokio::task::yield_now().await;
+        let period = Duration::from_secs(KEEPALIVE_INTERVAL_SECONDS);
+        for _ in 0..2 {
+            let before = tokio::time::Instant::now();
+            assert_eq!(
+                server.next().await.unwrap().unwrap(),
+                Message::Text(r#"{"type":"KeepAlive"}"#.into())
+            );
+            assert_eq!(before.elapsed(), period);
+        }
+        tokio::time::advance(Duration::from_millis(1500)).await;
+        sender.send(vec![1, 2]).unwrap();
+        assert_eq!(
+            server.next().await.unwrap().unwrap(),
+            Message::Binary(vec![1, 2].into())
+        );
+        let before = tokio::time::Instant::now();
+        assert_eq!(
+            server.next().await.unwrap().unwrap(),
+            Message::Text(r#"{"type":"KeepAlive"}"#.into())
+        );
+        assert_eq!(before.elapsed(), period);
+        drop(sender);
+        Box::new(session).cancel();
     }
 }

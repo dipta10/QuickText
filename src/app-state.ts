@@ -157,10 +157,33 @@ const recordingStartedAt = (
   return null;
 };
 
+const recordingPhase: Record<RecordingState, number> = {
+  idle: 0,
+  starting: 1,
+  recording: 2,
+  stopping: 3,
+  transcribed: 4,
+  error: 4,
+};
+
 export const applyBackendSnapshot = (
   state: AppState,
   snapshot: BackendAppSnapshot,
 ): AppState => {
+  // Command replies and events may arrive in a different order. Sessions are
+  // monotonically numbered by the resident backend; never rewind a capture.
+  if (state.activeSessionId !== null) {
+    if (
+      snapshot.sessionId === null ||
+      snapshot.sessionId < state.activeSessionId ||
+      (snapshot.sessionId === state.activeSessionId &&
+        (recordingPhase[snapshot.status] < recordingPhase[state.recording] ||
+          (state.recording === "error" && snapshot.status === "transcribed")))
+    ) {
+      return state;
+    }
+  }
+
   const isMissingApiKey = snapshot.error?.type === "missing_api_key";
   const shouldClearTranscript =
     snapshot.status === "starting" || snapshot.status === "error";

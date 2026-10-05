@@ -37,13 +37,13 @@ describe("recording-session transcript lifecycle", () => {
       finalText: "words from the failed recording",
       partialText: "still forming",
     });
-    state = applyBackendSnapshot(state, snapshot("stopping"));
+    state = applyBackendSnapshot(state, snapshot("stopping", null, 1));
     state = applyBackendSnapshot(
       state,
       snapshot("error", {
         type: "provider_unavailable",
         message: "Soniox finalization timed out.",
-      }),
+      }, 1),
     );
 
     expect(state.transcript).toBe("");
@@ -73,7 +73,7 @@ describe("recording-session transcript lifecycle", () => {
       },
       error: null,
     });
-    state = applyBackendSnapshot(state, snapshot("starting"));
+    state = applyBackendSnapshot(state, snapshot("starting", null, 2));
 
     expect(state.transcript).toBe("");
     expect(state.partialTranscript).toBe("");
@@ -158,5 +158,47 @@ describe("recording-session transcript lifecycle", () => {
       })).toBe(state);
     },
   );
+
+  it.each(["starting", "recording", "stopping", "transcribed", "error"] as const)(
+    "ignores a delayed %s snapshot from an older recording",
+    (status) => {
+      const state = applyBackendSnapshot(
+        createAppState("", 300, false, false, false, true, true, "", false, false),
+        snapshot("recording", null, 2),
+      );
+      expect(applyBackendSnapshot(state, snapshot(status, null, 1))).toBe(state);
+    },
+  );
+
+  it("ignores an initial idle response received after recording starts", () => {
+    const state = applyBackendSnapshot(
+      createAppState("", 300, false, false, false, true, true, "", false, false),
+      snapshot("recording", null, 1),
+    );
+    expect(applyBackendSnapshot(state, snapshot("idle"))).toBe(state);
+  });
+
+  it("does not resume live updates when an older recording reply arrives after stop", () => {
+    const state = applyBackendSnapshot(
+      createAppState("", 300, false, false, false, true, true, "", false, false),
+      snapshot("stopping", null, 1),
+    );
+    expect(applyBackendSnapshot(state, snapshot("recording", null, 1))).toBe(state);
+  });
+
+  it("allows paste failure after completion but rejects an older successful reply", () => {
+    let state = applyBackendSnapshot(
+      createAppState("", 300, false, false, false, true, true, "", false, false),
+      { ...snapshot("transcribed", null, 1), transcript: {text: "keep this transcript", provider: "deepgram"} },
+    );
+    state = applyBackendSnapshot(state, {
+      ...snapshot("error", {type: "paste_failed", message: "Paste failed"}, 1),
+      transcript: {text: "keep this transcript", provider: "deepgram"},
+    });
+    expect(state.recording).toBe("error");
+    expect(state.transcript).toBe("keep this transcript");
+    expect(applyBackendSnapshot(state, snapshot("transcribed", null, 1))).toBe(state);
+    expect(applyBackendSnapshot(state, snapshot("starting", null, 2)).recording).toBe("starting");
+  });
 
 });

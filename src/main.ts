@@ -202,6 +202,20 @@ const languageSummary = () => {
   return `${selectedLanguageCodes.length} languages selected`;
 };
 
+const renderLanguageControls = () => {
+  const disabled = isBusy(state) || isRecording(state) || languagePreferencesSaving;
+  view.clearLanguagesButton.disabled = disabled || selectedLanguageCodes.length === 0;
+  view.languageSearchInput.disabled = disabled;
+  for (const checkbox of view.languageOptions.querySelectorAll<HTMLInputElement>("input")) {
+    checkbox.disabled = disabled;
+  }
+  view.languagePickerSummary.setAttribute("aria-disabled", String(disabled));
+  view.languagePicker.classList.toggle("is-disabled", disabled);
+  if (disabled) {
+    view.languagePicker.open = false;
+  }
+};
+
 const renderLanguagePicker = () => {
   const providerControlsDisabled = isBusy(state) || isRecording(state);
   view.languagePickerSummary.textContent = languageSummary();
@@ -244,6 +258,7 @@ const renderLanguagePicker = () => {
     empty.textContent = "No languages match your search.";
     view.languageOptions.appendChild(empty);
   }
+  renderLanguageControls();
 };
 
 const render = () => {
@@ -322,7 +337,7 @@ const render = () => {
   view.transcriptionTermsInput.disabled = providerControlsDisabled;
   view.transcriptionTermsSaveButton.disabled =
     providerControlsDisabled || transcriptionTermsSaving;
-  view.languagePicker.classList.toggle("is-disabled", providerControlsDisabled);
+  renderLanguageControls();
   if (document.activeElement !== view.maxRecordingSecondsInput) {
     view.maxRecordingSecondsInput.value = state.maxRecordingSeconds.toString();
   }
@@ -901,6 +916,12 @@ view.languageOptions.addEventListener("change", (event) => {
       .map((language) => language.code)
       .filter((code) => selected.has(code)),
   );
+});
+
+view.languagePickerSummary.addEventListener("click", (event) => {
+  if (isBusy(state) || isRecording(state) || languagePreferencesSaving) {
+    event.preventDefault();
+  }
 });
 
 view.clearLanguagesButton.addEventListener("click", () => {

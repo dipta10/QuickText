@@ -134,6 +134,31 @@ mod tests {
             serde_json::from_str(r#"{"activeProvider":"deepgram"}"#).unwrap();
         assert_eq!(stored.active_provider, ProviderId::Deepgram);
     }
+
+    #[test]
+    fn restores_each_saved_provider_into_fresh_app_state() {
+        let path = std::env::temp_dir().join(format!(
+            "quicktext-provider-restart-{}.json",
+            std::process::id()
+        ));
+        for provider in [ProviderId::Deepgram, ProviderId::Soniox] {
+            crate::settings_file::write_json(
+                &path,
+                &StoredTranscriptionSettings {
+                    active_provider: provider,
+                },
+            )
+            .unwrap();
+            let restarted_state = TranscriptionSettingsState::default();
+            load_from_path(&restarted_state, &path).unwrap();
+            assert_eq!(
+                snapshot(&restarted_state).unwrap().active_provider,
+                provider
+            );
+        }
+        fs::remove_file(path).unwrap();
+    }
+
     #[test]
     fn invalid_saved_selection_blocks_capture_until_the_user_selects_a_provider() {
         let path = std::env::temp_dir().join(format!(

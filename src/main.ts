@@ -458,13 +458,9 @@ const saveInputDeviceSelection = async (deviceId: string) => {
 
 const loadApiKeyStatus = async (provider: ProviderId) => {
   try {
-    updateState(
-      setProviderApiKeyPresence(
-        state,
-        provider,
-        await hasProviderApiKey(provider),
-      ),
-    );
+    const hasApiKey = await hasProviderApiKey(provider);
+    // Startup loaders run concurrently; apply results to the current state.
+    updateState(setProviderApiKeyPresence(state, provider, hasApiKey));
   } catch (error) {
     updateState(
       setProviderApiKeyStatus(
@@ -642,7 +638,8 @@ const saveTranscriptionTerms = async () => {
 
 const loadBackendState = async () => {
   try {
-    updateState(applyBackendSnapshot(state, await getAppState()));
+    const snapshot = await getAppState();
+    updateState(applyBackendSnapshot(state, snapshot));
   } catch (error) {
     updateState(
       setStatus(state, error instanceof Error ? error.message : String(error)),
@@ -728,12 +725,8 @@ const toggleRecording = async () => {
   try {
     const nextState = showCapture(state);
     state = nextState;
-    updateState(
-      applyBackendSnapshot(
-        state,
-        await toggleBackendRecording(state.maxRecordingSeconds),
-      ),
-    );
+    const snapshot = await toggleBackendRecording(state.maxRecordingSeconds);
+    updateState(applyBackendSnapshot(state, snapshot));
     maybeAutoCopyTranscript();
   } catch (error) {
     updateState(

@@ -44,7 +44,8 @@ Required elements:
 - Recording affordance: timer plus subtle activity indicator while listening.
 - Read-only active-provider label.
 - Transcript display as a readable result surface, not a textarea.
-- Copy button in the transcript toolbar.
+- Copy and Clean & Copy buttons in the transcript toolbar.
+- Restore original after cleanup and a setup route when no Gemini cleanup key is saved.
 - Optional "New recording" action after transcript completion if the main toggle behavior is not enough.
 
 Transcript presentation:
@@ -75,6 +76,7 @@ Recommended sections:
 - Transcription: active-provider selector and shared `Terms and phrases` field.
 - Soniox: API key status, save/update key, delete key, Description textarea, and a searchable multi-select for transcription languages.
 - Deepgram: API key status, save/update key, delete key, and a clear English-only note with no language control.
+- Transcript cleanup: Google Gemini API key status, masked entry, Save/Delete, a Google AI Studio setup link, and disclosure about sending text and free-tier data use. This section is independent of speech-provider selection.
 - Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
 - Behavior: manual copy default, future auto-copy option, max recording duration display.
 - App: tray/background explanation and explicit quit note.
@@ -217,3 +219,9 @@ The Terms control also preserves its editor text and remains empty by default. A
 - **Should the app use a full navigation sidebar?** No for MVP. A compact top-bar toggle is enough.
 - **Should there be a visible tray/background control?** Settings should mention that closing hides to tray and quitting is explicit.
 - **What context UI is required?** One Description textarea and one simple one-term-per-line Terms textarea. Structured general context, translation terms, chips, and automatic context generation remain out of scope.
+
+## Transcript Cleanup
+
+Clean & Copy is enabled only with a saved Gemini key and a nonempty finalized transcript, while no cleanup is pending. Without the key, keep the button visible but disabled and show “Add a Gemini API key in Settings,” which focuses the dedicated key field. An unsaved field value never enables cleanup. Saving securely stores the key without a live validation request; invalid keys and quota failures are reported on cleanup.
+
+Show Cleaning… during a request. Success displays the cleaned text and copies it once; it never automatically pastes. Restore original switches the displayed version without touching the clipboard. Ordinary Copy always copies the displayed text. A new recording invalidates old cleanup results. See [the cleanup plan](transcript-cleanup-implementation-plan.md) for recovery rules and validation.

@@ -2,6 +2,7 @@ import "./styles.css";
 import {
   cancelShortcutCapture,
   canToggleRecording,
+  shouldAutoCopyTranscript,
   canChangeProvider,
   createAppState,
   applyBackendSnapshot,
@@ -33,6 +34,7 @@ import {
 } from "./app-state";
 import type { ProviderId } from "./app-state";
 import { createAppView } from "./app-view";
+import { connectCleanupControls, renderCleanupControls } from "./cleanup-controls";
 import { formatShortcut } from "./shortcut";
 import {
   getAutoCopyTranscript,
@@ -104,7 +106,7 @@ let state = createAppState(
   getLaunchOnStartup(),
 );
 const view = createAppView(app);
-let lastAutoCopiedTranscript = "";
+let lastAutoCopiedSessionId: number | null = null;
 let availableLanguages: SupportedLanguage[] = [];
 let selectedLanguageCodes: string[] = [];
 let confirmedLanguageCodes: string[] = [];
@@ -291,6 +293,7 @@ const render = () => {
   view.recordingTimer.textContent = formatElapsedTime(state.recordingStartedAt);
   view.activityIndicator.hidden = !isRecording(state);
   view.copyButton.disabled = !state.transcript;
+  renderCleanupControls(view, state);
   const hasTranscriptText =
     Boolean(state.transcript) || Boolean(state.partialTranscript);
   view.transcriptPlaceholder.hidden = hasTranscriptText;
@@ -392,16 +395,8 @@ const copyTranscript = async (successMessage = "Transcript copied.") => {
 };
 
 const maybeAutoCopyTranscript = () => {
-  if (
-    !state.autoCopyTranscript ||
-    state.recording !== "transcribed" ||
-    !state.transcript ||
-    state.transcript === lastAutoCopiedTranscript
-  ) {
-    return;
-  }
-
-  lastAutoCopiedTranscript = state.transcript;
+  if (!shouldAutoCopyTranscript(state, lastAutoCopiedSessionId)) return;
+  lastAutoCopiedSessionId = state.activeSessionId;
   void copyTranscript("Transcript copied automatically.");
 };
 
@@ -984,6 +979,7 @@ void onDeviceFallback((message) => {
   // Device fallback events run in the desktop app only.
 });
 
+connectCleanupControls(view, () => state, updateState);
 render();
 window.setInterval(render, 1000);
 void loadBackendState();

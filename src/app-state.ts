@@ -21,11 +21,23 @@ export type BackendAppError = {
   message: string;
 };
 
+export type CleanupSnapshot = {
+  revision: number;
+  running: boolean;
+  cleaned: boolean;
+  message: string;
+};
+
+const emptyCleanup = (): CleanupSnapshot => ({
+  revision: 0, running: false, cleaned: false, message: "",
+});
+
 export type BackendAppSnapshot = {
   status: RecordingState;
   sessionId: number | null;
   transcript: TranscriptResult | null;
   error: BackendAppError | null;
+  cleanup?: CleanupSnapshot;
 };
 
 export type PartialTranscriptUpdate = {
@@ -65,6 +77,11 @@ export type AppState = {
   deviceNotice: string;
   status: string;
   transcript: string;
+  cleanup: CleanupSnapshot;
+  cleanupApiKeyConfigured: boolean;
+  cleanupCredentialBusy: boolean;
+  cleanupActionPending: boolean;
+  cleanupApiKeyStatus: string;
   partialTranscript: string;
   recordingStartedAt: number | null;
 };
@@ -105,6 +122,11 @@ export const createAppState = (
   deviceNotice: "",
   status: "Ready.",
   transcript: "",
+  cleanup: emptyCleanup(),
+  cleanupApiKeyConfigured: false,
+  cleanupCredentialBusy: false,
+  cleanupActionPending: false,
+  cleanupApiKeyStatus: "",
   partialTranscript: "",
   recordingStartedAt: null,
 });
@@ -195,12 +217,18 @@ export const applyBackendSnapshot = (
     }
   }
 
+  if (snapshot.sessionId === state.activeSessionId &&
+      (snapshot.cleanup?.revision ?? 0) < state.cleanup.revision) {
+    return state;
+  }
+
   const isMissingApiKey = snapshot.error?.type === "missing_api_key";
   const sessionChanged = snapshot.sessionId !== state.activeSessionId;
   const shouldClearTranscript =
     sessionChanged || snapshot.status === "starting" || snapshot.status === "error";
   const shouldShowCapture =
-    snapshot.status !== "idle" && snapshot.status !== "error";
+    snapshot.status !== "idle" && snapshot.status !== "error" &&
+    (sessionChanged || snapshot.status !== state.recording);
 
   return {
     ...state,
@@ -216,6 +244,8 @@ export const applyBackendSnapshot = (
     recording: snapshot.status,
     activeSessionId: snapshot.sessionId,
     status: statusText(snapshot),
+    cleanup: snapshot.cleanup ?? emptyCleanup(),
+    cleanupActionPending: sessionChanged ? false : state.cleanupActionPending,
     transcript:
       snapshot.transcript?.text ??
       (shouldClearTranscript ? "" : state.transcript),
@@ -447,3 +477,19 @@ export const setStatus = (state: AppState, status: string): AppState => ({
   ...state,
   status,
 });
+
+export const canCleanTranscript = (state: AppState): boolean =>
+  state.cleanupApiKeyConfigured && Boolean(state.transcript.trim()) &&
+  canChangeProvider(state) && !state.cleanup.running && !state.cleanupActionPending && !state.cleanupCredentialBusy;
+
+export const setCleanupCredentials = (
+  state: AppState, configured: boolean, message = "",
+): AppState => ({ ...state, cleanupApiKeyConfigured: configured, cleanupApiKeyStatus: message });
+
+export const setCleanupCredentialStatus = (state: AppState, message: string): AppState =>
+  ({ ...state, cleanupApiKeyStatus: message });
+
+export const shouldAutoCopyTranscript = (state: AppState, lastSessionId: number | null): boolean =>
+  state.autoCopyTranscript && state.recording === "transcribed" && Boolean(state.transcript) &&
+  state.activeSessionId !== null && state.activeSessionId !== lastSessionId &&
+  state.cleanup.revision === 0;

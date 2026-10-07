@@ -314,3 +314,56 @@ describe("provider picker availability", () => {
     },
   );
 });
+
+describe("cleanup transcript lifecycle", () => {
+  const initial = () => createAppState("", 300, true, false, false, false, false, "", false, false);
+  const completed = (text: string, revision = 0): BackendAppSnapshot => ({
+    status: "transcribed", sessionId: 1, transcript: { text, provider: "soniox" }, error: null,
+    cleanup: { revision, running: false, cleaned: revision > 0, message: "" },
+  });
+
+  it("requires a saved key and finalized text, and rejects stale cleanup revisions", async () => {
+    const { canCleanTranscript, setCleanupCredentials } = await import("./app-state");
+    let state = applyBackendSnapshot(initial(), completed("original"));
+    expect(canCleanTranscript(state)).toBe(false);
+    state = setCleanupCredentials(state, true);
+    expect(canCleanTranscript(state)).toBe(true);
+    state = applyBackendSnapshot(state, completed("cleaned", 2));
+    expect(applyBackendSnapshot(state, completed("original", 1))).toBe(state);
+    state = applyBackendSnapshot(state, snapshot("starting", null, 2));
+    expect(canCleanTranscript(state)).toBe(false);
+    expect(state.cleanup.cleaned).toBe(false);
+    expect(applyBackendSnapshot(state, completed("stale", 3))).toBe(state);
+  });
+
+  it("auto-copies once per recording, including identical takes, but never cleanup or restore updates", async () => {
+    const { shouldAutoCopyTranscript } = await import("./app-state");
+    const state = applyBackendSnapshot(initial(), completed("original"));
+    expect(shouldAutoCopyTranscript(state, null)).toBe(true);
+    expect(shouldAutoCopyTranscript(state, 1)).toBe(false);
+    expect(shouldAutoCopyTranscript(applyBackendSnapshot(state, completed("cleaned", 2)), null)).toBe(false);
+    expect(shouldAutoCopyTranscript(applyBackendSnapshot(state, completed("original", 3)), null)).toBe(false);
+    const next = applyBackendSnapshot(state, { ...completed("original"), sessionId: 2 });
+    expect(shouldAutoCopyTranscript(next, 1)).toBe(true);
+  });
+});
+
+
+describe("cleanup navigation", () => {
+  it("preserves Settings while cleanup runs and completes, but opens Capture for the next recording", () => {
+    const original: BackendAppSnapshot = {
+      status: "transcribed", sessionId: 1, error: null,
+      transcript: { text: "Original.", provider: "soniox" },
+    };
+    let state = applyBackendSnapshot(createAppState("", 300, false, false, false, false, false, "", false, false), original);
+    state = { ...state, activeView: "settings" };
+    for (const running of [true, false]) {
+      state = applyBackendSnapshot(state, {
+        ...original, cleanup: { revision: running ? 1 : 2, running, cleaned: !running, message: "" },
+      });
+      expect(state.activeView).toBe("settings");
+    }
+    state = applyBackendSnapshot(state, { status: "starting", sessionId: 2, error: null, transcript: null });
+    expect(state.activeView).toBe("capture");
+  });
+});

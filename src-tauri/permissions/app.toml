@@ -1,0 +1,31 @@
+# Defining any app permission enables ACL enforcement for all app commands.
+# Keep the existing Capture and Settings commands available alongside cleanup.
+[[permission]]
+identifier = "allow-app-controls"
+description = "Allows the main window to control recording and configure existing app and transcription settings."
+commands.allow = [
+  "get_app_state",
+  "get_build_info",
+  "toggle_recording",
+  "set_global_shortcut",
+  "set_shortcut_behavior",
+  "set_paste_to_target",
+  "has_soniox_api_key",
+  "save_soniox_api_key",
+  "delete_soniox_api_key",
+  "has_provider_api_key",
+  "save_provider_api_key",
+  "delete_provider_api_key",
+  "list_input_devices",
+  "set_input_device",
+  "get_language_preferences",
+  "set_language_preferences",
+  "get_transcription_description",
+  "set_transcription_description",
+  "get_transcription_settings",
+  "set_active_provider",
+  "get_transcription_terms",
+  "set_transcription_terms",
+  "get_launch_on_startup",
+  "set_launch_on_startup",
+]

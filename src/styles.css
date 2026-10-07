@@ -23,8 +23,8 @@ body,
 }
 
 body {
-  min-width: 360px;
-  min-height: 520px;
+  min-width: 0;
+  min-height: 0;
   background: #090b10;
 }
 
@@ -41,6 +41,8 @@ button {
 
 #app {
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 18px;
 }
@@ -50,7 +52,9 @@ button {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 16px;
   width: min(100%, 480px);
+  min-width: 0;
   height: 100%;
+  min-height: 0;
   color: #f5f7fa;
 }
 
@@ -109,12 +113,17 @@ button {
 
 .view-toggle-button,
 .copy-button,
+.clean-button,
+.restore-button,
+.cleanup-setup-button,
 .copy-build-info-button,
 .keybind-button,
 .api-key-save-button,
 .api-key-delete-button,
 .deepgram-api-key-save-button,
 .deepgram-api-key-delete-button,
+.cleanup-api-key-save-button,
+.cleanup-api-key-delete-button,
 .transcription-description-save-button,
 .transcription-terms-save-button {
   min-height: 38px;
@@ -133,18 +142,26 @@ button {
 
 .view-toggle-button,
 .copy-button,
+.clean-button,
+.restore-button,
+.cleanup-setup-button,
 .copy-build-info-button {
   padding: 0 12px;
 }
 
 .view-toggle-button:hover,
 .copy-button:hover,
+.clean-button:hover,
+.restore-button:hover,
+.cleanup-setup-button:hover,
 .copy-build-info-button:hover,
 .keybind-button:hover,
 .api-key-save-button:hover,
 .api-key-delete-button:hover,
 .deepgram-api-key-save-button:hover,
 .deepgram-api-key-delete-button:hover,
+.cleanup-api-key-save-button:hover,
+.cleanup-api-key-delete-button:hover,
 .transcription-description-save-button:hover,
 .transcription-terms-save-button:hover {
   background: rgba(255, 255, 255, 0.1);
@@ -154,7 +171,7 @@ button {
 .main-content {
   min-width: 0;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .capture-view,
@@ -165,7 +182,8 @@ button {
 }
 
 .capture-view {
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
 }
 
 .settings-view {
@@ -183,6 +201,7 @@ button {
 }
 
 .recording-controls {
+  flex-shrink: 0;
   display: grid;
   justify-items: center;
   gap: 12px;
@@ -213,12 +232,17 @@ button {
 .record-button:active,
 .view-toggle-button:active,
 .copy-button:active,
+.clean-button:active,
+.restore-button:active,
+.cleanup-setup-button:active,
 .copy-build-info-button:active,
 .keybind-button:active,
 .api-key-save-button:active,
 .api-key-delete-button:active,
 .deepgram-api-key-save-button:active,
 .deepgram-api-key-delete-button:active,
+.cleanup-api-key-save-button:active,
+.cleanup-api-key-delete-button:active,
 .transcription-description-save-button:active,
 .transcription-terms-save-button:active {
   transform: translateY(1px);
@@ -226,10 +250,15 @@ button {
 
 .record-button:disabled,
 .copy-button:disabled,
+.clean-button:disabled,
+.restore-button:disabled,
+.cleanup-setup-button:disabled,
 .api-key-delete-button:disabled,
 .api-key-save-button:disabled,
 .deepgram-api-key-save-button:disabled,
 .deepgram-api-key-delete-button:disabled,
+.cleanup-api-key-save-button:disabled,
+.cleanup-api-key-delete-button:disabled,
 .transcription-description-save-button:disabled,
 .transcription-terms-save-button:disabled {
   cursor: not-allowed;
@@ -287,8 +316,9 @@ button {
 
 .transcript-panel {
   display: grid;
-  grid-template-rows: auto minmax(180px, 1fr);
-  min-height: 300px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .transcript-toolbar {
@@ -336,7 +366,7 @@ button {
   align-content: start;
   min-width: 0;
   overflow: auto;
-  padding-right: 2px;
+  scrollbar-width: none;
 }
 
 .settings-section {
@@ -366,6 +396,7 @@ button {
 
 .api-key-input,
 .deepgram-api-key-input,
+.cleanup-api-key-input,
 .provider-select,
 .input-device-select,
 .max-recording-seconds-input,
@@ -419,6 +450,7 @@ button {
 
 .api-key-input::placeholder,
 .deepgram-api-key-input::placeholder,
+.cleanup-api-key-input::placeholder,
 .max-recording-seconds-input::placeholder,
 .language-search-input::placeholder {
   color: #687488;
@@ -548,6 +580,8 @@ button {
 .api-key-delete-button,
 .deepgram-api-key-save-button,
 .deepgram-api-key-delete-button,
+.cleanup-api-key-save-button,
+.cleanup-api-key-delete-button,
 .keybind-button,
 .transcription-description-save-button,
 .transcription-terms-save-button {
@@ -577,10 +611,14 @@ button {
 .record-button:focus-visible,
 .view-toggle-button:focus-visible,
 .copy-button:focus-visible,
+.clean-button:focus-visible,
+.restore-button:focus-visible,
+.cleanup-setup-button:focus-visible,
 .copy-build-info-button:focus-visible,
 .keybind-button:focus-visible,
 .api-key-input:focus-visible,
 .deepgram-api-key-input:focus-visible,
+.cleanup-api-key-input:focus-visible,
 .provider-select:focus-visible,
 .transcription-description-input:focus-visible,
 .transcription-terms-input:focus-visible,
@@ -591,6 +629,8 @@ button {
 .api-key-delete-button:focus-visible,
 .deepgram-api-key-save-button:focus-visible,
 .deepgram-api-key-delete-button:focus-visible,
+.cleanup-api-key-save-button:focus-visible,
+.cleanup-api-key-delete-button:focus-visible,
 .transcription-description-save-button:focus-visible,
 .transcription-terms-save-button:focus-visible,
 .transcript-text:focus-visible {
@@ -607,4 +647,37 @@ button {
   cursor: not-allowed;
   opacity: 0.55;
   pointer-events: none;
+}
+
+/* Keep transcript actions usable at compact window widths. */
+.transcript-toolbar {
+  flex-wrap: wrap;
+}
+
+.transcript-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.cleanup-feedback {
+  padding: 8px 12px;
+}
+
+.cleanup-setup-button {
+  text-align: left;
+}
+
+.cleanup-status {
+  margin: 6px 0 0;
+}
+
+.cleanup-key-link {
+  color: #a8caff;
+  font-size: 0.8rem;
+}
+
+/* Settings stays scrollable without a platform scrollbar crowding the cards. */
+.settings-view::-webkit-scrollbar {
+  display: none;
 }

@@ -226,3 +226,33 @@ export const onDeviceFallback = async (handler: (message: string) => void) => {
     handler(event.payload);
   });
 };
+
+export const hasCleanupApiKey = async (): Promise<boolean> => {
+  assertTauriRuntime();
+  return invoke<boolean>("has_cleanup_api_key");
+};
+
+export const saveCleanupApiKey = async (apiKey: string): Promise<void> => {
+  assertTauriRuntime();
+  await invoke("save_cleanup_api_key", { apiKey });
+};
+
+export const deleteCleanupApiKey = async (): Promise<void> => {
+  assertTauriRuntime();
+  await invoke("delete_cleanup_api_key");
+};
+
+export const cleanAndCopy = async (): Promise<void> => {
+  assertTauriRuntime();
+  await invoke("clean_and_copy");
+};
+
+export const restoreOriginalTranscript = async (): Promise<void> => {
+  assertTauriRuntime();
+  await invoke("restore_original_transcript");
+};
+
+export const openCleanupKeySetup = async (): Promise<void> => {
+  assertTauriRuntime();
+  await invoke("open_cleanup_key_setup");
+};

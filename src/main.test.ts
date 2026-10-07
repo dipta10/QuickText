@@ -46,6 +46,7 @@ beforeEach(() => {
   vi.mocked(backend.getAppState).mockResolvedValue(idle);
   vi.mocked(backend.getTranscriptionSettings).mockResolvedValue({ activeProvider: "deepgram" });
   vi.mocked(backend.hasProviderApiKey).mockResolvedValue(true);
+  vi.mocked(backend.hasCleanupApiKey).mockResolvedValue(false);
   vi.mocked(backend.getBuildInfo).mockResolvedValue({
     version: "0.1.0", buildId: "test", sourceRevision: "Development",
   });
@@ -136,4 +137,90 @@ describe("provider restoration in the app", () => {
     expect(element(".status-chip").textContent).toBe("Transcript ready");
     expect(element(".transcript-final").textContent).toBe("Final transcript");
   });
+});
+
+describe("cleanup in the running app", () => {
+  it("shows restore after recording, stopping and cleaning a short transcript, then restores it", async () => {
+    vi.mocked(backend.hasCleanupApiKey).mockResolvedValue(true);
+    await startApp("soniox");
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    const recorded: BackendAppSnapshot = {
+      ...idle, status: "recording", sessionId: 1,
+    };
+    const original: BackendAppSnapshot = {
+      ...recorded, status: "transcribed",
+      transcript: { text: "Um, move it to Friday.", provider: "soniox" },
+      cleanup: { revision: 0, running: false, cleaned: false, message: "" },
+    };
+    vi.mocked(backend.toggleBackendRecording).mockImplementationOnce(async () => {
+      onState(recorded);
+      return recorded;
+    }).mockImplementationOnce(async () => {
+      onState({ ...recorded, status: "stopping" });
+      onState(original);
+      return original;
+    });
+    element<HTMLButtonElement>(".record-button").click();
+    await vi.advanceTimersByTimeAsync(0);
+    element<HTMLButtonElement>(".record-button").click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(element<HTMLButtonElement>(".restore-button").hidden).toBe(true);
+    expect(element<HTMLElement>(".cleanup-feedback").hidden).toBe(true);
+    const cleaned: BackendAppSnapshot = {
+      ...original, transcript: { text: "Move it to Friday.", provider: "soniox" },
+      cleanup: { revision: 2, running: false, cleaned: true, message: "Cleaned and copied." },
+    };
+    vi.mocked(backend.cleanAndCopy).mockImplementation(async () => {
+      onState({ ...original, cleanup: { revision: 1, running: true, cleaned: false, message: "Cleaning…" } });
+      onState(cleaned);
+    });
+    element<HTMLButtonElement>(".clean-button").click();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(backend.cleanAndCopy).toHaveBeenCalledOnce();
+    expect(element(".transcript-final").textContent).toBe("Move it to Friday.");
+    expect(element<HTMLButtonElement>(".restore-button").hidden).toBe(false);
+    expect(element<HTMLElement>(".cleanup-feedback").hidden).toBe(false);
+    expect(element<HTMLElement>(".cleanup-status").hidden).toBe(false);
+    expect(element(".cleanup-status").textContent).toBe("Cleaned and copied.");
+    vi.mocked(backend.restoreOriginalTranscript).mockImplementation(async () => {
+      onState({ ...original, cleanup: { revision: 3, running: false, cleaned: false, message: "Original restored. Press Copy to copy it." } });
+    });
+    element<HTMLButtonElement>(".restore-button").click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(backend.restoreOriginalTranscript).toHaveBeenCalledOnce();
+    expect(element(".transcript-final").textContent).toBe(original.transcript?.text);
+    expect(element<HTMLButtonElement>(".restore-button").hidden).toBe(true);
+    expect(backend.copyTextToClipboard).not.toHaveBeenCalled();
+  });
+});
+
+
+it("auto-copies each recording once, excludes cleanup and restore, and manually copies the displayed variant", async () => {
+  localStorage.setItem("stt.autoCopyTranscript", "true");
+  await startApp("soniox");
+  const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+  const original: BackendAppSnapshot = {
+    status: "transcribed", sessionId: 1, error: null,
+    transcript: { text: "Um, Friday.", provider: "soniox" },
+  };
+  onState(original);
+  onState(original);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(backend.copyTextToClipboard).toHaveBeenCalledExactlyOnceWith("Um, Friday.");
+  onState({ ...original, transcript: { text: "Friday.", provider: "soniox" },
+    cleanup: { revision: 2, running: false, cleaned: true, message: "Cleaned and copied." } });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(backend.copyTextToClipboard).toHaveBeenCalledTimes(1);
+  element<HTMLButtonElement>(".copy-button").click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(backend.copyTextToClipboard).toHaveBeenLastCalledWith("Friday.");
+  onState({ ...original, cleanup: { revision: 3, running: false, cleaned: false, message: "Original restored." } });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(backend.copyTextToClipboard).toHaveBeenCalledTimes(2);
+  element<HTMLButtonElement>(".copy-button").click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(backend.copyTextToClipboard).toHaveBeenLastCalledWith("Um, Friday.");
+  onState({ ...original, sessionId: 2 });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(backend.copyTextToClipboard).toHaveBeenCalledTimes(4);
 });

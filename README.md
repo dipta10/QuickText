@@ -2,7 +2,9 @@
 
 Fast speech-to-text dictation for your desktop. Press a key, speak, get text.
 
-QuickText is a lightweight desktop app that turns your voice into text in seconds: trigger it with the primary button or a global shortcut, speak, trigger again to stop, and copy the transcript. Transcription streams through your selected provider, [Soniox](https://soniox.com) or [Deepgram](https://deepgram.com), while you speak.
+QuickText turns your voice into text in seconds. Start, speak, stop—then copy your transcript or let QuickText paste it straight into the focused app. Transcription streams through your selected provider, [Soniox](https://soniox.com) or [Deepgram](https://deepgram.com), while you speak.
+
+![QuickText recording speech with a live transcript in its dark desktop interface.](docs/images/quicktext-recording.png)
 
 ## Features
 

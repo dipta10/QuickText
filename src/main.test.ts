@@ -46,6 +46,7 @@ beforeEach(() => {
   vi.mocked(backend.getAppState).mockResolvedValue(idle);
   vi.mocked(backend.getTranscriptionSettings).mockResolvedValue({ activeProvider: "deepgram" });
   vi.mocked(backend.hasProviderApiKey).mockResolvedValue(true);
+  vi.mocked(backend.hasCleanupApiKey).mockResolvedValue(false);
   vi.mocked(backend.getBuildInfo).mockResolvedValue({
     version: "0.1.0", buildId: "test", sourceRevision: "Development",
   });

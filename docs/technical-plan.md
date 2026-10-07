@@ -195,3 +195,9 @@ Deepgram uses English in the initial release. Shared terms and phrases map to re
 8. Test on Linux, macOS, and Windows.
 
 See [Implementation plan](implementation-plan.md) for the expanded milestone breakdown.
+
+## Optional Transcript Cleanup
+
+A separate object-safe `TranscriptCleaner` boundary edits finalized text; `GeminiCleaner` implements it using the Gemini 3.1 Flash-Lite generateContent API. It is independent of the Soniox/Deepgram speech registry. Backend commands own request state, original/displayed transcript variants, and copy-only delivery. Recording-session and cleanup-request identities prevent stale delivery; a semaphore permits one network request at a time. HTTP work runs outside the controller lock, while result acceptance and clipboard writing are serialized against new recording starts.
+
+The Gemini cleanup key uses its own OS credential-store account and is never sent to frontend code after saving. The main window has an explicit cleanup capability; the Google AI Studio setup action opens one fixed URL through Tauri Opener. Frontend cleanup controls live in a focused module and use typed Tauri adapters. Auto-copy is correlated to recording completion and excludes cleanup/restore revisions. See [ADR 0020](adrs/0020-explicit-transcript-cleanup.md).

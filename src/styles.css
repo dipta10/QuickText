@@ -23,7 +23,7 @@ body,
 }
 
 body {
-  min-width: 360px;
+  min-width: 0;
   min-height: 520px;
   background: #090b10;
 }
@@ -608,3 +608,41 @@ button {
   opacity: 0.55;
   pointer-events: none;
 }
+
+/* Keep transcript actions usable at compact window widths. */
+.transcript-toolbar { flex-wrap: wrap; }
+.transcript-actions { display: flex; gap: 6px; margin-left: auto; }
+.clean-button, .restore-button, .cleanup-setup-button,
+.cleanup-api-key-save-button, .cleanup-api-key-delete-button {
+  font: inherit;
+  font-size: 0.78rem;
+  color: #f5f7fa;
+  background: #252a33;
+  border: 1px solid #404754;
+  border-radius: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.clean-button:hover, .restore-button:hover, .cleanup-setup-button:hover,
+.cleanup-api-key-save-button:hover, .cleanup-api-key-delete-button:hover { background: #353c48; }
+.clean-button:disabled, .restore-button:disabled,
+.cleanup-api-key-save-button:disabled, .cleanup-api-key-delete-button:disabled { opacity: 0.45; cursor: default; }
+.cleanup-feedback { padding: 8px 12px; }
+.cleanup-feedback:has(.restore-button[hidden]):has(.cleanup-setup-button[hidden]):has(.cleanup-status:empty) { display: none; }
+.cleanup-setup-button { background: transparent; text-align: left; }
+.cleanup-status { margin: 6px 0 0; }
+.cleanup-status:empty { display: none; }
+.cleanup-api-key-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  color: #f5f7fa;
+  background: #12151b;
+  border: 1px solid #404754;
+  border-radius: 6px;
+}
+.cleanup-section a { color: #a8caff; font-size: 0.78rem; }
+.clean-button:focus-visible, .restore-button:focus-visible, .cleanup-setup-button:focus-visible,
+.cleanup-api-key-input:focus-visible, .cleanup-api-key-save-button:focus-visible,
+.cleanup-api-key-delete-button:focus-visible { outline: 2px solid #a8caff; outline-offset: 2px; }

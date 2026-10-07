@@ -1,0 +1,11 @@
+[[permission]]
+identifier = "allow-transcript-cleanup"
+description = "Allows the main window to configure Gemini cleanup, clean and copy a finalized transcript, restore the original, and open the fixed Google AI Studio key setup page."
+commands.allow = [
+  "has_cleanup_api_key",
+  "save_cleanup_api_key",
+  "delete_cleanup_api_key",
+  "clean_and_copy",
+  "restore_original_transcript",
+  "open_cleanup_key_setup",
+]

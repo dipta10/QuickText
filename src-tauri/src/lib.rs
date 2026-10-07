@@ -9,6 +9,7 @@ use std::{
 mod app_controller;
 mod audio_recorder;
 mod autostart;
+mod cleanup_credentials;
 mod companion_cli;
 mod deepgram_provider;
 mod ipc;
@@ -18,6 +19,7 @@ mod language_preferences;
 mod paste_target;
 mod settings_file;
 mod soniox_provider;
+mod transcript_cleanup;
 mod transcription;
 mod transcription_description;
 mod transcription_settings;
@@ -28,6 +30,7 @@ mod transcription_fixture_tests;
 
 use app_controller::{AppController, AppError, AppSnapshot, AppStatus, TranscriptResult};
 use audio_recorder::{AudioCaptureStats, AudioRecorder};
+use cleanup_credentials::CleanupCredentials;
 use deepgram_provider::DeepgramProvider;
 use keyring::{Entry, Error as KeyringError};
 use language_preferences::{LanguagePreferencesSnapshot, LanguagePreferencesState};
@@ -38,6 +41,7 @@ use tauri::{
     Emitter, Manager, State, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use transcript_cleanup::{CleanupError, GeminiCleaner, TranscriptCleaner, REQUEST_TIMEOUT};
 use transcription::{
     PartialTranscript, ProviderId, TranscriptionOptions, TranscriptionProvider,
     TranscriptionSession,
@@ -731,6 +735,98 @@ fn get_api_key_available(
 #[tauri::command]
 fn get_app_state(controller: State<'_, AppControllerState>) -> Result<AppSnapshot, String> {
     Ok(lock_controller(&controller)?.snapshot())
+}
+
+#[tauri::command]
+fn has_cleanup_api_key(credentials: State<'_, CleanupCredentials>) -> Result<bool, String> {
+    Ok(credentials.key()?.is_some())
+}
+
+#[tauri::command]
+fn open_cleanup_key_setup(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener().open_url("https://aistudio.google.com/apikey", None::<&str>)
+        .map_err(|_| "Could not open Google AI Studio. Visit https://aistudio.google.com/apikey in your browser.".into())
+}
+
+struct CleanupRequests(tokio::sync::Semaphore);
+
+impl Default for CleanupRequests {
+    fn default() -> Self {
+        Self(tokio::sync::Semaphore::new(1))
+    }
+}
+
+#[tauri::command]
+fn save_cleanup_api_key(
+    controller: State<'_, AppControllerState>,
+    credentials: State<'_, CleanupCredentials>,
+    api_key: String,
+) -> Result<(), String> {
+    let guard = lock_provider_settings(&controller)?;
+    if guard.snapshot().cleanup.running {
+        return Err(CleanupError::Busy.message().into());
+    }
+    credentials.save(&api_key)
+}
+
+#[tauri::command]
+fn delete_cleanup_api_key(
+    controller: State<'_, AppControllerState>,
+    credentials: State<'_, CleanupCredentials>,
+) -> Result<(), String> {
+    let guard = lock_provider_settings(&controller)?;
+    if guard.snapshot().cleanup.running {
+        return Err(CleanupError::Busy.message().into());
+    }
+    credentials.delete()
+}
+
+#[tauri::command]
+async fn clean_and_copy(
+    app: tauri::AppHandle,
+    controller: State<'_, AppControllerState>,
+    credentials: State<'_, CleanupCredentials>,
+    requests: State<'_, CleanupRequests>,
+) -> Result<(), String> {
+    let _permit = requests
+        .0
+        .try_acquire()
+        .map_err(|_| CleanupError::Busy.message().to_string())?;
+    let (request, cleaner) = {
+        let mut guard = lock_controller(&controller)?;
+        let key = credentials
+            .key()?
+            .ok_or_else(|| CleanupError::MissingKey.message().to_string())?;
+        let cleaner = GeminiCleaner::new(key).map_err(|e| e.message().to_string())?;
+        let request = guard.begin_cleanup().map_err(|e| e.message().to_string())?;
+        emit_app_snapshot(&app, &guard.snapshot());
+        (request, cleaner)
+    };
+    let result = tokio::time::timeout(REQUEST_TIMEOUT, cleaner.clean(&request.original))
+        .await
+        .unwrap_or(Err(CleanupError::Timeout));
+    let mut guard = lock_controller(&controller)?;
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    if guard.finish_cleanup(&request, result, |text| {
+        app.clipboard().write_text(text).map_err(|_| ())
+    }) {
+        emit_app_snapshot(&app, &guard.snapshot());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn restore_original_transcript(
+    app: tauri::AppHandle,
+    controller: State<'_, AppControllerState>,
+) -> Result<(), String> {
+    let mut guard = lock_controller(&controller)?;
+    let snapshot = guard
+        .restore_original()
+        .map_err(|e| e.message().to_string())?;
+    emit_app_snapshot(&app, &snapshot);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1477,6 +1573,8 @@ fn run_with_options(start_hidden: bool) {
         .manage(ShortcutSettings::default())
         .manage(AppControllerState::default())
         .manage(CredentialState::default())
+        .manage(CleanupCredentials::default())
+        .manage(CleanupRequests::default())
         .manage(AudioRecorderState::default())
         .manage(TranscriptionState::default())
         .manage(InputDeviceState::default())
@@ -1486,6 +1584,7 @@ fn run_with_options(start_hidden: bool) {
         .manage(TranscriptionTermsState::default())
         .manage(PendingPasteState::default())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(autostart::plugin())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -1548,6 +1647,12 @@ fn run_with_options(start_hidden: bool) {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_state,
+            has_cleanup_api_key,
+            open_cleanup_key_setup,
+            save_cleanup_api_key,
+            delete_cleanup_api_key,
+            clean_and_copy,
+            restore_original_transcript,
             get_build_info,
             toggle_recording,
             set_global_shortcut,

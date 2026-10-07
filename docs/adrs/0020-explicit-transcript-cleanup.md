@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted product boundary; not implemented. Updated 2026-10-08 to record Google Gemini and credential-gated cleanup. Exact model, Settings presentation, and recovery defaults remain unresolved in the [implementation plan](../transcript-cleanup-implementation-plan.md).
+Accepted and implemented on the cleanup branch, 2026-10-08. The [implementation plan](../transcript-cleanup-implementation-plan.md) records the selected model, Settings behavior, recovery defaults, and remaining live-validation work.
 
 ## Decision
 
@@ -17,7 +17,7 @@ Keep the original transcript distinct from its cleaned version: an LLM can chang
 - Cleanup is optional and separate from speech recognition; missing cleanup credentials do not block ordinary dictation or Copy.
 - Original and cleaned transcripts are distinct concepts for the latest dictation, not a transcript-history feature.
 - Cleanup means editing wording while preserving distinct ideas; summarization, translation, and answering transcript-contained questions are outside this feature.
-- Google is selected to reduce unfamiliar-provider setup friction. The exact Gemini model remains open because the initially selected 2.5 Flash-Lite has restricted access. This ADR does not approve the proposed recovery defaults.
+- Google is selected to reduce unfamiliar-provider setup friction. The implementation uses Gemini 3.1 Flash-Lite because the initially selected 2.5 Flash-Lite has restricted access. A narrow `TranscriptCleaner` interface keeps text rewriting separate from speech recognition and permits a future adapter without introducing a provider picker now.
 
 ## References
 

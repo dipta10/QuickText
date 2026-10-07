@@ -87,6 +87,22 @@ describe("cleanup settings and actions", () => {
     expect(view.cleanButton.disabled).toBe(true);
   });
 
+  it("retains a saved key discovered after a failed save during startup", async () => {
+    const pending = deferred<boolean>();
+    vi.mocked(backend.hasCleanupApiKey).mockReturnValue(pending.promise);
+    vi.mocked(backend.saveCleanupApiKey).mockRejectedValue(new Error("Save failed."));
+    const { view, state } = start();
+    view.cleanupApiKeyInput.value = "replacement-key";
+    view.cleanupApiKeySaveButton.click();
+    await settle();
+    pending.resolve(true);
+    await settle();
+    expect(state().cleanupApiKeyConfigured).toBe(true);
+    expect(view.cleanButton.disabled).toBe(false);
+    expect(view.cleanupApiKeyInput.value).toBe("replacement-key");
+    expect(view.cleanupApiKeyStatus.textContent).toBe("Save failed.");
+  });
+
   it("rapid clicks make one backend request and never copy again in the frontend", async () => {
     vi.mocked(backend.hasCleanupApiKey).mockResolvedValue(true);
     const pending = deferred<void>();

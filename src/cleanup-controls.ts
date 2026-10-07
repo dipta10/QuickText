@@ -34,11 +34,11 @@ export const connectCleanupControls = (
   let credentialRevision = 0;
   const credentialAction = async (remove: boolean) => {
     if (getState().cleanupCredentialBusy || !canChangeProvider(getState()) || getState().cleanup.running) return;
-    credentialRevision += 1;
     updateState({ ...getState(), cleanupCredentialBusy: true });
     try {
       if (remove) await deleteCleanupApiKey();
       else await saveCleanupApiKey(view.cleanupApiKeyInput.value);
+      credentialRevision += 1;
       view.cleanupApiKeyInput.value = "";
       updateState(setCleanupCredentials(getState(), !remove,
         remove ? "API key deleted." : "API key saved."));
@@ -81,7 +81,9 @@ export const connectCleanupControls = (
   });
   const initialRevision = credentialRevision;
   void hasCleanupApiKey().then((configured) => {
-    if (credentialRevision === initialRevision) updateState(setCleanupCredentials(getState(), configured));
+    if (credentialRevision === initialRevision) {
+      updateState(setCleanupCredentials(getState(), configured, getState().cleanupApiKeyStatus));
+    }
   }).catch((error: unknown) => {
     if (credentialRevision === initialRevision) updateState(setCleanupCredentialStatus(getState(), errorMessage(error)));
   });

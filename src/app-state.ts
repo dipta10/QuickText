@@ -227,7 +227,8 @@ export const applyBackendSnapshot = (
   const shouldClearTranscript =
     sessionChanged || snapshot.status === "starting" || snapshot.status === "error";
   const shouldShowCapture =
-    snapshot.status !== "idle" && snapshot.status !== "error";
+    snapshot.status !== "idle" && snapshot.status !== "error" &&
+    (sessionChanged || snapshot.status !== state.recording);
 
   return {
     ...state,
@@ -244,6 +245,7 @@ export const applyBackendSnapshot = (
     activeSessionId: snapshot.sessionId,
     status: statusText(snapshot),
     cleanup: snapshot.cleanup ?? emptyCleanup(),
+    cleanupActionPending: sessionChanged ? false : state.cleanupActionPending,
     transcript:
       snapshot.transcript?.text ??
       (shouldClearTranscript ? "" : state.transcript),

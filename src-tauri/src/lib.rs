@@ -41,7 +41,7 @@ use tauri::{
     Emitter, Manager, State, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-use transcript_cleanup::{CleanupError, GeminiCleaner, TranscriptCleaner, REQUEST_TIMEOUT};
+use transcript_cleanup::{CleanupError, GeminiCleaner};
 use transcription::{
     PartialTranscript, ProviderId, TranscriptionOptions, TranscriptionProvider,
     TranscriptionSession,
@@ -749,11 +749,19 @@ fn open_cleanup_key_setup(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|_| "Could not open Google AI Studio. Visit https://aistudio.google.com/apikey in your browser.".into())
 }
 
-struct CleanupRequests(tokio::sync::Semaphore);
+struct CleanupRequests {
+    permits: tokio::sync::Semaphore,
+    cancelled: tokio::sync::watch::Sender<()>,
+    delivery: tokio::sync::Mutex<()>,
+}
 
 impl Default for CleanupRequests {
     fn default() -> Self {
-        Self(tokio::sync::Semaphore::new(1))
+        Self {
+            permits: tokio::sync::Semaphore::new(1),
+            cancelled: tokio::sync::watch::channel(()).0,
+            delivery: tokio::sync::Mutex::new(()),
+        }
     }
 }
 
@@ -790,10 +798,10 @@ async fn clean_and_copy(
     requests: State<'_, CleanupRequests>,
 ) -> Result<(), String> {
     let _permit = requests
-        .0
+        .permits
         .try_acquire()
         .map_err(|_| CleanupError::Busy.message().to_string())?;
-    let (request, cleaner) = {
+    let (request, cleaner, cancellation) = {
         let mut guard = lock_controller(&controller)?;
         let key = credentials
             .key()?
@@ -801,11 +809,15 @@ async fn clean_and_copy(
         let cleaner = GeminiCleaner::new(key).map_err(|e| e.message().to_string())?;
         let request = guard.begin_cleanup().map_err(|e| e.message().to_string())?;
         emit_app_snapshot(&app, &guard.snapshot());
-        (request, cleaner)
+        (request, cleaner, requests.cancelled.subscribe())
     };
-    let result = tokio::time::timeout(REQUEST_TIMEOUT, cleaner.clean(&request.original))
-        .await
-        .unwrap_or(Err(CleanupError::Timeout));
+    let Some(result) =
+        transcript_cleanup::run_cleanup(&cleaner, &request.original, cancellation).await
+    else {
+        return Ok(());
+    };
+    // A pending paste must finish before cleanup can replace the clipboard.
+    let _delivery = requests.delivery.lock().await;
     let mut guard = lock_controller(&controller)?;
     use tauri_plugin_clipboard_manager::ClipboardExt;
     if guard.finish_cleanup(&request, result, |text| {
@@ -1025,7 +1037,9 @@ pub(crate) async fn toggle_recording_for_app(
                 ) {
                     return Ok(controller.snapshot());
                 }
-                controller.begin_start()
+                let starting = controller.begin_start();
+                app.state::<CleanupRequests>().cancelled.send_modify(|_| {});
+                starting
             };
             clear_pending_paste(&app);
             let recording_session_id = starting
@@ -1282,6 +1296,9 @@ async fn finalize_recording(app: &tauri::AppHandle) -> Result<AppSnapshot, Strin
         }
     };
 
+    // Serialize finalization delivery with cleanup before publishing the result.
+    let cleanup_requests = app.state::<CleanupRequests>();
+    let _delivery = cleanup_requests.delivery.lock().await;
     let transcribed = {
         let mut controller = lock_controller(&controller)?;
         controller.finish_stop(transcript.clone(), audio_stats)

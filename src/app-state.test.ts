@@ -347,3 +347,23 @@ describe("cleanup transcript lifecycle", () => {
     expect(shouldAutoCopyTranscript(next, 1)).toBe(true);
   });
 });
+
+
+describe("cleanup navigation", () => {
+  it("preserves Settings while cleanup runs and completes, but opens Capture for the next recording", () => {
+    const original: BackendAppSnapshot = {
+      status: "transcribed", sessionId: 1, error: null,
+      transcript: { text: "Original.", provider: "soniox" },
+    };
+    let state = applyBackendSnapshot(createAppState("", 300, false, false, false, false, false, "", false, false), original);
+    state = { ...state, activeView: "settings" };
+    for (const running of [true, false]) {
+      state = applyBackendSnapshot(state, {
+        ...original, cleanup: { revision: running ? 1 : 2, running, cleaned: !running, message: "" },
+      });
+      expect(state.activeView).toBe("settings");
+    }
+    state = applyBackendSnapshot(state, { status: "starting", sessionId: 2, error: null, transcript: null });
+    expect(state.activeView).toBe("capture");
+  });
+});

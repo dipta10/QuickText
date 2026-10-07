@@ -64,7 +64,9 @@ export const connectCleanupControls = (
         updateState(setStatus(getState(), errorMessage(error)));
       }
     } finally {
-      updateState({ ...getState(), cleanupActionPending: false });
+      if (getState().activeSessionId === session) {
+        updateState({ ...getState(), cleanupActionPending: false });
+      }
     }
   };
   view.cleanButton.addEventListener("click", () => { void action(false); });

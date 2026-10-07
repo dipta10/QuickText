@@ -137,4 +137,30 @@ describe("cleanup settings and actions", () => {
     await settle();
     expect(state().status).toBe("Starting recording...");
   });
+  it("releases the old pending action on a new session without letting its reply unlock a newer action", async () => {
+    vi.mocked(backend.hasCleanupApiKey).mockResolvedValue(true);
+    const oldRequest = deferred<void>();
+    const newRequest = deferred<void>();
+    vi.mocked(backend.cleanAndCopy)
+      .mockReturnValueOnce(oldRequest.promise).mockReturnValueOnce(newRequest.promise);
+    const { view, update, state } = start();
+    await settle();
+    view.cleanButton.click();
+    update(applyBackendSnapshot(state(), { status: "starting", sessionId: 2, transcript: null, error: null }));
+    expect(state().cleanupActionPending).toBe(false);
+    update(applyBackendSnapshot(state(), {
+      status: "transcribed", sessionId: 2,
+      transcript: { text: "Next recording.", provider: "soniox" }, error: null,
+    }));
+    expect(view.cleanButton.disabled).toBe(false);
+    view.cleanButton.click();
+    oldRequest.resolve();
+    await settle();
+    expect(state().cleanupActionPending).toBe(true);
+    expect(view.cleanButton.disabled).toBe(true);
+    newRequest.resolve();
+    await settle();
+    expect(state().cleanupActionPending).toBe(false);
+  });
+
 });

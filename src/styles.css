@@ -24,7 +24,7 @@ body,
 
 body {
   min-width: 0;
-  min-height: 520px;
+  min-height: 0;
   background: #090b10;
 }
 
@@ -42,6 +42,7 @@ button {
 #app {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 18px;
 }
@@ -51,6 +52,7 @@ button {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 16px;
   width: min(100%, 480px);
+  min-width: 0;
   height: 100%;
   min-height: 0;
   color: #f5f7fa;
@@ -169,7 +171,7 @@ button {
 .main-content {
   min-width: 0;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .capture-view,
@@ -364,7 +366,7 @@ button {
   align-content: start;
   min-width: 0;
   overflow: auto;
-  padding-right: 2px;
+  scrollbar-width: none;
 }
 
 .settings-section {
@@ -673,4 +675,9 @@ button {
 .cleanup-key-link {
   color: #a8caff;
   font-size: 0.8rem;
+}
+
+/* Settings stays scrollable without a platform scrollbar crowding the cards. */
+.settings-view::-webkit-scrollbar {
+  display: none;
 }

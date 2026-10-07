@@ -48,6 +48,20 @@ pub trait TranscriptCleaner: Send + Sync {
     fn clean<'a>(&'a self, transcript: &'a str) -> CleanupFuture<'a>;
 }
 
+/// Drop the HTTP future as soon as another recording invalidates its transcript.
+pub async fn run_cleanup(
+    cleaner: &dyn TranscriptCleaner,
+    transcript: &str,
+    mut cancellation: tokio::sync::watch::Receiver<()>,
+) -> Option<Result<String, CleanupError>> {
+    tokio::select! {
+        biased;
+        _ = cancellation.changed() => None,
+        result = tokio::time::timeout(REQUEST_TIMEOUT, cleaner.clean(transcript)) =>
+            Some(result.unwrap_or(Err(CleanupError::Timeout))),
+    }
+}
+
 pub fn validate_input(transcript: &str) -> Result<(), CleanupError> {
     if transcript.trim().is_empty() {
         return Err(CleanupError::InvalidResponse);
@@ -201,6 +215,34 @@ impl TranscriptCleaner for GeminiCleaner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct PendingCleaner;
+
+    impl TranscriptCleaner for PendingCleaner {
+        fn clean<'a>(&'a self, _: &'a str) -> CleanupFuture<'a> {
+            Box::pin(std::future::pending())
+        }
+    }
+
+    #[tokio::test]
+    async fn new_recording_cancels_a_stalled_request_without_waiting_for_timeout() {
+        let (cancel, receiver) = tokio::sync::watch::channel(());
+        let request = run_cleanup(&PendingCleaner, "Original", receiver);
+        tokio::pin!(request);
+        assert!(futures_util::poll!(&mut request).is_pending());
+        cancel.send_modify(|_| {});
+        assert_eq!(request.await, None);
+    }
+
+    #[tokio::test]
+    async fn cancellation_before_the_request_is_polled_is_not_lost() {
+        let (cancel, receiver) = tokio::sync::watch::channel(());
+        cancel.send_modify(|_| {});
+        assert_eq!(
+            run_cleanup(&PendingCleaner, "Original", receiver).await,
+            None
+        );
+    }
 
     #[test]
     fn excludes_thoughts_and_combines_only_final_text() {

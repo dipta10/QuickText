@@ -53,7 +53,7 @@ The user confirmed button-only cleanup and no automatic paste, then authorized i
 
 - Restore original changes the displayed text only. It does not change the clipboard; Copy copies the displayed version.
 - Every cleanup request uses the original finalized transcript, even when a cleaned version is displayed, to avoid cumulative rewriting.
-- Allow a new recording while cleanup is pending. Invalidate the old cleanup and prevent its result from changing either the display or clipboard.
+- Allow a new recording while cleanup is pending. Cancel the old HTTP request, release its pending UI action, and prevent its result from changing either the display or clipboard.
 - Keep the current displayed text and clipboard unchanged if the provider request fails.
 - If cleanup succeeds but copying fails, keep the cleaned text visible and show “Cleaned, but couldn't copy. Use Copy.”
 - Allow one request at a time, use a 30-second total request timeout, and add no automatic retries. A deliberate later click may retry.
@@ -119,7 +119,7 @@ Keep recording and transcription unchanged. Use the object-safe `TranscriptClean
 - `src/cleanup-controls.ts`: focused DOM action wiring, Settings feedback, and cleanup-control rendering; Tauri operations go through typed wrappers.
 - `src/main.ts`: compose cleanup controls and render backend-owned state. Keep network requests, credential handling, and raw command names outside this file.
 
-Use a recording-session ID plus a cleanup-request ID. Capture the original text at request acceptance, release state locks while awaiting HTTPS, then validate both IDs before applying results. Final validity checking, display-state acceptance, and clipboard delivery must be serialized against accepting a new recording; a stale result must never write the clipboard. Do not hold a state lock across the network call.
+Use a recording-session ID plus a cleanup-request ID. Capture the original text at request acceptance, release state locks while awaiting HTTPS, then validate both IDs before applying results. Cleanup clipboard delivery also waits for any in-flight original paste-to-target delivery to finish, so its text cannot be pasted by the original recording’s delayed keystroke. Final validity checking, display-state acceptance, and clipboard delivery must be serialized against accepting a new recording; a stale result must never write the clipboard. Do not hold a state lock across the network call.
 
 Existing frontend auto-copy reacts to changed final transcript text. Adjust that path so cleanup and restore updates cannot trigger automatic delivery a second time. Existing paste-to-target runs after recording finalization; cleanup must use its own copy-only path and must never call finalization delivery. Label copy success only after the clipboard write succeeds.
 
@@ -156,6 +156,17 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --check
 Offline backend tests cover the replaceable cleaner, stale-result rejection, duplicate delivery prevention, restore, provider failure, clipboard failure, bounded input, and Gemini response parsing. Frontend tests cover saved-key gating, credential startup races, save failure, duplicate clicks, stale command errors, stale snapshots, and auto-copy isolation. Browser preview checks cover compact Capture and the Settings setup route.
 
 No live Gemini request has been made: no user key was supplied for this implementation. Offline tests cannot establish rewrite quality, latency, account quota, or platform-specific secure storage and clipboard behavior in packaged builds.
+
+## Regression Review Against Main
+
+- Keep Settings as one scrollable region without a visible platform scrollbar. Wheel, touchpad, and keyboard navigation still reach all sections; the header and footer stay fixed. The app shell fits scaled and minimum-size windows without a second document scrollbar.
+- Keep speech-provider settings together, with cleanup credentials after the speech-provider sections.
+- Cleanup progress and completion preserve the selected view. A new recording still opens Capture.
+- Starting a new recording cancels pending cleanup HTTP work and clears only that session’s frontend pending action. A delayed reply cannot unlock or overwrite a newer action.
+- Serialize original paste delivery and cleaned clipboard delivery to keep Clean & Copy copy-only even when the original paste is waiting for window focus to settle.
+- Regression tests cover navigation, cancellation before and during a stalled request, overlapping frontend replies, and ordinary/manual/automatic copy across cleanup, restore, and repeated dictations.
+
+Validation after this review: 58 frontend tests and 105 Rust tests pass (two live speech-provider fixtures remain ignored). Frontend build, `cargo check`, and formatting checks pass. Browser layout checks cover 360×520, 480×620, and a scaled 300×433 CSS viewport, including keyboard access to lower Settings sections and the cleaned-result restore action. Native packaged Windows/macOS behavior and live provider requests were not exercised.
 
 ## Out Of Scope
 

@@ -171,23 +171,6 @@ const appTemplate = `
           </p>
         </section>
 
-        <section class="settings-section cleanup-section">
-          <h2 class="section-title">Transcript cleanup</h2>
-          <p class="settings-note">Google Gemini</p>
-          <label class="api-key-label" for="gemini-cleanup-api-key">Gemini API key</label>
-          <input class="cleanup-api-key-input" id="gemini-cleanup-api-key"
-            type="password" autocomplete="off" spellcheck="false" maxlength="4096"
-            placeholder="Enter Gemini API key" aria-describedby="cleanup-api-key-status" />
-          <div class="api-key-actions">
-            <button class="cleanup-api-key-save-button" type="button">Save</button>
-            <button class="cleanup-api-key-delete-button" type="button">Delete</button>
-          </div>
-          <p class="cleanup-api-key-status settings-note" id="cleanup-api-key-status" role="status"></p>
-          <a class="cleanup-key-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Get an API key in Google AI Studio</a>
-          <p class="settings-note">Clean &amp; Copy sends transcript text to Google for rewriting.
-            Free-tier content may be used to improve Google's products. Billing setup is optional.</p>
-        </section>
-
         <section class="settings-section soniox-section">
           <h2 class="section-title">Soniox</h2>
           <label class="api-key-label" for="soniox-api-key">API key</label>
@@ -273,6 +256,23 @@ const appTemplate = `
             Deepgram uses Nova 3 with English transcription in this release.
             Language options will be added later.
           </p>
+        </section>
+
+        <section class="settings-section cleanup-section">
+          <h2 class="section-title">Transcript cleanup</h2>
+          <p class="settings-note">Google Gemini</p>
+          <label class="api-key-label" for="gemini-cleanup-api-key">Gemini API key</label>
+          <input class="cleanup-api-key-input" id="gemini-cleanup-api-key"
+            type="password" autocomplete="off" spellcheck="false" maxlength="4096"
+            placeholder="Enter Gemini API key" aria-describedby="cleanup-api-key-status" />
+          <div class="api-key-actions">
+            <button class="cleanup-api-key-save-button" type="button">Save</button>
+            <button class="cleanup-api-key-delete-button" type="button">Delete</button>
+          </div>
+          <p class="cleanup-api-key-status settings-note" id="cleanup-api-key-status" role="status"></p>
+          <a class="cleanup-key-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Get an API key in Google AI Studio</a>
+          <p class="settings-note">Clean &amp; Copy sends transcript text to Google for rewriting.
+            Free-tier content may be used to improve Google's products. Billing setup is optional.</p>
         </section>
 
         <section class="settings-section">

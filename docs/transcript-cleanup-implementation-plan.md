@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft, 2026-10-07. Documentation only; no application changes are authorized by this plan alone. Core product decisions are confirmed below. Provider access and the proposed recovery rules remain open for review.
+Draft, updated 2026-10-08. Documentation only; no application changes are authorized by this plan alone. Google Gemini through a user-supplied Google AI Studio API key is selected. Exact model, Settings presentation details, and the proposed recovery rules remain open for review.
 
 ## Problem And Intended Result
 
@@ -17,7 +17,17 @@ Cleanup should make the user's words easier to use without removing distinct ide
 - Show the cleaned result as selectable output text and provide Restore original.
 - Use the user's own API key, configured in Settings and stored through OS credential storage.
 - Run cleanup only on an explicit button click. Copy once on success and never automatically paste.
-- Select Gemini 2.5 Flash-Lite, subject to resolving the access restriction described below.
+- Use Google's Gemini API with a key obtained through Google AI Studio. Google AI Studio is the key setup service; Gemini is the model family that performs cleanup.
+- Add a dedicated cleanup section in Settings, following the existing provider credential sections, where the user supplies their Gemini API key.
+- Enable Clean & Copy only when a cleanup key has been saved, a nonempty final transcript exists, and no cleanup request is active. Missing cleanup credentials disable this button without blocking recording or ordinary Copy.
+
+## Current Provider Direction
+
+Google is selected for familiar account setup and access to a free API tier without requiring billing setup first. QuickText must not require paid billing or a prepaid balance merely to save the key or enable cleanup. Actual requests remain subject to the account's model access and usage limits.
+
+The previously selected Gemini 2.5 Flash-Lite is restricted to previous active users. Gemini 3.1 Flash-Lite was subsequently recommended as a low-cost alternative; its exact model selection still needs confirmation. Keep one fixed model and no model picker for the preliminary version.
+
+New accounts start on a usage-limited free tier, not a standard $5 signup credit. Paid billing is optional. Explain that Google may use free-tier content to improve its products; paid-tier handling differs. Do not claim zero retention. Sources: [Gemini billing](https://ai.google.dev/gemini-api/docs/billing/) and [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing).
 
 ## Provider Research
 
@@ -26,14 +36,14 @@ Official standard text prices checked on 2026-10-07, in USD per million tokens. 
 | Model | Input | Output | Estimated cost for 1,000 cleanups | Availability consideration |
 |---|---:|---:|---:|---|
 | Gemini `gemini-2.5-flash-lite` | $0.10 | $0.40 | $0.30 | Access restricted to users who actively used 2.5 models previously. |
-| DeepSeek `deepseek-flash`, off-peak | $0.15, cache miss | $0.60 | $0.45 | Candidate if the chosen Gemini model is inaccessible. |
+| DeepSeek `deepseek-flash`, off-peak | $0.15, cache miss | $0.60 | $0.45 | Previously considered; Google is now selected. |
 | DeepSeek `deepseek-flash`, peak | $0.30, cache miss | $1.20 | $0.90 | Same model, time-dependent pricing. |
 
 Sources: [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash-lite), [Gemini model access](https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite), [Gemini lifecycle](https://ai.google.dev/gemini-api/docs/deprecations), and [DeepSeek pricing](https://api-docs.deepseek.com/quick_start/pricing/).
 
-The initial Gemini recommendation considered price before checking access. Google currently recommends newer models for new projects. Do not silently substitute a newer, differently priced Gemini model or automatically fall back to DeepSeek. Resolve the choice before implementation, then recheck model availability and pricing.
+This table records the initial comparison rather than the final model choice. The initial Gemini recommendation considered price before checking access. Do not silently substitute a differently priced model or automatically fall back to another provider. Resolve the exact Gemini model before implementation, then recheck availability and pricing.
 
-Use the paid Gemini tier if retaining Gemini; its pricing documentation states that paid-tier content is not used to improve Google's products. This does not establish zero retention. Do not make a zero-retention claim. Settings should explain that clicking Clean & Copy sends the transcript text to the selected cleanup service. Audio is not sent for cleanup.
+Support both free and paid Gemini API accounts. Settings should explain that clicking Clean & Copy sends transcript text to Google for rewriting. Audio is not sent for cleanup.
 
 Keep the first version to one fixed provider and model. No provider selector, custom endpoints, tools, search, conversation history, or prompt editor.
 
@@ -51,11 +61,31 @@ The user explicitly confirmed button-only cleanup and no automatic paste. The fo
 
 ## Capture And Settings Behavior
 
-Enable Clean & Copy only when a nonempty final transcript exists and no cleanup request is active. Disable it during recording and finalization. Show **Cleaning…** while awaiting the result; leave the current text selectable. Keep ordinary Copy available for the currently displayed text.
+Enable Clean & Copy only when the backend reports a saved Gemini cleanup key, a nonempty final transcript exists, and no cleanup request is active. Disable it during recording and finalization. Text entered into an unsaved key field does not enable cleanup. Deleting the saved key disables cleanup immediately. Enforce the credential requirement in the backend as well as the UI.
+
+Show **Cleaning…** while awaiting the result; leave the current text selectable. Keep ordinary Copy available for the currently displayed text. A saved key means configured, not proven valid or funded; authentication and quota failures require actionable feedback when a request is attempted.
 
 Show Restore original only when a cleaned variant is displayed. It is an in-memory action for the latest recording, not transcript history. A new recording clears both variants using the existing transcript lifecycle.
 
-Missing cleanup credentials should offer a route to the cleanup section in Settings. They must not prevent recording, transcription, or ordinary Copy. Settings needs only key status, save/update, delete, and the brief disclosure about sending transcript text. Never display the stored key.
+### Settings Section
+
+Confirmed: one separate section similar to existing credential sections, with a Gemini API key field. Reuse secure save/update and delete behavior and show key presence without revealing the stored secret. Keep this credential separate from Soniox and Deepgram keys.
+
+Proposed presentation, pending the Settings interview:
+
+```text
+Transcript cleanup
+Google Gemini
+API key: Not configured / Saved
+[ Enter Gemini API key                         ]
+[ Save key ] [ Delete key ]
+Get an API key in Google AI Studio ↗
+
+Clean & Copy sends transcript text to Google for rewriting.
+Free-tier content may be used to improve Google's products.
+```
+
+The key setup link points to [Google AI Studio API keys](https://aistudio.google.com/apikey). A saved key is never loaded back into the entry field. Exact labels, missing-key guidance in Capture, and whether a separate live key test is needed remain open. Credential status must come from the backend rather than frontend persistence. No cleanup style, billing controls, or model selector is added here.
 
 ## Cleanup Instructions
 
@@ -102,7 +132,7 @@ Keep original and cleaned text in memory only. Never store API keys in ordinary 
 
 ## Implementation And Validation
 
-1. Resolve provider access and confirm the proposed defaults.
+1. Confirm the exact Gemini model, Settings presentation, and proposed defaults.
 2. Add secure cleanup credential operations and a focused backend adapter with a fake implementation for offline tests.
 3. Add backend transcript variants, cleanup state, restore, and request invalidation.
 4. Wire Clean & Copy and Restore original, and explicitly prevent duplicate auto-copy and automatic paste.

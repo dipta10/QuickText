@@ -10,6 +10,7 @@ Terms used across the product and ADR docs. Add entries here when an ADR introdu
 - **Clean & Copy**: Explicit user action that requests transcript cleanup and copies the cleaned result to the clipboard; it never automatically pastes.
 - **Restore original**: User action that displays the original transcript again after a cleaned version was shown. Clipboard behavior remains a proposed decision in the cleanup plan.
 - **Cleanup provider**: A text-rewriting service, separate from the speech provider that recognizes audio.
+- **Cleanup API key**: The user's credential for the transcript-cleanup service, separate from speech-provider credentials. This feature uses a Gemini API key obtained through Google AI Studio.
 - **Capture**: The user-facing activity of recording speech and producing a transcript; the primary app loop.
 - **Recording session**: One accepted dictation attempt. Starts at the backend transition into `starting`, before microphone/provider setup, and ends after finalization, cancellation, or failure reaches a terminal state.
 - **Notification preference**: An individual opt-in checkbox controlling one notification type (started, complete, error). Defaults to off.

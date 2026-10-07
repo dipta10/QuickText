@@ -29,3 +29,6 @@ _Avoid_: Delete recording, retranscribe.
 
 **Cleanup provider**:
 The service that rewrites transcript text. It is distinct from the speech provider that recognizes audio.
+
+**Cleanup API key**:
+The user's credential for the transcript-cleanup service, distinct from their speech-provider credentials.

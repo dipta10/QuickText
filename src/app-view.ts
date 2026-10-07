@@ -2,6 +2,7 @@ export type AppView = {
   cleanButton: HTMLButtonElement;
   restoreButton: HTMLButtonElement;
   cleanupSetupButton: HTMLButtonElement;
+  cleanupFeedback: HTMLDivElement;
   cleanupStatus: HTMLParagraphElement;
   cleanupApiKeyInput: HTMLInputElement;
   cleanupApiKeySaveButton: HTMLButtonElement;
@@ -437,6 +438,7 @@ export const createAppView = (root: HTMLElement): AppView => {
   const cleanButton = root.querySelector<HTMLButtonElement>(".clean-button");
   const restoreButton = root.querySelector<HTMLButtonElement>(".restore-button");
   const cleanupSetupButton = root.querySelector<HTMLButtonElement>(".cleanup-setup-button");
+  const cleanupFeedback = root.querySelector<HTMLDivElement>(".cleanup-feedback");
   const cleanupStatus = root.querySelector<HTMLParagraphElement>(".cleanup-status");
   const cleanupApiKeyInput = root.querySelector<HTMLInputElement>(".cleanup-api-key-input");
   const cleanupApiKeySaveButton = root.querySelector<HTMLButtonElement>(".cleanup-api-key-save-button");
@@ -582,6 +584,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     !cleanButton ||
     !restoreButton ||
     !cleanupSetupButton ||
+    !cleanupFeedback ||
     !cleanupStatus ||
     !cleanupApiKeyInput ||
     !cleanupApiKeySaveButton ||
@@ -656,6 +659,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     cleanButton,
     restoreButton,
     cleanupSetupButton,
+    cleanupFeedback,
     cleanupStatus,
     cleanupApiKeyInput,
     cleanupApiKeySaveButton,

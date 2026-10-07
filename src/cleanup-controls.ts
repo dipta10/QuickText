@@ -18,6 +18,9 @@ export const renderCleanupControls = (view: AppView, state: AppState) => {
   view.restoreButton.disabled = state.cleanup.running || state.cleanupActionPending;
   view.cleanupSetupButton.hidden = state.cleanupApiKeyConfigured;
   view.cleanupStatus.textContent = state.cleanup.message;
+  view.cleanupStatus.hidden = !state.cleanup.message;
+  view.cleanupFeedback.hidden = !state.cleanup.cleaned &&
+    state.cleanupApiKeyConfigured && !state.cleanup.message;
   const disabled = !canChangeProvider(state) || state.cleanup.running || state.cleanupCredentialBusy || state.cleanupActionPending;
   view.cleanupApiKeyInput.disabled = disabled;
   view.cleanupApiKeySaveButton.disabled = disabled;

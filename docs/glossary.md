@@ -4,6 +4,12 @@ Terms used across the product and ADR docs. Add entries here when an ADR introdu
 
 ## Terms
 
+- **Transcript cleanup**: A concise rewrite of finalized dictation that removes fillers and repetition and corrects grammar while preserving distinct ideas, intent, uncertainty, names, numbers, and language. It is distinct from summarization, translation, and speech recognition.
+- **Original transcript**: The finalized speech-recognition result before cleanup.
+- **Cleaned transcript**: An edited version of the original transcript produced by cleanup.
+- **Clean & Copy**: Explicit user action that requests transcript cleanup and copies the cleaned result to the clipboard; it never automatically pastes.
+- **Restore original**: User action that displays the original transcript again after a cleaned version was shown. Clipboard behavior remains a proposed decision in the cleanup plan.
+- **Cleanup provider**: A text-rewriting service, separate from the speech provider that recognizes audio.
 - **Capture**: The user-facing activity of recording speech and producing a transcript; the primary app loop.
 - **Recording session**: One accepted dictation attempt. Starts at the backend transition into `starting`, before microphone/provider setup, and ends after finalization, cancellation, or failure reaches a terminal state.
 - **Notification preference**: An individual opt-in checkbox controlling one notification type (started, complete, error). Defaults to off.

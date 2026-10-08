@@ -20,7 +20,8 @@ makedepends=(
   'npm'
   'rust'
 )
-options=('!debug')
+# GCC LTO objects from ring's C code cannot be linked by Rust's lld linker.
+options=('!debug' '!lto')
 
 _source_revision="${QUICKTEXT_SOURCE_REVISION:-HEAD}"
 _source_url="${QUICKTEXT_SOURCE_URL:-https://github.com/dipta10/QuickText.git}"

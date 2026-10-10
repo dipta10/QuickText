@@ -8,6 +8,7 @@ pub const RESPONSE_TIMEOUT_SECONDS: u64 = 15;
 #[serde(rename_all = "snake_case")]
 pub enum IpcCommand {
     Toggle,
+    ToggleWindow,
     Status,
 }
 
@@ -66,6 +67,8 @@ pub struct IpcResponse {
     error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    visible: Option<bool>,
 }
 
 impl IpcResponse {
@@ -75,8 +78,18 @@ impl IpcResponse {
                 ok: true,
                 error: None,
                 snapshot: Some(value),
+                visible: None,
             },
             Err(error) => Self::error(format!("Could not serialize app state: {error}")),
+        }
+    }
+
+    pub fn visibility(visible: bool) -> Self {
+        Self {
+            ok: true,
+            error: None,
+            snapshot: None,
+            visible: Some(visible),
         }
     }
 
@@ -85,6 +98,7 @@ impl IpcResponse {
             ok: false,
             error: Some(message.into()),
             snapshot: None,
+            visible: None,
         }
     }
 }
@@ -141,6 +155,24 @@ mod tests {
         let request = IpcRequest::parse(r#"{"v":1,"cmd":"toggle"}"#).unwrap();
 
         assert_eq!(request.command(), IpcCommand::Toggle);
+    }
+
+    #[test]
+    fn window_toggle_round_trips_and_reports_visibility_without_capture_state() {
+        let request = IpcRequest::new(IpcCommand::ToggleWindow);
+        let line = serde_json::to_string(&request).unwrap();
+        assert_eq!(line, r#"{"v":1,"cmd":"toggle_window"}"#);
+        assert_eq!(
+            IpcRequest::parse(&line).unwrap().command(),
+            IpcCommand::ToggleWindow
+        );
+        for visible in [true, false] {
+            let response = serde_json::to_value(IpcResponse::visibility(visible)).unwrap();
+            assert_eq!(
+                response,
+                serde_json::json!({"ok": true, "visible": visible})
+            );
+        }
     }
 
     #[test]

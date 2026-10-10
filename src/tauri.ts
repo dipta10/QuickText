@@ -10,6 +10,7 @@ import type {
 const getAppStateCommand = "get_app_state";
 const getBuildInfoCommand = "get_build_info";
 const toggleRecordingCommand = "toggle_recording";
+const setWindowShortcutCommand = "set_window_shortcut";
 const setGlobalShortcutCommand = "set_global_shortcut";
 const setShortcutBehaviorCommand = "set_shortcut_behavior";
 const setPasteToTargetCommand = "set_paste_to_target";
@@ -71,6 +72,11 @@ const assertTauriRuntime = () => {
 export const setGlobalShortcut = async (shortcut: string) => {
   assertTauriRuntime();
   await invoke(setGlobalShortcutCommand, { shortcut });
+};
+
+export const setWindowShortcut = async (shortcut: string) => {
+  assertTauriRuntime();
+  await invoke(setWindowShortcutCommand, { shortcut });
 };
 
 export const setShortcutBehavior = async (

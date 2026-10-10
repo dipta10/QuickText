@@ -224,3 +224,47 @@ it("auto-copies each recording once, excludes cleanup and restore, and manually 
   await vi.advanceTimersByTimeAsync(0);
   expect(backend.copyTextToClipboard).toHaveBeenCalledTimes(4);
 });
+
+describe("independent window shortcut", () => {
+  it("restores both saved shortcuts at startup", async () => {
+    localStorage.setItem("stt.globalShortcut", "F9");
+    localStorage.setItem("stt.windowShortcut", "F10");
+    await import("./main");
+    expect(backend.setGlobalShortcut).toHaveBeenCalledWith("F9");
+    expect(backend.setWindowShortcut).toHaveBeenCalledWith("F10");
+    expect(element(".window-keybind-button").textContent).toBe("F10");
+  });
+
+  it("captures and persists a window key without changing the recording key", async () => {
+    localStorage.setItem("stt.globalShortcut", "F9");
+    await import("./main");
+    vi.mocked(backend.setGlobalShortcut).mockClear();
+    element<HTMLButtonElement>(".window-keybind-button").click();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", code: "F10" }));
+    await Promise.resolve();
+    expect(backend.setWindowShortcut).toHaveBeenCalledWith("F10");
+    expect(backend.setGlobalShortcut).not.toHaveBeenCalled();
+    expect(backend.toggleBackendRecording).not.toHaveBeenCalled();
+    expect(localStorage.getItem("stt.globalShortcut")).toBe("F9");
+    expect(localStorage.getItem("stt.windowShortcut")).toBe("F10");
+  });
+
+  it("keeps the saved window key when registration is rejected", async () => {
+    localStorage.setItem("stt.windowShortcut", "F10");
+    await import("./main");
+    vi.mocked(backend.setWindowShortcut).mockRejectedValue(new Error("Shortcut unavailable"));
+    element<HTMLButtonElement>(".window-keybind-button").click();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F11", code: "F11" }));
+    await Promise.resolve();
+    expect(localStorage.getItem("stt.windowShortcut")).toBe("F10");
+    expect(element(".window-keybind-status").textContent).toBe("Shortcut unavailable");
+  });
+
+  it("cancels window shortcut capture with Escape", async () => {
+    await import("./main");
+    element<HTMLButtonElement>(".window-keybind-button").click();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape" }));
+    expect(backend.setWindowShortcut).not.toHaveBeenCalled();
+    expect(element(".window-keybind-button").textContent).toBe("Set window shortcut");
+  });
+});

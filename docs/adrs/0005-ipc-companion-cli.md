@@ -23,13 +23,14 @@ Run a local IPC listener inside the resident app process and branch the same bin
   - `quicktext` with no arguments launches the GUI.
   - `quicktext toggle` toggles recording through the same backend path as the button and shortcut.
   - `quicktext toggle focus` additionally manages window visibility: when it starts a recording, the main window is shown and focused; when it stops a recording, the window hides after the transcript is ready. The flag applies per call only.
+  - `quicktext toggle-window` shows/focuses or hides the main window without changing recording. The independent window shortcut uses the same backend action. Its response carries the resulting `visible` boolean instead of a recording snapshot.
   - `quicktext status` prints current state without changing it.
 - Plain IPC toggles must not steal window focus; showing the window stays a UI-button behavior unless `focus` is requested.
-- Wire format is line-delimited JSON with a protocol version field; responses carry the app snapshot.
+- Wire format is line-delimited JSON with a protocol version field; recording/status responses carry the app snapshot and visibility responses carry `visible`.
 - CLI output is human-readable text by default and full JSON with `--json`.
 - Exit codes are deterministic: 0 success, 1 generic failure, 2 app not running (`toggle` fails fast rather than auto-launching).
 
-The MVP IPC surface is `toggle` and `status` only.
+The IPC surface is `toggle`, `toggle_window`, and `status`. The CLI spells the visibility command `toggle-window`. Linux/macOS use the implemented Unix transport; Windows named-pipe transport remains deferred.
 
 ## Consequences
 
@@ -49,7 +50,7 @@ The MVP IPC surface is `toggle` and `status` only.
 - **When does the focused stop hide the window?** After finalization so the transcript is visible and auto-copy can fire; immediate hiding was rejected because manual-copy users would never see the result.
 - **Single instance enforced via socket?** Yes.
 - **Binary layout?** Same binary, argv branch; a separate CLI binary doubles packaging work for MVP.
-- **Commands in MVP?** `toggle` and `status`; `start`/`stop` deferred until a real caller needs them.
+- **Commands in MVP?** `toggle`, `toggle-window`, and `status`; `start`/`stop` deferred until a real caller needs them.
 - **Wire format?** Line-delimited JSON with version field; plain text rejected because `--json` and error reporting get mushy.
 - **Exit codes?** 0/1/2 as above, decided without grilling since scripts require determinism and no real alternative existed.
 

@@ -57,6 +57,8 @@ export type AppState = {
   recording: RecordingState;
   shortcutCapture: ShortcutCaptureState;
   selectedShortcut: string;
+  selectedWindowShortcut: string;
+  shortcutCaptureTarget: "recording" | "window";
   shortcutFocusOnStart: boolean;
   shortcutHideOnStop: boolean;
   maxRecordingSeconds: number;
@@ -97,11 +99,14 @@ export const createAppState = (
   selectedInputDeviceId: string,
   pasteToTarget: boolean,
   launchOnStartup: boolean,
+  selectedWindowShortcut = "",
 ): AppState => ({
   activeView: "capture",
   recording: "idle",
   shortcutCapture: "idle",
   selectedShortcut,
+  selectedWindowShortcut,
+  shortcutCaptureTarget: "recording",
   shortcutFocusOnStart,
   shortcutHideOnStop,
   maxRecordingSeconds,
@@ -144,9 +149,13 @@ export const canToggleRecording = (state: AppState) =>
 export const isCapturingShortcut = (state: AppState) =>
   state.shortcutCapture === "capturing";
 
-export const startShortcutCapture = (state: AppState): AppState => ({
+export const startShortcutCapture = (
+  state: AppState,
+  shortcutCaptureTarget: "recording" | "window" = "recording",
+): AppState => ({
   ...state,
   shortcutCapture: "capturing",
+  shortcutCaptureTarget,
   status: "Press a shortcut. Esc cancels.",
 });
 
@@ -314,6 +323,16 @@ export const saveShortcut = (
   shortcutCapture: "idle",
   selectedShortcut,
   status: "Saved.",
+});
+
+export const saveWindowShortcut = (
+  state: AppState,
+  selectedWindowShortcut: string,
+): AppState => ({
+  ...state,
+  shortcutCapture: "idle",
+  selectedWindowShortcut,
+  status: "Window shortcut saved.",
 });
 
 export const setActiveProvider = (

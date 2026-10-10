@@ -134,6 +134,18 @@ async fn dispatch(app: &tauri::AppHandle, request: &IpcRequest) -> IpcResponse {
                 Err(_) => IpcResponse::error("QuickText did not respond to the toggle in time."),
             }
         }
+        IpcCommand::ToggleWindow => {
+            match timeout(
+                Duration::from_secs(super::ipc::RESPONSE_TIMEOUT_SECONDS),
+                crate::toggle_main_window(app.clone()),
+            )
+            .await
+            {
+                Ok(Ok(visible)) => IpcResponse::visibility(visible),
+                Ok(Err(message)) => IpcResponse::error(message),
+                Err(_) => IpcResponse::error("QuickText did not toggle window visibility in time."),
+            }
+        }
         IpcCommand::Status => {
             let controller = app.state::<AppControllerState>();
             let snapshot =

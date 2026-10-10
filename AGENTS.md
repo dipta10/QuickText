@@ -86,7 +86,7 @@ npm run tauri dev
 - Do not store API keys in ordinary config files, local storage, or committed files.
 - Backend state should become the source of truth for recording/transcription state as the app grows.
 - Global shortcuts should emit app events or call app-controller behavior, not duplicate recording logic in the frontend.
-- IPC commands and companion CLI calls must go through the same backend toggle path as UI triggers; they must not show or focus windows.
+- Recording IPC commands and companion CLI calls must go through the same backend toggle path as UI triggers; plain recording toggles must not show or focus windows. The explicit `toggle-window` command shares the visibility action with the window shortcut and may show/focus or hide the main window.
 - Tray/menu bar actions should show/hide the same main window and use explicit quit for process exit.
 - Use Tauri commands/events for frontend-to-backend communication.
 - Add or update Tauri capability permissions when adding new commands or plugins.

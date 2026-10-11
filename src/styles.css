@@ -590,6 +590,7 @@ button {
 }
 
 .keybind-status,
+.window-keybind-status,
 .api-key-status,
 .deepgram-api-key-status,
 .transcription-description-status,
@@ -600,6 +601,10 @@ button {
   color: #8c99aa;
   font-size: 0.8rem;
   line-height: 1.4;
+}
+
+.window-keybind-status:empty {
+  display: none;
 }
 
 .bottom-status {

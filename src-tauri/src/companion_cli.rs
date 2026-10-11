@@ -15,7 +15,7 @@ pub const EXIT_SUCCESS: i32 = 0;
 pub const EXIT_FAILURE: i32 = 1;
 pub const EXIT_NOT_RUNNING: i32 = 2;
 
-const USAGE: &str = "Usage: quicktext [toggle|status] [focus] [--json]\n\nRun without arguments to launch the app. `focus` manages the window around a toggle: shown and focused when recording starts, hidden once the transcript is ready.";
+const USAGE: &str = "Usage: quicktext [toggle|toggle-window|status] [focus] [--json]\n\nRun without arguments to launch the app. `toggle-window` shows/focuses or hides the resident window without changing recording. `focus` manages the window around a toggle: shown and focused when recording starts, hidden once the transcript is ready.";
 
 pub fn run(args: &[String]) -> i32 {
     let mut json_output = false;
@@ -27,6 +27,7 @@ pub fn run(args: &[String]) -> i32 {
             "--json" => json_output = true,
             "focus" => focus_window = true,
             "toggle" => command = Some(IpcCommand::Toggle),
+            "toggle-window" => command = Some(IpcCommand::ToggleWindow),
             "status" => command = Some(IpcCommand::Status),
             _ => {
                 eprintln!("Unknown argument: {arg}\n{USAGE}");
@@ -87,6 +88,17 @@ fn print_response(response: &serde_json::Value, json_output: bool) -> i32 {
     }
 
     if !json_output {
+        if let Some(visible) = response.get("visible").and_then(serde_json::Value::as_bool) {
+            println!(
+                "{}",
+                if visible {
+                    "Window shown"
+                } else {
+                    "Window hidden"
+                }
+            );
+            return EXIT_SUCCESS;
+        }
         match response.get("snapshot") {
             Some(snapshot) => println!("{}", format_status_text(snapshot)),
             None => eprintln!("The response did not include app state."),
@@ -186,5 +198,25 @@ async fn send_unix_request(
         Err(_) => Err(ClientError::Failed(
             "QuickText did not respond in time.".to_string(),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn successful_visibility_changes_have_success_exit_status() {
+        for visible in [true, false] {
+            let response = serde_json::json!({"ok": true, "visible": visible});
+            assert_eq!(print_response(&response, false), EXIT_SUCCESS);
+            assert_eq!(print_response(&response, true), EXIT_SUCCESS);
+        }
+    }
+
+    #[test]
+    fn visibility_errors_have_failure_exit_status() {
+        let response = serde_json::json!({"ok": false, "error": "Window unavailable"});
+        assert_eq!(print_response(&response, true), EXIT_FAILURE);
     }
 }

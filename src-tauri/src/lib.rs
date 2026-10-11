@@ -40,7 +40,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State, WindowEvent,
 };
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use transcript_cleanup::{CleanupError, GeminiCleaner};
 use transcription::{
     PartialTranscript, ProviderId, TranscriptionOptions, TranscriptionProvider,
@@ -152,7 +152,8 @@ mod provider_registry_tests {
 }
 
 struct ShortcutSettings {
-    active_shortcut: Mutex<Option<String>>,
+    active_shortcut: Mutex<Option<Shortcut>>,
+    window_shortcut: Mutex<Option<Shortcut>>,
     focus_on_start: Mutex<bool>,
     hide_on_stop: Mutex<bool>,
     paste_to_target: Mutex<bool>,
@@ -162,6 +163,7 @@ impl Default for ShortcutSettings {
     fn default() -> Self {
         Self {
             active_shortcut: Mutex::new(None),
+            window_shortcut: Mutex::new(None),
             focus_on_start: Mutex::new(true),
             hide_on_stop: Mutex::new(false),
             paste_to_target: Mutex::new(false),
@@ -442,6 +444,36 @@ fn hide_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
     }
+}
+
+// Dispatch visibility changes on the UI thread so simultaneous IPC/key presses
+// inspect and change the window in order, without touching capture state.
+async fn toggle_main_window(app: tauri::AppHandle) -> Result<bool, String> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        let result = (|| {
+            let window = handle
+                .get_webview_window("main")
+                .ok_or_else(|| "The main window is unavailable.".to_string())?;
+            let visible = window.is_visible().map_err(|error| error.to_string())?;
+            let minimized = window.is_minimized().map_err(|error| error.to_string())?;
+            if visible && !minimized {
+                window.hide().map_err(|error| error.to_string())?;
+                Ok(false)
+            } else {
+                window.unminimize().map_err(|error| error.to_string())?;
+                window.show().map_err(|error| error.to_string())?;
+                window.set_focus().map_err(|error| error.to_string())?;
+                Ok(true)
+            }
+        })();
+        let _ = sender.send(result);
+    })
+    .map_err(|error| format!("Could not toggle the main window: {error}"))?;
+    receiver
+        .await
+        .map_err(|_| "The window visibility request was interrupted.".to_string())?
 }
 
 fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
@@ -1401,34 +1433,87 @@ fn stop_audio_recorder(
     Ok(active_recorder.map(AudioRecorder::stop).unwrap_or_default())
 }
 
+// Hold both slots while replacing one shortcut. Register first so an invalid
+// or unavailable replacement leaves both working shortcuts intact.
+fn replace_shortcut(
+    app: &tauri::AppHandle,
+    active: &mut Option<Shortcut>,
+    other: &Option<Shortcut>,
+    shortcut: &str,
+    toggle_window: bool,
+) -> Result<String, String> {
+    let shortcut = shortcut.trim();
+    if shortcut.is_empty() {
+        return Err("Choose a shortcut first.".into());
+    }
+    let parsed: Shortcut = shortcut
+        .parse()
+        .map_err(|error| format!("Invalid shortcut: {error}"))?;
+    if other.as_ref() == Some(&parsed) {
+        return Err("Recording and window visibility must use different shortcuts.".into());
+    }
+    if active.as_ref() == Some(&parsed) {
+        return Ok(shortcut.to_string());
+    }
+    app.global_shortcut()
+        .on_shortcut(parsed, move |app, _shortcut, event| {
+            if event.state() != ShortcutState::Pressed {
+                return;
+            }
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if toggle_window {
+                    if let Err(error) = toggle_main_window(app).await {
+                        eprintln!("Could not toggle window visibility: {error}");
+                    }
+                } else {
+                    run_shortcut_toggle(app).await;
+                }
+            });
+        })
+        .map_err(|error| format!("Could not register shortcut: {error}"))?;
+    if let Some(previous) = active.as_ref() {
+        if let Err(error) = app.global_shortcut().unregister(*previous) {
+            let _ = app.global_shortcut().unregister(parsed);
+            return Err(format!("Could not clear the previous shortcut: {error}"));
+        }
+    }
+    *active = Some(parsed);
+    Ok(shortcut.to_string())
+}
+
 #[tauri::command]
 fn set_global_shortcut(
     app: tauri::AppHandle,
     settings: State<'_, ShortcutSettings>,
     shortcut: String,
 ) -> Result<String, String> {
-    let shortcut = shortcut.trim();
-
-    if shortcut.is_empty() {
-        return Err("Choose a shortcut first.".into());
-    }
-
-    app.global_shortcut()
-        .unregister_all()
-        .map_err(|error| format!("Could not clear the previous shortcut: {error}"))?;
-
-    app.global_shortcut()
-        .register(shortcut)
-        .map_err(|error| format!("Could not register shortcut: {error}"))?;
-
-    let mut active_shortcut = settings
+    let mut recording = settings
         .active_shortcut
         .lock()
         .map_err(|_| "Could not update shortcut state.".to_string())?;
+    let window = settings
+        .window_shortcut
+        .lock()
+        .map_err(|_| "Could not update shortcut state.".to_string())?;
+    replace_shortcut(&app, &mut recording, &window, &shortcut, false)
+}
 
-    *active_shortcut = Some(shortcut.to_string());
-
-    Ok(shortcut.to_string())
+#[tauri::command]
+fn set_window_shortcut(
+    app: tauri::AppHandle,
+    settings: State<'_, ShortcutSettings>,
+    shortcut: String,
+) -> Result<String, String> {
+    let recording = settings
+        .active_shortcut
+        .lock()
+        .map_err(|_| "Could not update shortcut state.".to_string())?;
+    let mut window = settings
+        .window_shortcut
+        .lock()
+        .map_err(|_| "Could not update shortcut state.".to_string())?;
+    replace_shortcut(&app, &mut window, &recording, &shortcut, true)
 }
 
 #[tauri::command]
@@ -1603,18 +1688,7 @@ fn run_with_options(start_hidden: bool) {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(autostart::plugin())
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state() == ShortcutState::Pressed {
-                        let app = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            run_shortcut_toggle(app).await;
-                        });
-                    }
-                })
-                .build(),
-        )
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(move |app| {
             if let Err(error) = language_preferences::load(
                 app.handle(),
@@ -1673,6 +1747,7 @@ fn run_with_options(start_hidden: bool) {
             get_build_info,
             toggle_recording,
             set_global_shortcut,
+            set_window_shortcut,
             set_shortcut_behavior,
             set_paste_to_target,
             has_soniox_api_key,

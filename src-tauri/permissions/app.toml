@@ -8,6 +8,7 @@ commands.allow = [
   "get_build_info",
   "toggle_recording",
   "set_global_shortcut",
+  "set_window_shortcut",
   "set_shortcut_behavior",
   "set_paste_to_target",
   "has_soniox_api_key",

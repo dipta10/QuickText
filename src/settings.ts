@@ -98,3 +98,13 @@ export const getLaunchOnStartup = (): boolean => {
 export const saveLaunchOnStartup = (launchOnStartup: boolean) => {
   localStorage.setItem(launchOnStartupStorageKey, launchOnStartup.toString());
 };
+
+const windowShortcutStorageKey = "stt.windowShortcut";
+
+export const getWindowShortcut = (): string => {
+  return localStorage.getItem(windowShortcutStorageKey) ?? "";
+};
+
+export const saveWindowShortcut = (shortcut: string) => {
+  localStorage.setItem(windowShortcutStorageKey, shortcut);
+};

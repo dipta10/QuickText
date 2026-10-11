@@ -69,6 +69,10 @@ quicktext toggle
 # shown/focused on start, hidden once the transcript is ready
 quicktext toggle focus
 
+# Show/focus or hide the window; recording is unchanged
+quicktext toggle-window
+quicktext toggle-window --json
+
 # Print current state without changing anything
 quicktext status
 
@@ -76,18 +80,29 @@ quicktext status
 quicktext status --json
 ```
 
+Settings provides separate **Recording shortcut** and **Window shortcut** controls.
+Choose different keys for each; both are restored when QuickText starts. The window
+shortcut shows and focuses a hidden/minimized window or hides a visible window to
+the tray, even during recording. It never quits the app.
+
+`toggle-window --json` returns `{"ok":true,"visible":true}` when shown and
+`{"ok":true,"visible":false}` when hidden. The resident app must already be running.
+The CLI transport is implemented on Linux/macOS; Windows IPC remains unsupported.
+
 Exit codes: `0` success, `1` failure, `2` app not running.
 
 Bind it to a key in Hyprland:
 
 ```ini
 bind = , F10, exec, quicktext toggle focus
+bind = , F11, exec, quicktext toggle-window
 ```
 
 Or Sway:
 
 ```ini
 bindsym F10 exec quicktext toggle focus
+bindsym F11 exec quicktext toggle-window
 ```
 
 ## Documentation

@@ -11,6 +11,7 @@ import {
   isBusy,
   isRecording,
   saveShortcut,
+  saveWindowShortcut as saveWindowShortcutState,
   setActiveProvider,
   setProviderApiKeyPresence,
   setProviderApiKeyStatus,
@@ -39,6 +40,7 @@ import { formatShortcut } from "./shortcut";
 import {
   getAutoCopyTranscript,
   getGlobalShortcut,
+  getWindowShortcut,
   getInputDeviceId,
   getLiveTranscript,
   getLaunchOnStartup,
@@ -49,6 +51,7 @@ import {
   getShortcutHideOnStop,
   saveAutoCopyTranscript,
   saveGlobalShortcut,
+  saveWindowShortcut,
   saveInputDeviceId,
   saveLiveTranscript,
   saveLaunchOnStartup,
@@ -76,6 +79,7 @@ import {
   saveProviderApiKey,
   setActiveProvider as setActiveProviderBackend,
   setGlobalShortcut,
+  setWindowShortcut,
   setInputDevice,
   setPasteToTargetBackend,
   setLaunchOnStartup as setBackendLaunchOnStartup,
@@ -104,6 +108,7 @@ let state = createAppState(
   getInputDeviceId(),
   getPasteToTarget(),
   getLaunchOnStartup(),
+  getWindowShortcut(),
 );
 const view = createAppView(app);
 let lastAutoCopiedSessionId: number | null = null;
@@ -301,10 +306,17 @@ const render = () => {
   view.transcriptPartial.textContent = state.partialTranscript;
   view.transcriptText.classList.toggle("is-empty", !hasTranscriptText);
 
-  view.keybindButton.textContent = isCapturingShortcut(state)
-    ? "Press keys"
-    : state.selectedShortcut || "Set shortcut";
+  view.keybindButton.textContent =
+    isCapturingShortcut(state) && state.shortcutCaptureTarget === "recording"
+      ? "Press keys"
+      : state.selectedShortcut || "Set shortcut";
+  view.windowKeybindButton.textContent =
+    isCapturingShortcut(state) && state.shortcutCaptureTarget === "window"
+      ? "Press keys"
+      : state.selectedWindowShortcut || "Set window shortcut";
   view.keybindStatus.textContent = state.status;
+  view.windowKeybindStatus.textContent =
+    state.shortcutCaptureTarget === "window" ? state.status : "";
   view.shortcutFocusOnStartCheckbox.checked = state.shortcutFocusOnStart;
   view.shortcutHideOnStopCheckbox.checked = state.shortcutHideOnStop;
   view.providerSelect.value = state.providerSelectionStatus === "ready"
@@ -405,6 +417,18 @@ const registerShortcut = async (shortcut: string) => {
     await setGlobalShortcut(shortcut);
     saveGlobalShortcut(shortcut);
     updateState(saveShortcut(state, shortcut));
+  } catch (error) {
+    updateState(
+      setStatus(state, error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
+const registerWindowShortcut = async (shortcut: string) => {
+  try {
+    await setWindowShortcut(shortcut);
+    saveWindowShortcut(shortcut);
+    updateState(saveWindowShortcutState(state, shortcut));
   } catch (error) {
     updateState(
       setStatus(state, error instanceof Error ? error.message : String(error)),
@@ -848,6 +872,10 @@ view.launchOnStartupCheckbox.addEventListener("change", () => {
   void updateLaunchOnStartup(view.launchOnStartupCheckbox.checked);
 });
 
+view.windowKeybindButton.addEventListener("click", () => {
+  updateState(startShortcutCapture(state, "window"));
+});
+
 view.keybindButton.addEventListener("click", () => {
   updateState(startShortcutCapture(state));
 });
@@ -953,7 +981,12 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
-  void registerShortcut(result.shortcut);
+  if (event.repeat) return;
+  if (state.shortcutCaptureTarget === "window") {
+    void registerWindowShortcut(result.shortcut);
+  } else {
+    void registerShortcut(result.shortcut);
+  }
 });
 
 void onAppStateChanged((snapshot) => {
@@ -1002,4 +1035,8 @@ if (state.selectedInputDeviceId) {
 
 if (state.selectedShortcut) {
   void registerShortcut(state.selectedShortcut);
+}
+
+if (state.selectedWindowShortcut) {
+  void registerWindowShortcut(state.selectedWindowShortcut);
 }

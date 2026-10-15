@@ -9,7 +9,15 @@ use tokio::sync::{
     oneshot,
 };
 use tokio::{net::lookup_host, net::TcpStream};
-use tokio_tungstenite::{client_async_tls, tungstenite::Message};
+use tokio_tungstenite::{
+    client_async_tls,
+    tungstenite::{
+        client::IntoClientRequest,
+        handshake::client::Request,
+        http::{header::AUTHORIZATION, HeaderValue},
+        Message,
+    },
+};
 
 type SonioxWebsocket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -80,17 +88,13 @@ impl SonioxSession {
         let (failure_tx, failure_rx) = oneshot::channel();
         let stream_error: SharedErrorSlot = Arc::new(Mutex::new(None));
 
-        let config_message = soniox_config_message(
-            &api_key,
-            &audio_format,
-            &language_hints,
-            &description,
-            &terms,
-        );
+        let config_message =
+            soniox_config_message(&audio_format, &language_hints, &description, &terms);
 
         let task_error = Arc::clone(&stream_error);
         let task = tauri::async_runtime::spawn(async move {
             run_configured_session(
+                api_key,
                 config_message,
                 audio_rx,
                 command_rx,
@@ -215,6 +219,7 @@ impl TranscriptionProvider for SonioxProvider {
 }
 
 async fn run_configured_session(
+    api_key: String,
     config_message: String,
     audio_rx: UnboundedReceiver<Vec<u8>>,
     command_rx: UnboundedReceiver<SonioxCommand>,
@@ -222,7 +227,12 @@ async fn run_configured_session(
     stream_error: SharedErrorSlot,
     ready_tx: oneshot::Sender<Result<(), String>>,
 ) {
-    match connect_with_timeout(ProviderId::Soniox, connect_and_configure(&config_message)).await {
+    match connect_with_timeout(
+        ProviderId::Soniox,
+        connect_and_configure(&api_key, &config_message),
+    )
+    .await
+    {
         Ok(websocket) => {
             let _ = ready_tx.send(Ok(()));
             run_soniox_session(websocket, audio_rx, command_rx, partial_tx, stream_error).await;
@@ -235,11 +245,26 @@ async fn run_configured_session(
     }
 }
 
-async fn connect_and_configure(config_message: &str) -> Result<SonioxWebsocket, String> {
+fn soniox_connection_request(api_key: &str) -> Result<Request, String> {
+    let mut request = SONIOX_WEBSOCKET_URL
+        .into_client_request()
+        .map_err(|_| "Could not build the Soniox connection request.".to_string())?;
+    let mut authorization = HeaderValue::from_str(&format!("Bearer {api_key}"))
+        .map_err(|_| "Invalid Soniox API key. Update it in Settings.".to_string())?;
+    authorization.set_sensitive(true);
+    request.headers_mut().insert(AUTHORIZATION, authorization);
+    Ok(request)
+}
+
+async fn connect_and_configure(
+    api_key: &str,
+    config_message: &str,
+) -> Result<SonioxWebsocket, String> {
+    let request = soniox_connection_request(api_key)?;
     soniox_log!("Resolving IPv4 endpoint.");
     let socket = connect_ipv4(SONIOX_WEBSOCKET_HOST, SONIOX_WEBSOCKET_PORT).await?;
     soniox_log!("IPv4 TCP connection established; starting WebSocket handshake.");
-    let (mut websocket, _) = client_async_tls(SONIOX_WEBSOCKET_URL, socket)
+    let (mut websocket, _) = client_async_tls(request, socket)
         .await
         .map_err(|error| transport_error(ProviderId::Soniox, &error))?;
     soniox_log!("WebSocket handshake completed.");
@@ -492,7 +517,6 @@ fn soniox_audio_format(audio_format: &AudioFormat) -> &'static str {
 }
 
 fn soniox_config_message(
-    api_key: &str,
     audio_format: &AudioFormat,
     language_hints: &[String],
     description: &str,
@@ -504,7 +528,6 @@ fn soniox_config_message(
     });
 
     serde_json::to_string(&SonioxConfig {
-        api_key,
         model: SONIOX_MODEL,
         audio_format: soniox_audio_format(audio_format),
         sample_rate: audio_format.sample_rate,
@@ -517,7 +540,6 @@ fn soniox_config_message(
 
 #[derive(Serialize)]
 struct SonioxConfig<'a> {
-    api_key: &'a str,
     model: &'a str,
     audio_format: &'a str,
     sample_rate: u32,
@@ -565,6 +587,51 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn authenticates_websocket_handshake_with_bearer_header() {
+        let request = soniox_connection_request("test-secret").unwrap();
+        assert!(request.headers()[AUTHORIZATION].is_sensitive());
+        assert!(!format!("{request:?}").contains("test-secret"));
+
+        let (client, server) = tokio::io::duplex(4096);
+        let server_task = tokio::spawn(async move {
+            tokio_tungstenite::accept_hdr_async(server, |request: &Request, response| {
+                assert_eq!(request.uri().path(), "/transcribe-websocket");
+                assert_eq!(request.headers()[AUTHORIZATION], "Bearer test-secret");
+                assert!(request.headers().get("Sec-WebSocket-Protocol").is_none());
+                Ok(response)
+            })
+            .await
+            .unwrap()
+        });
+        tokio_tungstenite::client_async(request, client)
+            .await
+            .unwrap();
+        server_task.await.unwrap();
+    }
+
+    #[test]
+    fn rejects_invalid_authorization_without_exposing_the_key() {
+        let error = soniox_connection_request("private-secret\r\nInjected: value").unwrap_err();
+        assert_eq!(error, "Invalid Soniox API key. Update it in Settings.");
+    }
+
+    #[test]
+    fn start_message_contains_configuration_without_credentials() {
+        let config: serde_json::Value =
+            serde_json::from_str(&soniox_config_message(&test_audio_format(), &[], "", &[]))
+                .unwrap();
+        assert_eq!(
+            config,
+            serde_json::json!({
+                "model": "stt-rt-v5",
+                "audio_format": "pcm_s16le",
+                "sample_rate": 16000,
+                "num_channels": 1,
+            })
+        );
+    }
+
     #[test]
     fn soniox_connection_keeps_only_ipv4_addresses() {
         let addresses = [
@@ -584,14 +651,9 @@ mod tests {
 
     #[test]
     fn omits_language_hints_for_automatic_detection() {
-        let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
-            "secret",
-            &test_audio_format(),
-            &[],
-            "",
-            &[],
-        ))
-        .unwrap();
+        let config: serde_json::Value =
+            serde_json::from_str(&soniox_config_message(&test_audio_format(), &[], "", &[]))
+                .unwrap();
 
         assert!(config.get("language_hints").is_none());
     }
@@ -600,7 +662,6 @@ mod tests {
     fn sends_selected_language_hints() {
         let hints = vec!["en".to_string(), "bn".to_string()];
         let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
-            "secret",
             &test_audio_format(),
             &hints,
             "",
@@ -613,14 +674,9 @@ mod tests {
 
     #[test]
     fn omits_context_when_description_and_terms_are_empty() {
-        let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
-            "secret",
-            &test_audio_format(),
-            &[],
-            "",
-            &[],
-        ))
-        .unwrap();
+        let config: serde_json::Value =
+            serde_json::from_str(&soniox_config_message(&test_audio_format(), &[], "", &[]))
+                .unwrap();
 
         assert!(config.get("context").is_none());
     }
@@ -629,7 +685,6 @@ mod tests {
     fn sends_description_as_exact_context_text() {
         let description = "  Project Atlas\nKeep the spacing.  ";
         let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
-            "secret",
             &test_audio_format(),
             &[],
             description,
@@ -643,7 +698,6 @@ mod tests {
     #[test]
     fn sends_whitespace_only_description_unchanged() {
         let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
-            "secret",
             &test_audio_format(),
             &[],
             "   ",
@@ -658,7 +712,6 @@ mod tests {
     fn sends_terms_without_context_text() {
         let terms = vec!["Soniox".to_string(), "Hyprland".to_string()];
         let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
-            "secret",
             &test_audio_format(),
             &[],
             "",
@@ -674,7 +727,6 @@ mod tests {
     fn sends_description_and_terms_in_the_same_context() {
         let terms = vec!["Quenora".to_string()];
         let config: serde_json::Value = serde_json::from_str(&soniox_config_message(
-            "secret",
             &test_audio_format(),
             &[],
             "Project Atlas",
@@ -825,6 +877,17 @@ mod tests {
 
         assert!(!error.contains("Bad audio"));
         assert!(error.contains("Check your API key and transcription settings"));
+    }
+
+    #[test]
+    fn maps_connection_authentication_error_without_exposing_provider_details() {
+        let error = handle_soniox_text_response(
+            r#"{"error_code":401,"error_type":"unauthenticated","error_message":"Invalid private-secret"}"#,
+            &mut String::new(),
+        )
+        .unwrap_err();
+        assert!(error.contains("Check your API key"));
+        assert!(!error.contains("private-secret"));
     }
 
     #[test]

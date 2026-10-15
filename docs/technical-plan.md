@@ -175,6 +175,15 @@ Current Soniox docs identify the real-time STT endpoint as:
 wss://stt-rt.soniox.com/transcribe-websocket
 ```
 
+The Rust Soniox client authenticates the WebSocket upgrade request with an
+`Authorization: Bearer <SONIOX_API_KEY>` header. The first configuration message
+contains transcription settings only; it must not contain `api_key`. The header
+is marked sensitive and request-construction errors never include credentials.
+Authentication failures arrive as WebSocket error messages and use the existing
+provider-error path. See Soniox's [WebSocket authentication guide](https://soniox.com/docs/guides/websocket-authentication)
+and [migration checklist](https://soniox.com/docs/guides/migrate-websocket-authentication).
+First-message authentication stops working on January 15, 2027.
+
 The first configuration should target `stt-rt-v5`, send microphone audio as binary WebSocket frames, and send an empty WebSocket frame to end the stream gracefully. The provider decision is recorded in [ADR 0002](adrs/0002-streaming-soniox-stt.md).
 
 ## Deepgram Integration Decision

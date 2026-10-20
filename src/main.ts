@@ -12,6 +12,10 @@ import {
   isRecording,
   saveShortcut,
   saveWindowShortcut as saveWindowShortcutState,
+  beginShortcutSave,
+  failShortcutSave,
+  setShortcutStatus,
+  type ShortcutTarget,
   setActiveProvider,
   setProviderApiKeyPresence,
   setProviderApiKeyStatus,
@@ -314,9 +318,10 @@ const render = () => {
     isCapturingShortcut(state) && state.shortcutCaptureTarget === "window"
       ? "Press keys"
       : state.selectedWindowShortcut || "Set window shortcut";
-  view.keybindStatus.textContent = state.status;
-  view.windowKeybindStatus.textContent =
-    state.shortcutCaptureTarget === "window" ? state.status : "";
+  view.keybindButton.disabled = state.shortcutCapture === "saving";
+  view.windowKeybindButton.disabled = state.shortcutCapture === "saving";
+  view.keybindStatus.textContent = state.shortcutStatus.recording;
+  view.windowKeybindStatus.textContent = state.shortcutStatus.window;
   view.shortcutFocusOnStartCheckbox.checked = state.shortcutFocusOnStart;
   view.shortcutHideOnStopCheckbox.checked = state.shortcutHideOnStop;
   view.providerSelect.value = state.providerSelectionStatus === "ready"
@@ -412,26 +417,31 @@ const maybeAutoCopyTranscript = () => {
   void copyTranscript("Transcript copied automatically.");
 };
 
-const registerShortcut = async (shortcut: string) => {
+const registerShortcut = async (
+  shortcut: string,
+  target: ShortcutTarget = "recording",
+  restoring = false,
+) => {
   try {
-    await setGlobalShortcut(shortcut);
-    saveGlobalShortcut(shortcut);
-    updateState(saveShortcut(state, shortcut));
+    if (target === "window") {
+      await setWindowShortcut(shortcut);
+    } else {
+      await setGlobalShortcut(shortcut);
+    }
+    // Restoring a binding must not finish a newer interactive capture or
+    // overwrite its persisted value/status when the startup reply arrives late.
+    if (restoring) return;
+    if (target === "window") {
+      saveWindowShortcut(shortcut);
+      updateState(saveWindowShortcutState(state, shortcut));
+    } else {
+      saveGlobalShortcut(shortcut);
+      updateState(saveShortcut(state, shortcut));
+    }
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     updateState(
-      setStatus(state, error instanceof Error ? error.message : String(error)),
-    );
-  }
-};
-
-const registerWindowShortcut = async (shortcut: string) => {
-  try {
-    await setWindowShortcut(shortcut);
-    saveWindowShortcut(shortcut);
-    updateState(saveWindowShortcutState(state, shortcut));
-  } catch (error) {
-    updateState(
-      setStatus(state, error instanceof Error ? error.message : String(error)),
+      restoring ? setShortcutStatus(state, target, message) : failShortcutSave(state, message),
     );
   }
 };
@@ -976,17 +986,14 @@ window.addEventListener("keydown", (event) => {
 
   if (!result.ok) {
     if (result.message) {
-      updateState(setStatus(state, result.message));
+      updateState(setShortcutStatus(state, state.shortcutCaptureTarget, result.message));
     }
     return;
   }
 
   if (event.repeat) return;
-  if (state.shortcutCaptureTarget === "window") {
-    void registerWindowShortcut(result.shortcut);
-  } else {
-    void registerShortcut(result.shortcut);
-  }
+  updateState(beginShortcutSave(state));
+  void registerShortcut(result.shortcut, state.shortcutCaptureTarget);
 });
 
 void onAppStateChanged((snapshot) => {
@@ -1034,9 +1041,9 @@ if (state.selectedInputDeviceId) {
 }
 
 if (state.selectedShortcut) {
-  void registerShortcut(state.selectedShortcut);
+  void registerShortcut(state.selectedShortcut, "recording", true);
 }
 
 if (state.selectedWindowShortcut) {
-  void registerWindowShortcut(state.selectedWindowShortcut);
+  void registerShortcut(state.selectedWindowShortcut, "window", true);
 }

@@ -433,10 +433,29 @@ async fn forward_partial_transcripts(
 }
 
 fn show_main_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(window) = handle.get_webview_window("main") {
+            let _ = show_and_focus_window(&window);
+        }
+    });
+}
+
+// Must run on the UI thread. On GTK, Tauri queues show/unminimize, but its
+// immediate set_focus call ignores windows that are still hidden/minimized.
+// Present via GTK first so the queued focus request sees a shown window.
+fn show_and_focus_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        use gtk::prelude::GtkWindowExt;
+        window.gtk_window()?.present();
+        window.set_focus()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        window.unminimize()?;
+        window.show()?;
+        window.set_focus()
     }
 }
 
@@ -462,9 +481,7 @@ async fn toggle_main_window(app: tauri::AppHandle) -> Result<bool, String> {
                 window.hide().map_err(|error| error.to_string())?;
                 Ok(false)
             } else {
-                window.unminimize().map_err(|error| error.to_string())?;
-                window.show().map_err(|error| error.to_string())?;
-                window.set_focus().map_err(|error| error.to_string())?;
+                show_and_focus_window(&window).map_err(|error| error.to_string())?;
                 Ok(true)
             }
         })();

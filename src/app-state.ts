@@ -5,7 +5,8 @@ export type RecordingState =
   | "stopping"
   | "transcribed"
   | "error";
-export type ShortcutCaptureState = "idle" | "capturing";
+export type ShortcutCaptureState = "idle" | "capturing" | "saving";
+export type ShortcutTarget = "recording" | "window";
 export type ActiveView = "capture" | "settings";
 export type ProviderId = "soniox" | "deepgram";
 export type ProviderSelectionStatus = "loading" | "ready" | "error";
@@ -58,7 +59,8 @@ export type AppState = {
   shortcutCapture: ShortcutCaptureState;
   selectedShortcut: string;
   selectedWindowShortcut: string;
-  shortcutCaptureTarget: "recording" | "window";
+  shortcutCaptureTarget: ShortcutTarget;
+  shortcutStatus: Record<ShortcutTarget, string>;
   shortcutFocusOnStart: boolean;
   shortcutHideOnStop: boolean;
   maxRecordingSeconds: number;
@@ -107,6 +109,7 @@ export const createAppState = (
   selectedShortcut,
   selectedWindowShortcut,
   shortcutCaptureTarget: "recording",
+  shortcutStatus: { recording: "", window: "" },
   shortcutFocusOnStart,
   shortcutHideOnStop,
   maxRecordingSeconds,
@@ -151,18 +154,50 @@ export const isCapturingShortcut = (state: AppState) =>
 
 export const startShortcutCapture = (
   state: AppState,
-  shortcutCaptureTarget: "recording" | "window" = "recording",
-): AppState => ({
-  ...state,
-  shortcutCapture: "capturing",
-  shortcutCaptureTarget,
-  status: "Press a shortcut. Esc cancels.",
-});
+  shortcutCaptureTarget: ShortcutTarget = "recording",
+): AppState => {
+  if (state.shortcutCapture === "saving") return state;
+  return {
+    ...state,
+    shortcutCapture: "capturing",
+    shortcutCaptureTarget,
+    shortcutStatus: {
+      ...state.shortcutStatus,
+      ...(isCapturingShortcut(state) ? { [state.shortcutCaptureTarget]: "" } : {}),
+      [shortcutCaptureTarget]: "Press a shortcut. Esc cancels.",
+    },
+    status: "Press a shortcut. Esc cancels.",
+  };
+};
 
 export const cancelShortcutCapture = (state: AppState): AppState => ({
   ...state,
   shortcutCapture: "idle",
+  shortcutStatus: { ...state.shortcutStatus, [state.shortcutCaptureTarget]: "Canceled." },
   status: "Canceled.",
+});
+
+export const setShortcutStatus = (
+  state: AppState,
+  target: ShortcutTarget,
+  message: string,
+): AppState => ({
+  ...state,
+  shortcutStatus: { ...state.shortcutStatus, [target]: message },
+});
+
+export const beginShortcutSave = (state: AppState): AppState => {
+  if (!isCapturingShortcut(state)) return state;
+  return {
+    ...setShortcutStatus(state, state.shortcutCaptureTarget, "Saving shortcut..."),
+    shortcutCapture: "saving",
+  };
+};
+
+export const failShortcutSave = (state: AppState, message: string): AppState => ({
+  ...setShortcutStatus(state, state.shortcutCaptureTarget, message),
+  shortcutCapture: "capturing",
+  status: message,
 });
 
 const statusText = (snapshot: BackendAppSnapshot): string => {
@@ -319,7 +354,7 @@ export const saveShortcut = (
   state: AppState,
   selectedShortcut: string,
 ): AppState => ({
-  ...state,
+  ...setShortcutStatus(state, "recording", "Saved."),
   shortcutCapture: "idle",
   selectedShortcut,
   status: "Saved.",
@@ -329,7 +364,7 @@ export const saveWindowShortcut = (
   state: AppState,
   selectedWindowShortcut: string,
 ): AppState => ({
-  ...state,
+  ...setShortcutStatus(state, "window", "Window shortcut saved."),
   shortcutCapture: "idle",
   selectedWindowShortcut,
   status: "Window shortcut saved.",

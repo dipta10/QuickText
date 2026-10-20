@@ -88,6 +88,8 @@ the tray, even during recording. It never quits the app.
 `toggle-window --json` returns `{"ok":true,"visible":true}` when shown and
 `{"ok":true,"visible":false}` when hidden. The resident app must already be running.
 The CLI transport is implemented on Linux/macOS; Windows IPC remains unsupported.
+Window focus also depends on the desktop's activation policy; a Wayland compositor
+may require its own focus binding or configuration.
 
 Exit codes: `0` success, `1` failure, `2` app not running.
 

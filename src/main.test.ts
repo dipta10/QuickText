@@ -224,3 +224,133 @@ it("auto-copies each recording once, excludes cleanup and restore, and manually 
   await vi.advanceTimersByTimeAsync(0);
   expect(backend.copyTextToClipboard).toHaveBeenCalledTimes(4);
 });
+
+describe("independent window shortcut", () => {
+  it.each(["recording", "window"] as const)(
+    "does not cancel %s capture when startup restoration finishes",
+    async (target) => {
+      localStorage.setItem("stt.globalShortcut", "F9");
+      localStorage.setItem("stt.windowShortcut", "F10");
+      const restored = deferred<void>();
+      const restore = target === "window" ? backend.setGlobalShortcut : backend.setWindowShortcut;
+      vi.mocked(restore).mockReturnValueOnce(restored.promise);
+      await import("./main");
+      const selector = target === "window" ? ".window-keybind-button" : ".keybind-button:not(.window-keybind-button)";
+      element<HTMLButtonElement>(selector).click();
+      restored.resolve();
+      await restored.promise;
+      expect(element(selector).textContent).toBe("Press keys");
+    },
+  );
+
+  it.each(["recording", "window"] as const)("accepts only one key while a %s shortcut registration is pending", async (target) => {
+    const saved = deferred<void>();
+    const register = target === "window" ? backend.setWindowShortcut : backend.setGlobalShortcut;
+    const selector = target === "window" ? ".window-keybind-button" : ".keybind-button:not(.window-keybind-button)";
+    vi.mocked(register).mockReturnValueOnce(saved.promise);
+    await import("./main");
+    element<HTMLButtonElement>(selector).click();
+    for (const key of ["F10", "F11", "Escape"]) {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key, code: key }));
+    }
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(element<HTMLButtonElement>(".window-keybind-button").disabled).toBe(true);
+    expect(element<HTMLButtonElement>(".keybind-button").disabled).toBe(true);
+    // Neither another key nor switching controls can supersede a pending save.
+    element<HTMLButtonElement>(".window-keybind-button").click();
+    element<HTMLButtonElement>(".keybind-button").click();
+    saved.resolve();
+    await saved.promise;
+    expect(localStorage.getItem(target === "window" ? "stt.windowShortcut" : "stt.globalShortcut")).toBe("F10");
+    expect(element<HTMLButtonElement>(".window-keybind-button").disabled).toBe(false);
+  });
+
+  it.each(["recording", "window"] as const)("keeps startup %s registration errors in their own section", async (target) => {
+    localStorage.setItem("stt.globalShortcut", "F9");
+    localStorage.setItem("stt.windowShortcut", "F10");
+    const failing = target === "window" ? backend.setWindowShortcut : backend.setGlobalShortcut;
+    const succeeding = target === "window" ? backend.setGlobalShortcut : backend.setWindowShortcut;
+    const selector = target === "window" ? ".window-keybind-status" : ".keybind-status";
+    const otherSelector = target === "window" ? ".keybind-status" : ".window-keybind-status";
+    vi.mocked(failing).mockRejectedValueOnce(new Error("Key unavailable"));
+    const restored = deferred<void>();
+    vi.mocked(succeeding).mockReturnValueOnce(restored.promise);
+    await import("./main");
+    restored.resolve();
+    await restored.promise;
+    expect(element(selector).textContent).toBe("Key unavailable");
+    expect(element(otherSelector).textContent).not.toContain("Key unavailable");
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    onState({ ...idle, status: "recording", sessionId: 1 });
+    expect(element(selector).textContent).toBe("Key unavailable");
+    expect(backend.toggleBackendRecording).not.toHaveBeenCalled();
+  });
+
+  it("moves the capture prompt when switching shortcut controls", async () => {
+    await import("./main");
+    element<HTMLButtonElement>(".window-keybind-button").click();
+    element<HTMLButtonElement>(".keybind-button").click();
+    expect(element(".window-keybind-status").textContent).not.toContain("Press a shortcut");
+    expect(element(".keybind-status").textContent).toContain("Press a shortcut");
+  });
+
+  it("allows retry after a rejected save and keeps recording state independent", async () => {
+    localStorage.setItem("stt.windowShortcut", "F10");
+    await import("./main");
+    vi.mocked(backend.setWindowShortcut).mockRejectedValueOnce(new Error("Shortcut unavailable"));
+    element<HTMLButtonElement>(".window-keybind-button").click();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F11", code: "F11" }));
+    await Promise.resolve();
+    expect(element<HTMLButtonElement>(".window-keybind-button").disabled).toBe(false);
+    expect(localStorage.getItem("stt.windowShortcut")).toBe("F10");
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    onState({ ...idle, status: "recording", sessionId: 1 });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F12", code: "F12" }));
+    await Promise.resolve();
+    expect(localStorage.getItem("stt.windowShortcut")).toBe("F12");
+    expect(element(".status-chip").textContent).toBe("Listening");
+    expect(backend.toggleBackendRecording).not.toHaveBeenCalled();
+  });
+
+  it("restores both saved shortcuts at startup", async () => {
+    localStorage.setItem("stt.globalShortcut", "F9");
+    localStorage.setItem("stt.windowShortcut", "F10");
+    await import("./main");
+    expect(backend.setGlobalShortcut).toHaveBeenCalledWith("F9");
+    expect(backend.setWindowShortcut).toHaveBeenCalledWith("F10");
+    expect(element(".window-keybind-button").textContent).toBe("F10");
+  });
+
+  it("captures and persists a window key without changing the recording key", async () => {
+    localStorage.setItem("stt.globalShortcut", "F9");
+    await import("./main");
+    vi.mocked(backend.setGlobalShortcut).mockClear();
+    element<HTMLButtonElement>(".window-keybind-button").click();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", code: "F10" }));
+    await Promise.resolve();
+    expect(backend.setWindowShortcut).toHaveBeenCalledWith("F10");
+    expect(backend.setGlobalShortcut).not.toHaveBeenCalled();
+    expect(backend.toggleBackendRecording).not.toHaveBeenCalled();
+    expect(localStorage.getItem("stt.globalShortcut")).toBe("F9");
+    expect(localStorage.getItem("stt.windowShortcut")).toBe("F10");
+  });
+
+  it("keeps the saved window key when registration is rejected", async () => {
+    localStorage.setItem("stt.windowShortcut", "F10");
+    await import("./main");
+    vi.mocked(backend.setWindowShortcut).mockRejectedValue(new Error("Shortcut unavailable"));
+    element<HTMLButtonElement>(".window-keybind-button").click();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F11", code: "F11" }));
+    await Promise.resolve();
+    expect(localStorage.getItem("stt.windowShortcut")).toBe("F10");
+    expect(element(".window-keybind-status").textContent).toBe("Shortcut unavailable");
+  });
+
+  it("cancels window shortcut capture with Escape", async () => {
+    await import("./main");
+    element<HTMLButtonElement>(".window-keybind-button").click();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape" }));
+    expect(backend.setWindowShortcut).not.toHaveBeenCalled();
+    expect(element(".window-keybind-button").textContent).toBe("Set window shortcut");
+  });
+});

@@ -54,8 +54,9 @@ Once launched, the app should remain resident in the system tray/menu bar until 
 
 Global shortcut grabs are X11-only on Linux and do not fire for Wayland-native windows, so compositor bindings need an executable entry point into the app.
 
-- The resident app exposes `toggle` and `status` over a local socket (named pipe on Windows).
+- The resident app exposes `toggle`, `toggle_window`, and `status` over a local socket (named pipe on Windows).
 - The same binary acts as the CLI: `quicktext toggle` and `quicktext status` forward requests to the running instance; plain `quicktext` launches the GUI.
+- `quicktext toggle-window` shares the window-visibility action with the independent Settings shortcut: show/focus or hide to tray without changing recording. Visibility changes run on the UI thread, and IPC replies include the resulting `visible` boolean.
 - Socket binding doubles as single-instance enforcement.
 - IPC toggles reuse the app-controller path. `quicktext toggle focus` additionally shows and focuses the window when starting and hides it once the transcript is ready when stopping.
 

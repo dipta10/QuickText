@@ -72,31 +72,44 @@ export type AppView = {
   copyBuildInfoButton: HTMLButtonElement;
   buildInfoStatus: HTMLParagraphElement;
   bottomStatus: HTMLParagraphElement;
+  shortcutHint: HTMLSpanElement;
 };
 
 const appTemplate = `
   <section class="app-shell" aria-label="Speech to Text">
     <header class="top-bar">
       <div class="brand-block">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 9v6m4-10v14m5-11v8m5-14v20m4-14v8" />
+        </svg>
         <h1 class="app-title">QuickText</h1>
-        <span class="status-chip">Ready</span>
       </div>
-      <button class="view-toggle-button" type="button" aria-label="Open settings">
-        Settings
-      </button>
+      <div class="top-bar-actions">
+        <span class="status-chip">Ready</span>
+        <button class="view-toggle-button" type="button" aria-label="Open settings">
+          Settings
+        </button>
+      </div>
     </header>
 
     <main class="main-content">
       <section class="capture-view" aria-label="Capture">
         <div class="recording-controls">
+          <span class="capture-label">Capture / microphone</span>
           <span class="provider-label">Provider: Soniox</span>
           <button class="record-button" type="button" aria-label="Start recording">
-            Record
+            Start recording
           </button>
           <div class="recording-meta">
             <span class="recording-timer">00:00</span>
             <span class="activity-indicator" aria-hidden="true"></span>
           </div>
+        </div>
+        <div class="capture-activity" aria-hidden="true">
+          <div class="activity-bars">${Array.from({ length: 48 }, (_, index) =>
+            `<i style="--bar-height: ${[7, 13, 9, 22, 16, 28, 11, 19][index % 8]}px; --bar-delay: ${-(index % 7) * 0.15}s"></i>`,
+          ).join("")}</div>
+          <span class="activity-label">Recording activity</span>
         </div>
         <p class="device-notice" role="status"></p>
 
@@ -109,7 +122,7 @@ const appTemplate = `
             </div>
           </div>
           <div class="transcript-text" tabindex="0"
-            ><p class="transcript-placeholder">Transcript will appear here.</p
+            ><p class="transcript-placeholder">Your words, ready to use.<br />Start a recording to see your transcript here.</p
             ><span class="transcript-final"></span
             ><span class="transcript-partial" aria-label="Unconfirmed words"></span
           ></div>
@@ -122,6 +135,11 @@ const appTemplate = `
       </section>
 
       <section class="settings-view" aria-label="Settings" hidden>
+        <header class="settings-heading">
+          <p class="eyebrow">Preferences</p>
+          <h2>Make it your own.</h2>
+          <p>Set up your microphone, shortcuts, and transcription.</p>
+        </header>
         <section class="settings-section">
           <h2 class="section-title">General</h2>
           <label class="checkbox-field" for="launch-on-startup">
@@ -416,7 +434,13 @@ const appTemplate = `
       </section>
     </main>
 
-    <p class="bottom-status" role="status"></p>
+    <footer class="bottom-bar">
+      <div class="bottom-bar-meta">
+        <span class="shortcut-hint"></span>
+        <span class="resident-label">Tray / background</span>
+      </div>
+      <p class="bottom-status" role="status"></p>
+    </footer>
   </section>
 `;
 
@@ -581,6 +605,7 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
+  const shortcutHint = root.querySelector<HTMLSpanElement>(".shortcut-hint");
 
   if (
     !statusChip ||
@@ -654,12 +679,14 @@ export const createAppView = (root: HTMLElement): AppView => {
     !sourceRevision ||
     !copyBuildInfoButton ||
     !buildInfoStatus ||
-    !bottomStatus
+    !bottomStatus ||
+    !shortcutHint
   ) {
     throw new Error("App controls were not found");
   }
 
   return {
+    shortcutHint,
     statusChip,
     viewToggleButton,
     captureView,

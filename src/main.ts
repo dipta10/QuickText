@@ -280,6 +280,7 @@ const render = () => {
   const providerControlsDisabled = !canChangeProvider(state);
   const providerName = state.activeProvider === "soniox" ? "Soniox" : "Deepgram";
   view.captureView.hidden = isSettings;
+  view.captureView.dataset.status = state.recording;
   view.settingsView.hidden = !isSettings;
   view.viewToggleButton.textContent = isSettings ? "Capture" : "Settings";
   view.viewToggleButton.setAttribute(
@@ -289,11 +290,12 @@ const render = () => {
   view.statusChip.textContent = statusLabel();
   view.statusChip.dataset.status = state.recording;
 
-  view.recordButton.textContent = isRecording(state) ? "Stop" : "Record";
-  view.recordButton.setAttribute(
-    "aria-label",
-    isRecording(state) ? "Stop recording" : "Start recording",
-  );
+  view.recordButton.textContent = state.recording === "starting"
+    ? "Starting…"
+    : state.recording === "stopping"
+      ? "Finalizing…"
+      : isRecording(state) ? "Stop recording" : "Start recording";
+  view.recordButton.setAttribute("aria-label", view.recordButton.textContent);
   view.recordButton.disabled = !canToggleRecording(state) || providerSelectionSaving;
   view.providerLabel.textContent = state.providerSelectionStatus === "ready"
     ? `Provider: ${providerName}`
@@ -384,6 +386,7 @@ const render = () => {
       : state.selectedShortcut
         ? `Shortcut: ${state.selectedShortcut}`
         : "No shortcut saved.";
+  view.shortcutHint.textContent = state.selectedShortcut || "Set a shortcut in Settings";
 };
 
 const updateState = (nextState: typeof state) => {

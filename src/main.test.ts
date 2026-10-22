@@ -116,7 +116,7 @@ describe("provider restoration in the app", () => {
     await initialSnapshot.promise;
     expectProvider("deepgram");
     expect(element(".status-chip").textContent).toBe("Listening");
-    expect(element<HTMLButtonElement>(".record-button").textContent).toBe("Stop");
+    expect(element<HTMLButtonElement>(".record-button").textContent).toBe("Stop recording");
   });
 
   it("keeps the provider and finalized transcript when an older toggle reply arrives late", async () => {
@@ -137,6 +137,25 @@ describe("provider restoration in the app", () => {
     expect(element(".status-chip").textContent).toBe("Transcript ready");
     expect(element(".transcript-final").textContent).toBe("Final transcript");
   });
+});
+
+it("keeps recording visuals and actions aligned with backend lifecycle events", async () => {
+  await startApp("soniox");
+  const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+  const button = element<HTMLButtonElement>(".record-button");
+  for (const [status, label, disabled] of [
+    ["starting", "Starting…", true],
+    ["recording", "Stop recording", false],
+    ["stopping", "Finalizing…", true],
+    ["transcribed", "Start recording", false],
+  ] as const) {
+    onState({ ...idle, status, sessionId: 1 });
+    expect(element<HTMLElement>(".capture-view").dataset.status).toBe(status);
+    expect(button.textContent).toBe(label);
+    expect(button.getAttribute("aria-label")).toBe(label);
+    expect(button.disabled).toBe(disabled);
+    expect(element<HTMLElement>(".activity-indicator").hidden).toBe(status !== "recording");
+  }
 });
 
 describe("cleanup in the running app", () => {

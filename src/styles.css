@@ -136,7 +136,8 @@ input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; margin: 0; a
 .keybind-button, .window-keybind-button { justify-self: stretch !important; text-align: left; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; padding: 11px !important; overflow-wrap: anywhere; }
 .settings-note, .keybind-status, .window-keybind-status, .api-key-status, .deepgram-api-key-status, .transcription-description-status, .transcription-terms-status { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
 .window-keybind-status:empty { display: none; }
-.cleanup-key-link { color: var(--accent); font-size: 12px; text-underline-offset: 3px; }
+.cleanup-key-link { color: var(--ink); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.cleanup-key-link:hover, .cleanup-key-link:focus-visible { text-decoration-thickness: 2px; text-underline-offset: 4px; }
 .language-picker { border: 1px solid var(--border); border-radius: 4px; background: var(--surface-input); min-width: 0; }
 .language-picker > summary { padding: 11px; font-size: 13px; }
 .language-picker-panel { display: grid; gap: 10px; padding: 0 10px 10px; }

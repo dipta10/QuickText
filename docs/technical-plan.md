@@ -96,6 +96,16 @@ Use streaming for MVP because it can reduce perceived wait time and enables live
 
 Microphone capture starts immediately on trigger while the provider connection happens concurrently; audio captured before the connection completes buffers in the session channel and flushes in order once connected (see [ADR 0007](adrs/0007-immediate-capture-with-provider-buffering.md)).
 
+Capture's input-level display measures the same microphone samples locally.
+The recorder normalizes supported PCM formats and accumulates peak chunk RMS
+in an atomic scalar. A separate task samples and clears it every 50ms and emits
+an `audio-level` event with the recording session ID and normalized level. No
+Tauri events are emitted on the audio callback thread, and no audio bytes are
+sent to the frontend or persisted for the meter. The task stops when its
+recording ends; the UI discards obsolete session events and resets the display
+outside recording. Existing core event permissions cover this subscription;
+no new IPC command or capability is needed.
+
 ## Settings
 
 Transcription settings should include:

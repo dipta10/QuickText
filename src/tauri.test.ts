@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { listen } from "@tauri-apps/api/event";
-import { onAppStateChanged, onDeviceFallback, onPartialTranscript } from "./tauri";
+import { onAppStateChanged, onAudioLevel, onDeviceFallback, onPartialTranscript } from "./tauri";
 
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
@@ -14,12 +14,25 @@ describe("backend event subscriptions", () => {
     ["app state", () => onAppStateChanged(() => {})],
     ["partial transcript", () => onPartialTranscript(() => {})],
     ["device fallback", () => onDeviceFallback(() => {})],
+    ["audio level", () => onAudioLevel(() => {})],
   ] as const)("rejects %s subscriptions asynchronously outside Tauri", async (_name, subscribe) => {
     vi.stubGlobal("window", {});
     // The caller attaches .catch() and continues initializing the app.
     // A synchronous throw would leave the provider picker stuck loading.
     await expect(subscribe()).rejects.toThrow("Run the desktop app");
     expect(listen).not.toHaveBeenCalled();
+  });
+
+  it("forwards session-tagged audio levels and returns the unsubscribe callback", async () => {
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+    const unsubscribe = vi.fn();
+    vi.mocked(listen).mockResolvedValue(unsubscribe);
+    const handler = vi.fn();
+    expect(await onAudioLevel(handler)).toBe(unsubscribe);
+    expect(vi.mocked(listen).mock.calls[0][0]).toBe("audio-level");
+    const payload = { recordingSessionId: 3, level: 0.25 };
+    vi.mocked(listen).mock.calls[0][1]({ event: "audio-level", id: 1, payload });
+    expect(handler).toHaveBeenCalledWith(payload);
   });
 
   it("lets callers handle event registration failures without aborting startup", async () => {

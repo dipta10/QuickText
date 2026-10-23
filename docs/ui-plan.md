@@ -59,9 +59,9 @@ Transcript presentation:
 
 Capture state behavior:
 
-- `idle`: show primary action as Record.
+- `idle`: show primary action as Start recording.
 - `starting`: disable toggle and show Starting.
-- `recording`: show primary action as Stop, timer, and listening indicator.
+- `recording`: show primary action as Stop recording, timer, and listening indicator.
 - `stopping`: disable toggle and show Finalizing.
 - `transcribed`: show transcript, Copy enabled, primary action can start a new recording.
 - `error`: show concise recovery text and keep retry action clear.
@@ -126,6 +126,29 @@ Use a modern restrained desktop style:
 - Subtle borders, 8px radius maximum, and stable spacing.
 - Icon buttons where they are conventional: settings, copy, close/hide, retry.
 - Text buttons only for primary record/stop and clear settings actions.
+
+The selected visual direction is **Signal**: a charcoal desktop instrument with
+an amber primary action, small uppercase labels, and a monospaced recording
+timer. Keep the record/stop button beside the timer in a compact capture strip.
+The transcript uses the main window surface rather than a nested card, with
+Copy and Clean & Copy in its toolbar. A stable footer shows the recording
+shortcut, background/tray hint, and current status or recovery message.
+
+The input-level strip shows a short history of actual microphone volume, not a
+looping animation. The audio recorder measures normalized RMS from the same
+samples sent to transcription. Backend events report the highest chunk RMS in
+each 50ms interval, tagged with the recording session ID. The UI maps -60 to
+0 dBFS to bar height so ordinary speech is visible; this is relative input
+level, not calibrated sound pressure. Silence produces flat bars, and stopping,
+errors, or a new session clear the history. Ignore obsolete session events.
+Reduced-motion preferences disable smoothing while preserving real level
+updates. Recording switches the primary action to a contrasting stop control.
+Starting and finalizing states have explicit disabled action labels.
+
+Settings uses the same charcoal surfaces and amber section labels, separated
+by thin rules instead of individual cards. Keep native inputs and visible
+scrollbars, keyboard focus rings, and all existing settings accessible at the
+360px minimum window width.
 
 Avoid:
 

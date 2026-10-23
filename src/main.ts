@@ -39,6 +39,7 @@ import {
 } from "./app-state";
 import type { ProviderId } from "./app-state";
 import { createAppView } from "./app-view";
+import { createAudioLevelMeter } from "./audio-level";
 import { connectCleanupControls, renderCleanupControls } from "./cleanup-controls";
 import { formatShortcut } from "./shortcut";
 import {
@@ -78,6 +79,7 @@ import {
   hasProviderApiKey,
   listInputDevices,
   onAppStateChanged,
+  onAudioLevel,
   onDeviceFallback,
   onPartialTranscript,
   saveProviderApiKey,
@@ -115,6 +117,7 @@ let state = createAppState(
   getWindowShortcut(),
 );
 const view = createAppView(app);
+const audioLevelMeter = createAudioLevelMeter(view.audioLevelMeter, view.audioLevelBars);
 let lastAutoCopiedSessionId: number | null = null;
 let availableLanguages: SupportedLanguage[] = [];
 let selectedLanguageCodes: string[] = [];
@@ -276,10 +279,12 @@ const renderLanguagePicker = () => {
 };
 
 const render = () => {
+  audioLevelMeter.sync(state);
   const isSettings = state.activeView === "settings";
   const providerControlsDisabled = !canChangeProvider(state);
   const providerName = state.activeProvider === "soniox" ? "Soniox" : "Deepgram";
   view.captureView.hidden = isSettings;
+  view.captureView.dataset.status = state.recording;
   view.settingsView.hidden = !isSettings;
   view.viewToggleButton.textContent = isSettings ? "Capture" : "Settings";
   view.viewToggleButton.setAttribute(
@@ -289,11 +294,12 @@ const render = () => {
   view.statusChip.textContent = statusLabel();
   view.statusChip.dataset.status = state.recording;
 
-  view.recordButton.textContent = isRecording(state) ? "Stop" : "Record";
-  view.recordButton.setAttribute(
-    "aria-label",
-    isRecording(state) ? "Stop recording" : "Start recording",
-  );
+  view.recordButton.textContent = state.recording === "starting"
+    ? "Starting…"
+    : state.recording === "stopping"
+      ? "Finalizing…"
+      : isRecording(state) ? "Stop recording" : "Start recording";
+  view.recordButton.setAttribute("aria-label", view.recordButton.textContent);
   view.recordButton.disabled = !canToggleRecording(state) || providerSelectionSaving;
   view.providerLabel.textContent = state.providerSelectionStatus === "ready"
     ? `Provider: ${providerName}`
@@ -384,6 +390,7 @@ const render = () => {
       : state.selectedShortcut
         ? `Shortcut: ${state.selectedShortcut}`
         : "No shortcut saved.";
+  view.shortcutHint.textContent = state.selectedShortcut || "Set a shortcut in Settings";
 };
 
 const updateState = (nextState: typeof state) => {
@@ -1011,6 +1018,12 @@ void onPartialTranscript((update) => {
   updateState(
     setStatus(state, "Live transcript events run in the desktop app."),
   );
+});
+
+void onAudioLevel((update) => {
+  audioLevelMeter.accept(state, update);
+}).catch(() => {
+  // Leave the meter flat if input-level events are unavailable.
 });
 
 void onDeviceFallback((message) => {

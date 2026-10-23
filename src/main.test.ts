@@ -60,6 +60,7 @@ beforeEach(() => {
   vi.mocked(backend.onAppStateChanged).mockResolvedValue(() => {});
   vi.mocked(backend.onPartialTranscript).mockResolvedValue(() => {});
   vi.mocked(backend.onDeviceFallback).mockResolvedValue(() => {});
+  vi.mocked(backend.onAudioLevel).mockResolvedValue(() => {});
 });
 
 afterEach(() => {
@@ -116,7 +117,7 @@ describe("provider restoration in the app", () => {
     await initialSnapshot.promise;
     expectProvider("deepgram");
     expect(element(".status-chip").textContent).toBe("Listening");
-    expect(element<HTMLButtonElement>(".record-button").textContent).toBe("Stop");
+    expect(element<HTMLButtonElement>(".record-button").textContent).toBe("Stop recording");
   });
 
   it("keeps the provider and finalized transcript when an older toggle reply arrives late", async () => {
@@ -137,6 +138,57 @@ describe("provider restoration in the app", () => {
     expect(element(".status-chip").textContent).toBe("Transcript ready");
     expect(element(".transcript-final").textContent).toBe("Final transcript");
   });
+});
+
+it("shows actual microphone levels and ignores stopped or obsolete recording updates", async () => {
+  await startApp("soniox");
+  expect(backend.onAudioLevel).toHaveBeenCalledOnce();
+  const onLevel = vi.mocked(backend.onAudioLevel).mock.calls[0][0];
+  const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+  const meter = element<HTMLElement>(".activity-bars");
+  onState({ ...idle, status: "recording", sessionId: 1 });
+  onLevel({ recordingSessionId: 1, level: 0 });
+  expect(meter.getAttribute("aria-valuenow")).toBe("0");
+  onLevel({ recordingSessionId: 1, level: 0.1 });
+  const quietHeight = (meter.lastElementChild as HTMLElement).style.height;
+  onLevel({ recordingSessionId: 1, level: 0.8 });
+  expect(parseFloat((meter.lastElementChild as HTMLElement).style.height)).toBeGreaterThan(parseFloat(quietHeight));
+  onLevel({ recordingSessionId: 2, level: 0 });
+  expect(Number(meter.getAttribute("aria-valuenow"))).toBeGreaterThan(0);
+  for (let index = 0; index < meter.children.length; index += 1) {
+    onLevel({ recordingSessionId: 1, level: 0 });
+  }
+  expect(meter.getAttribute("aria-valuenow")).toBe("0");
+  expect(Array.from(meter.children).every((bar) => (bar as HTMLElement).style.height === "3px")).toBe(true);
+  onLevel({ recordingSessionId: 1, level: 0.5 });
+  onState({ ...idle, status: "stopping", sessionId: 1 });
+  onLevel({ recordingSessionId: 1, level: 1 });
+  expect(meter.getAttribute("aria-valuenow")).toBe("0");
+  expect(Array.from(meter.children).every((bar) => (bar as HTMLElement).style.height === "3px")).toBe(true);
+  onState({ ...idle, status: "recording", sessionId: 2 });
+  onLevel({ recordingSessionId: 1, level: 1 });
+  expect(meter.getAttribute("aria-valuenow")).toBe("0");
+  onLevel({ recordingSessionId: 2, level: 0.2 });
+  expect(Number(meter.getAttribute("aria-valuenow"))).toBeGreaterThan(0);
+});
+
+it("keeps recording visuals and actions aligned with backend lifecycle events", async () => {
+  await startApp("soniox");
+  const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+  const button = element<HTMLButtonElement>(".record-button");
+  for (const [status, label, disabled] of [
+    ["starting", "Starting…", true],
+    ["recording", "Stop recording", false],
+    ["stopping", "Finalizing…", true],
+    ["transcribed", "Start recording", false],
+  ] as const) {
+    onState({ ...idle, status, sessionId: 1 });
+    expect(element<HTMLElement>(".capture-view").dataset.status).toBe(status);
+    expect(button.textContent).toBe(label);
+    expect(button.getAttribute("aria-label")).toBe(label);
+    expect(button.disabled).toBe(disabled);
+    expect(element<HTMLElement>(".activity-indicator").hidden).toBe(status !== "recording");
+  }
 });
 
 describe("cleanup in the running app", () => {

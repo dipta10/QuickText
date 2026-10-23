@@ -48,6 +48,11 @@ export type PartialTranscriptUpdate = {
   partialText: string;
 };
 
+export type AudioLevelUpdate = {
+  recordingSessionId: number;
+  level: number;
+};
+
 export type InputDeviceOption = {
   id: string;
   label: string;

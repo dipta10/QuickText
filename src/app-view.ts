@@ -19,6 +19,8 @@ export type AppView = {
   deviceNotice: HTMLParagraphElement;
   recordingTimer: HTMLSpanElement;
   activityIndicator: HTMLSpanElement;
+  audioLevelMeter: HTMLElement;
+  audioLevelBars: HTMLElement[];
   transcriptText: HTMLDivElement;
   transcriptPlaceholder: HTMLParagraphElement;
   transcriptFinal: HTMLSpanElement;
@@ -72,31 +74,44 @@ export type AppView = {
   copyBuildInfoButton: HTMLButtonElement;
   buildInfoStatus: HTMLParagraphElement;
   bottomStatus: HTMLParagraphElement;
+  shortcutHint: HTMLSpanElement;
 };
 
 const appTemplate = `
   <section class="app-shell" aria-label="Speech to Text">
     <header class="top-bar">
       <div class="brand-block">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 9v6m4-10v14m5-11v8m5-14v20m4-14v8" />
+        </svg>
         <h1 class="app-title">QuickText</h1>
-        <span class="status-chip">Ready</span>
       </div>
-      <button class="view-toggle-button" type="button" aria-label="Open settings">
-        Settings
-      </button>
+      <div class="top-bar-actions">
+        <span class="status-chip">Ready</span>
+        <button class="view-toggle-button" type="button" aria-label="Open settings">
+          Settings
+        </button>
+      </div>
     </header>
 
     <main class="main-content">
       <section class="capture-view" aria-label="Capture">
         <div class="recording-controls">
+          <span class="capture-label">Capture / microphone</span>
           <span class="provider-label">Provider: Soniox</span>
           <button class="record-button" type="button" aria-label="Start recording">
-            Record
+            Start recording
           </button>
           <div class="recording-meta">
             <span class="recording-timer">00:00</span>
             <span class="activity-indicator" aria-hidden="true"></span>
           </div>
+        </div>
+        <div class="capture-activity">
+          <div class="activity-bars" role="meter" aria-label="Microphone input level"
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+          >${"<i aria-hidden=\"true\"></i>".repeat(48)}</div>
+          <span class="activity-label" aria-hidden="true">Input level</span>
         </div>
         <p class="device-notice" role="status"></p>
 
@@ -109,7 +124,7 @@ const appTemplate = `
             </div>
           </div>
           <div class="transcript-text" tabindex="0"
-            ><p class="transcript-placeholder">Transcript will appear here.</p
+            ><p class="transcript-placeholder">Your words, ready to use.<br />Start a recording to see your transcript here.</p
             ><span class="transcript-final"></span
             ><span class="transcript-partial" aria-label="Unconfirmed words"></span
           ></div>
@@ -416,7 +431,13 @@ const appTemplate = `
       </section>
     </main>
 
-    <p class="bottom-status" role="status"></p>
+    <footer class="bottom-bar">
+      <div class="bottom-bar-meta">
+        <span class="shortcut-hint"></span>
+        <span class="resident-label">Tray / background</span>
+      </div>
+      <p class="bottom-status" role="status"></p>
+    </footer>
   </section>
 `;
 
@@ -581,6 +602,9 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
+  const shortcutHint = root.querySelector<HTMLSpanElement>(".shortcut-hint");
+  const audioLevelMeter = root.querySelector<HTMLElement>(".activity-bars");
+  const audioLevelBars = Array.from(root.querySelectorAll<HTMLElement>(".activity-bars i"));
 
   if (
     !statusChip ||
@@ -654,12 +678,18 @@ export const createAppView = (root: HTMLElement): AppView => {
     !sourceRevision ||
     !copyBuildInfoButton ||
     !buildInfoStatus ||
-    !bottomStatus
+    !bottomStatus ||
+    !shortcutHint ||
+    !audioLevelMeter ||
+    !audioLevelBars.length
   ) {
     throw new Error("App controls were not found");
   }
 
   return {
+    audioLevelMeter,
+    audioLevelBars,
+    shortcutHint,
     statusChip,
     viewToggleButton,
     captureView,

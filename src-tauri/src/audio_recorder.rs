@@ -1,6 +1,7 @@
 use std::{
     mem,
     sync::{
+        atomic::{AtomicU32, Ordering},
         mpsc, {Arc, Mutex},
     },
     thread::JoinHandle,
@@ -89,6 +90,7 @@ pub fn list_input_devices() -> InputDeviceList {
 
 pub struct AudioRecorder {
     stats: Arc<Mutex<AudioCaptureStats>>,
+    level: Arc<AtomicU32>,
     command_tx: mpsc::Sender<()>,
     worker: Option<JoinHandle<()>>,
     started_at: Instant,
@@ -111,15 +113,24 @@ impl AudioRecorder {
         selected_device: Option<&str>,
     ) -> Result<StartedRecording, String> {
         let stats = Arc::new(Mutex::new(AudioCaptureStats::default()));
+        let level = Arc::new(AtomicU32::new(0));
         let (ready_tx, ready_rx) = mpsc::channel();
         let (command_tx, command_rx) = mpsc::channel();
 
         let worker_stats = Arc::clone(&stats);
+        let worker_level = Arc::clone(&level);
         let worker_device = selected_device.map(str::to_string);
         let worker = std::thread::Builder::new()
             .name("audio-capture".to_string())
             .spawn(move || {
-                run_capture_loop(worker_stats, audio_tx, ready_tx, command_rx, worker_device)
+                run_capture_loop(
+                    worker_stats,
+                    worker_level,
+                    audio_tx,
+                    ready_tx,
+                    command_rx,
+                    worker_device,
+                )
             })
             .map_err(|error| format!("Could not spawn microphone capture thread: {error}"))?;
 
@@ -130,12 +141,19 @@ impl AudioRecorder {
         Ok(StartedRecording {
             recorder: Self {
                 stats,
+                level,
                 command_tx,
                 worker: Some(worker),
                 started_at: Instant::now(),
             },
             fell_back_to_default,
         })
+    }
+
+    /// Highest chunk RMS since the previous UI sample; reading clears it so
+    /// missing callbacks settle to silence rather than holding a stale level.
+    pub fn take_level(&self) -> f32 {
+        f32::from_bits(self.level.swap(0, Ordering::Relaxed))
     }
 
     pub fn stop(mut self) -> AudioCaptureStats {
@@ -168,6 +186,7 @@ impl Drop for AudioRecorder {
 
 fn run_capture_loop(
     stats: Arc<Mutex<AudioCaptureStats>>,
+    level: Arc<AtomicU32>,
     audio_tx: UnboundedSender<Vec<u8>>,
     ready_tx: mpsc::Sender<Result<bool, String>>,
     command_rx: mpsc::Receiver<()>,
@@ -175,7 +194,7 @@ fn run_capture_loop(
 ) {
     // cpal streams are !Send on some platforms (macOS CoreAudio), so the
     // device and stream must be created and dropped on this dedicated thread.
-    let stream = match open_input_stream(stats, audio_tx, selected_device.as_deref()) {
+    let stream = match open_input_stream(stats, level, audio_tx, selected_device.as_deref()) {
         Ok((stream, fell_back_to_default)) => {
             if ready_tx.send(Ok(fell_back_to_default)).is_err() {
                 return;
@@ -197,15 +216,16 @@ fn run_capture_loop(
 
 fn open_input_stream(
     stats: Arc<Mutex<AudioCaptureStats>>,
+    level: Arc<AtomicU32>,
     audio_tx: UnboundedSender<Vec<u8>>,
     selected_device: Option<&str>,
 ) -> Result<(Stream, bool), String> {
     let (device, fell_back_to_default) = resolve_input_device(selected_device)?;
     let (config, sample_format) = input_config(&device)?;
     let stream = match sample_format {
-        SampleFormat::F32 => build_input_stream::<f32>(&device, &config, stats, audio_tx)?,
-        SampleFormat::I16 => build_input_stream::<i16>(&device, &config, stats, audio_tx)?,
-        SampleFormat::U16 => build_input_stream::<u16>(&device, &config, stats, audio_tx)?,
+        SampleFormat::F32 => build_input_stream::<f32>(&device, &config, stats, level, audio_tx)?,
+        SampleFormat::I16 => build_input_stream::<i16>(&device, &config, stats, level, audio_tx)?,
+        SampleFormat::U16 => build_input_stream::<u16>(&device, &config, stats, level, audio_tx)?,
         sample_format => {
             return Err(format!(
                 "Microphone sample format {sample_format:?} is not supported yet."
@@ -255,6 +275,7 @@ fn build_input_stream<T>(
     device: &cpal::Device,
     config: &StreamConfig,
     stats: Arc<Mutex<AudioCaptureStats>>,
+    level: Arc<AtomicU32>,
     audio_tx: UnboundedSender<Vec<u8>>,
 ) -> Result<Stream, String>
 where
@@ -263,7 +284,7 @@ where
     device
         .build_input_stream(
             config,
-            move |data: &[T], _| record_audio_chunk::<T>(data, &stats, &audio_tx),
+            move |data: &[T], _| record_audio_chunk::<T>(data, &stats, &level, &audio_tx),
             move |error| eprintln!("Microphone stream error: {error}"),
             None,
         )
@@ -273,6 +294,7 @@ where
 fn record_audio_chunk<T>(
     data: &[T],
     stats: &Arc<Mutex<AudioCaptureStats>>,
+    level: &AtomicU32,
     audio_tx: &UnboundedSender<Vec<u8>>,
 ) where
     T: PcmBytes,
@@ -280,6 +302,11 @@ fn record_audio_chunk<T>(
     if data.is_empty() {
         return;
     }
+
+    // Positive finite float bits are ordered like their numeric values.
+    // The audio callback only computes a scalar and updates an atomic; IPC
+    // happens on a separate task, never on this real-time capture thread.
+    level.fetch_max(samples_rms(data).to_bits(), Ordering::Relaxed);
 
     let bytes = samples_to_le_bytes(data);
 
@@ -305,24 +332,52 @@ fn audio_encoding(sample_format: SampleFormat) -> Result<AudioEncoding, String> 
 
 trait PcmBytes {
     fn append_le_bytes(&self, output: &mut Vec<u8>);
+    fn normalized(&self) -> f32;
 }
 
 impl PcmBytes for f32 {
+    fn normalized(&self) -> f32 {
+        if self.is_finite() {
+            self.clamp(-1.0, 1.0)
+        } else {
+            0.0
+        }
+    }
+
     fn append_le_bytes(&self, output: &mut Vec<u8>) {
         output.extend_from_slice(&self.to_le_bytes());
     }
 }
 
 impl PcmBytes for i16 {
+    fn normalized(&self) -> f32 {
+        f32::from(*self) / 32768.0
+    }
+
     fn append_le_bytes(&self, output: &mut Vec<u8>) {
         output.extend_from_slice(&self.to_le_bytes());
     }
 }
 
 impl PcmBytes for u16 {
+    fn normalized(&self) -> f32 {
+        (f32::from(*self) - 32768.0) / 32768.0
+    }
+
     fn append_le_bytes(&self, output: &mut Vec<u8>) {
         output.extend_from_slice(&self.to_le_bytes());
     }
+}
+
+fn samples_rms<T: PcmBytes>(samples: &[T]) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    let sum: f64 = samples
+        .iter()
+        .map(|sample| f64::from(sample.normalized()).powi(2))
+        .sum();
+    (sum / samples.len() as f64).sqrt() as f32
 }
 
 fn samples_to_le_bytes<T: PcmBytes>(samples: &[T]) -> Vec<u8> {
@@ -333,4 +388,55 @@ fn samples_to_le_bytes<T: PcmBytes>(samples: &[T]) -> Vec<u8> {
     }
 
     bytes
+}
+
+#[cfg(test)]
+mod level_tests {
+    use super::*;
+
+    #[test]
+    fn measures_silence_and_volume_in_all_supported_formats() {
+        assert_eq!(samples_rms::<f32>(&[]), 0.0);
+        assert_eq!(samples_rms(&[0.0_f32; 32]), 0.0);
+        assert_eq!(samples_rms(&[0_i16; 32]), 0.0);
+        assert_eq!(samples_rms(&[32768_u16; 32]), 0.0);
+        assert_eq!(samples_rms(&[-0.5_f32, 0.5]), 0.5);
+        assert_eq!(samples_rms(&[-16384_i16, 16384]), 0.5);
+        assert_eq!(samples_rms(&[16384_u16, 49152]), 0.5);
+        assert!(samples_rms(&[-0.8_f32, 0.8]) > samples_rms(&[-0.1_f32, 0.1]));
+        assert_eq!(samples_rms(&[i16::MIN]), 1.0);
+        assert_eq!(samples_rms(&[0_u16]), 1.0);
+        assert_eq!(samples_rms(&[f32::NAN, f32::INFINITY]), 0.0);
+        assert_eq!(samples_rms(&[-2.0_f32, 2.0]), 1.0);
+    }
+
+    #[test]
+    fn capture_updates_levels_without_changing_audio_and_reading_clears_the_peak() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let stats = Arc::new(Mutex::new(AudioCaptureStats::default()));
+        let level = Arc::new(AtomicU32::new(0));
+        record_audio_chunk(&[0.75_f32, -0.75], &stats, &level, &tx);
+        record_audio_chunk(&[0.1_f32, -0.1], &stats, &level, &tx);
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            samples_to_le_bytes(&[0.75_f32, -0.75])
+        );
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            samples_to_le_bytes(&[0.1_f32, -0.1])
+        );
+        let (command_tx, _) = mpsc::channel();
+        let recorder = AudioRecorder {
+            stats,
+            level,
+            command_tx,
+            worker: None,
+            started_at: Instant::now(),
+        };
+        assert_eq!(recorder.take_level(), 0.75);
+        assert_eq!(recorder.take_level(), 0.0);
+        record_audio_chunk(&[0.0_f32; 16], &recorder.stats, &recorder.level, &tx);
+        assert_eq!(recorder.take_level(), 0.0);
+        assert_eq!(recorder.stats().chunk_count, 3);
+    }
 }

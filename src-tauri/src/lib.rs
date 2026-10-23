@@ -78,6 +78,13 @@ struct PartialTranscriptEvent {
     partial_text: String,
 }
 
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioLevelEvent {
+    recording_session_id: u64,
+    level: f32,
+}
+
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct BuildInfo {
@@ -427,6 +434,38 @@ async fn forward_partial_transcripts(
                 provider_session_id,
                 final_text: update.final_text,
                 partial_text: update.partial_text,
+            },
+        );
+    }
+}
+
+async fn forward_audio_levels(app: tauri::AppHandle, recording_session_id: u64) {
+    let mut interval = tokio::time::interval(Duration::from_millis(50));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        interval.tick().await;
+        let level = {
+            let controller = app.state::<AppControllerState>();
+            let Ok(controller) = lock_controller(&controller) else {
+                return;
+            };
+            if !controller.is_recording_session(recording_session_id) {
+                return;
+            }
+            // Keep the session stable while reading: an old task must never
+            // consume the next recording's pending level sample.
+            let recorder = app.state::<AudioRecorderState>();
+            let level = lock_recorder(&recorder)
+                .ok()
+                .and_then(|recorder| recorder.as_ref().map(AudioRecorder::take_level))
+                .unwrap_or(0.0);
+            level
+        };
+        let _ = app.emit(
+            "audio-level",
+            AudioLevelEvent {
+                recording_session_id,
+                level,
             },
         );
     }
@@ -1223,6 +1262,7 @@ pub(crate) async fn toggle_recording_for_app(
             let session_id = lock_controller(&controller)?.active_session_id();
             emit_app_snapshot(&app, &recording);
             if let Some(session_id) = session_id {
+                tauri::async_runtime::spawn(forward_audio_levels(app.clone(), session_id));
                 schedule_max_recording_duration(app.clone(), session_id, max_recording_seconds);
                 if let Some(provider_ready_rx) = provider_ready_rx {
                     tauri::async_runtime::spawn(fail_recording_when_provider_unreachable(

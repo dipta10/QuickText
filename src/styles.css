@@ -40,8 +40,38 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .
 .status-chip::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
 .status-chip[data-status="recording"], .status-chip[data-status="error"] { color: var(--danger); }
 .status-chip[data-status="recording"]::before, .status-chip[data-status="error"]::before { background: currentColor; }
-.view-toggle-button { background: transparent; color: var(--muted); border: 1px solid transparent; padding: 6px 8px; min-height: 32px; font-size: 12px; }
-.view-toggle-button:hover { color: var(--ink); background: var(--surface-raised); border-color: var(--border); }
+.view-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid #555a64;
+  background: #2b2f36;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.view-toggle-button::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 3-.6 2.2-2 .9-2-.6-2 3.5 1.5 1.6v2.8L2.4 15l2 3.5 2-.6 2 .9L9 21h6l.6-2.2 2-.9 2 .6 2-3.5-1.5-1.6v-2.8L21.6 9l-2-3.5-2 .6-2-.9L15 3Z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+}
+.view-toggle-button[aria-label="Open capture"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m10 5-7 7 7 7M3 12h18' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.view-toggle-button:hover {
+  background: #373c45;
+  border-color: var(--accent);
+}
+.view-toggle-button:active {
+  background: var(--surface-input);
+}
 .main-content { min-height: 0; min-width: 0; overflow: hidden; }
 .capture-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .recording-controls, .capture-activity, .device-notice { flex-shrink: 0; }

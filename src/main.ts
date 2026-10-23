@@ -39,6 +39,7 @@ import {
 } from "./app-state";
 import type { ProviderId } from "./app-state";
 import { createAppView } from "./app-view";
+import { createAudioLevelMeter } from "./audio-level";
 import { connectCleanupControls, renderCleanupControls } from "./cleanup-controls";
 import { formatShortcut } from "./shortcut";
 import {
@@ -78,6 +79,7 @@ import {
   hasProviderApiKey,
   listInputDevices,
   onAppStateChanged,
+  onAudioLevel,
   onDeviceFallback,
   onPartialTranscript,
   saveProviderApiKey,
@@ -115,6 +117,7 @@ let state = createAppState(
   getWindowShortcut(),
 );
 const view = createAppView(app);
+const audioLevelMeter = createAudioLevelMeter(view.audioLevelMeter, view.audioLevelBars);
 let lastAutoCopiedSessionId: number | null = null;
 let availableLanguages: SupportedLanguage[] = [];
 let selectedLanguageCodes: string[] = [];
@@ -276,6 +279,7 @@ const renderLanguagePicker = () => {
 };
 
 const render = () => {
+  audioLevelMeter.sync(state);
   const isSettings = state.activeView === "settings";
   const providerControlsDisabled = !canChangeProvider(state);
   const providerName = state.activeProvider === "soniox" ? "Soniox" : "Deepgram";
@@ -1014,6 +1018,12 @@ void onPartialTranscript((update) => {
   updateState(
     setStatus(state, "Live transcript events run in the desktop app."),
   );
+});
+
+void onAudioLevel((update) => {
+  audioLevelMeter.accept(state, update);
+}).catch(() => {
+  // Leave the meter flat if input-level events are unavailable.
 });
 
 void onDeviceFallback((message) => {

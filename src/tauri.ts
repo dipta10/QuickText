@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type {
   BackendAppSnapshot,
+  AudioLevelUpdate,
   PartialTranscriptUpdate,
   ProviderId,
 } from "./app-state";
@@ -32,6 +33,7 @@ const setTranscriptionTermsCommand = "set_transcription_terms";
 const appStateChangedEvent = "app-state-changed";
 const partialTranscriptEvent = "partial-transcript";
 const deviceFallbackEvent = "device-fallback";
+const audioLevelEvent = "audio-level";
 
 export type BackendInputDeviceInfo = {
   id: string;
@@ -229,6 +231,13 @@ export const onPartialTranscript = async (
 export const onDeviceFallback = async (handler: (message: string) => void) => {
   assertTauriRuntime();
   return listen<string>(deviceFallbackEvent, (event) => {
+    handler(event.payload);
+  });
+};
+
+export const onAudioLevel = async (handler: (update: AudioLevelUpdate) => void) => {
+  assertTauriRuntime();
+  return listen<AudioLevelUpdate>(audioLevelEvent, (event) => {
     handler(event.payload);
   });
 };

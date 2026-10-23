@@ -134,11 +134,16 @@ The transcript uses the main window surface rather than a nested card, with
 Copy and Clean & Copy in its toolbar. A stable footer shows the recording
 shortcut, background/tray hint, and current status or recovery message.
 
-The activity strip is a decorative session indicator, not a microphone level
-meter. It stays flat when idle, animates only for backend recording or
-transition states, and respects reduced-motion preferences. Recording switches
-the primary action to a contrasting stop control. Starting and finalizing
-states have explicit disabled action labels.
+The input-level strip shows a short history of actual microphone volume, not a
+looping animation. The audio recorder measures normalized RMS from the same
+samples sent to transcription. Backend events report the highest chunk RMS in
+each 50ms interval, tagged with the recording session ID. The UI maps -60 to
+0 dBFS to bar height so ordinary speech is visible; this is relative input
+level, not calibrated sound pressure. Silence produces flat bars, and stopping,
+errors, or a new session clear the history. Ignore obsolete session events.
+Reduced-motion preferences disable smoothing while preserving real level
+updates. Recording switches the primary action to a contrasting stop control.
+Starting and finalizing states have explicit disabled action labels.
 
 Settings uses the same charcoal surfaces and amber section labels, separated
 by thin rules instead of individual cards. Keep native inputs and visible

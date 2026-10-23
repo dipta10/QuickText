@@ -19,6 +19,8 @@ export type AppView = {
   deviceNotice: HTMLParagraphElement;
   recordingTimer: HTMLSpanElement;
   activityIndicator: HTMLSpanElement;
+  audioLevelMeter: HTMLElement;
+  audioLevelBars: HTMLElement[];
   transcriptText: HTMLDivElement;
   transcriptPlaceholder: HTMLParagraphElement;
   transcriptFinal: HTMLSpanElement;
@@ -105,11 +107,11 @@ const appTemplate = `
             <span class="activity-indicator" aria-hidden="true"></span>
           </div>
         </div>
-        <div class="capture-activity" aria-hidden="true">
-          <div class="activity-bars">${Array.from({ length: 48 }, (_, index) =>
-            `<i style="--bar-height: ${[7, 13, 9, 22, 16, 28, 11, 19][index % 8]}px; --bar-delay: ${-(index % 7) * 0.15}s"></i>`,
-          ).join("")}</div>
-          <span class="activity-label">Recording activity</span>
+        <div class="capture-activity">
+          <div class="activity-bars" role="meter" aria-label="Microphone input level"
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+          >${"<i aria-hidden=\"true\"></i>".repeat(48)}</div>
+          <span class="activity-label" aria-hidden="true">Input level</span>
         </div>
         <p class="device-notice" role="status"></p>
 
@@ -606,6 +608,8 @@ export const createAppView = (root: HTMLElement): AppView => {
   const bottomStatus =
     root.querySelector<HTMLParagraphElement>(".bottom-status");
   const shortcutHint = root.querySelector<HTMLSpanElement>(".shortcut-hint");
+  const audioLevelMeter = root.querySelector<HTMLElement>(".activity-bars");
+  const audioLevelBars = Array.from(root.querySelectorAll<HTMLElement>(".activity-bars i"));
 
   if (
     !statusChip ||
@@ -680,12 +684,16 @@ export const createAppView = (root: HTMLElement): AppView => {
     !copyBuildInfoButton ||
     !buildInfoStatus ||
     !bottomStatus ||
-    !shortcutHint
+    !shortcutHint ||
+    !audioLevelMeter ||
+    !audioLevelBars.length
   ) {
     throw new Error("App controls were not found");
   }
 
   return {
+    audioLevelMeter,
+    audioLevelBars,
     shortcutHint,
     statusChip,
     viewToggleButton,

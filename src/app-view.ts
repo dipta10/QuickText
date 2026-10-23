@@ -137,11 +137,6 @@ const appTemplate = `
       </section>
 
       <section class="settings-view" aria-label="Settings" hidden>
-        <header class="settings-heading">
-          <p class="eyebrow">Preferences</p>
-          <h2>Make it your own.</h2>
-          <p>Set up your microphone, shortcuts, and transcription.</p>
-        </header>
         <section class="settings-section">
           <h2 class="section-title">General</h2>
           <label class="checkbox-field" for="launch-on-startup">

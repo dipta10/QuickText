@@ -307,7 +307,6 @@ const render = () => {
     : "Choose a provider in Settings";
   view.deviceNotice.textContent = state.deviceNotice;
   view.recordingTimer.textContent = formatElapsedTime(state.recordingStartedAt);
-  view.activityIndicator.hidden = !isRecording(state);
   view.copyButton.disabled = !state.transcript;
   renderCleanupControls(view, state);
   const hasTranscriptText =

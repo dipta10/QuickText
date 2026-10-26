@@ -18,7 +18,6 @@ export type AppView = {
   providerLabel: HTMLSpanElement;
   deviceNotice: HTMLParagraphElement;
   recordingTimer: HTMLSpanElement;
-  activityIndicator: HTMLSpanElement;
   audioLevelMeter: HTMLElement;
   audioLevelBars: HTMLElement[];
   transcriptText: HTMLDivElement;
@@ -86,7 +85,6 @@ const appTemplate = `
         <h1 class="app-title">QuickText</h1>
       </div>
       <div class="top-bar-actions">
-        <span class="status-chip">Ready</span>
         <button class="view-toggle-button" type="button" aria-label="Open settings">
           Settings
         </button>
@@ -96,14 +94,13 @@ const appTemplate = `
     <main class="main-content">
       <section class="capture-view" aria-label="Capture">
         <div class="recording-controls">
-          <span class="capture-label">Capture / microphone</span>
+          <span class="status-chip" role="status" aria-live="polite">Ready</span>
           <span class="provider-label">Provider: Soniox</span>
           <button class="record-button" type="button" aria-label="Start recording">
             Start recording
           </button>
           <div class="recording-meta">
             <span class="recording-timer">00:00</span>
-            <span class="activity-indicator" aria-hidden="true"></span>
           </div>
         </div>
         <div class="capture-activity">
@@ -472,8 +469,6 @@ export const createAppView = (root: HTMLElement): AppView => {
     root.querySelector<HTMLParagraphElement>(".device-notice");
   const recordingTimer =
     root.querySelector<HTMLSpanElement>(".recording-timer");
-  const activityIndicator =
-    root.querySelector<HTMLSpanElement>(".activity-indicator");
   const transcriptText =
     root.querySelector<HTMLDivElement>(".transcript-text");
   const transcriptPlaceholder = root.querySelector<HTMLParagraphElement>(
@@ -626,7 +621,6 @@ export const createAppView = (root: HTMLElement): AppView => {
     !providerLabel ||
     !deviceNotice ||
     !recordingTimer ||
-    !activityIndicator ||
     !transcriptText ||
     !transcriptPlaceholder ||
     !transcriptFinal ||
@@ -708,7 +702,6 @@ export const createAppView = (root: HTMLElement): AppView => {
     providerLabel,
     deviceNotice,
     recordingTimer,
-    activityIndicator,
     transcriptText,
     transcriptPlaceholder,
     transcriptFinal,

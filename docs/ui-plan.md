@@ -20,14 +20,14 @@ The app should always open to Capture when triggered for dictation. Settings sho
 Recommended initial window size:
 
 - Width: 420-520px.
-- Height: 520-680px.
+- Height: 700px by default, with a 520px minimum for smaller screens.
 - Resizable: yes, with sensible minimums.
 - Default theme: dark.
 - Density: compact, but not cramped.
 
 The window should have three stable regions:
 
-- Top bar: app name, current backend status, Settings button.
+- Top bar: app name and Settings/Capture navigation only.
 - Main content: either Capture or Settings.
 - Bottom status line: shortcut hint, tray/background status, or current error.
 
@@ -41,7 +41,7 @@ Required elements:
 
 - Large primary record/stop toggle.
 - Short status label: Ready, Listening, Finalizing, Transcript ready, or Error.
-- Recording affordance: timer plus subtle activity indicator while listening.
+- Recording affordance: backend status directly above the timer, with a status dot and measured microphone level strip.
 - Read-only active-provider label.
 - Transcript display as a readable result surface, not a textarea.
 - Copy and Clean & Copy buttons in the transcript toolbar.
@@ -130,7 +130,7 @@ Use a modern restrained desktop style:
 
 The selected visual direction is **Signal**: a charcoal desktop instrument with
 an amber primary action, small uppercase labels, and a monospaced recording
-timer. Keep the record/stop button beside the timer in a compact capture strip.
+timer. Show the backend status directly above the timer, replacing the static Capture / microphone label. Keep the record/stop button beside them in a compact capture strip. The header contains only the brand and Settings/Capture navigation; it does not repeat recording status.
 The transcript uses the main window surface rather than a nested card, with
 Copy and Clean & Copy in its toolbar. A stable footer shows the recording
 shortcut, background/tray hint, and current status or recovery message.
@@ -145,6 +145,13 @@ errors, or a new session clear the history. Ignore obsolete session events.
 Reduced-motion preferences disable smoothing while preserving real level
 updates. Recording switches the primary action to a contrasting stop control.
 Starting and finalizing states have explicit disabled action labels.
+
+Use readable type at the actual desktop window size: 14px for primary controls,
+recording status, and settings inputs/labels; 12px for supporting text and section
+headings; a 32px timer; and 16px transcript and empty-state text. Keep the native
+system UI font and platform font smoothing rather than forcing thinner
+antialiasing. Preserve this scale at the 360px minimum width; wrap toolbars when
+necessary instead of shrinking their text.
 
 Settings uses the same charcoal surfaces and amber section labels, separated
 by thin rules instead of individual cards. Keep native inputs and visible
@@ -165,12 +172,11 @@ Avoid:
 QuickText window
   Top bar
     QuickText
-    Status chip
     Settings/Capture icon button
 
   Capture view
     Record/Stop toggle
-    Timer and recording state
+    Backend status above timer
     Active provider label
     Transcript result panel
     Copy action

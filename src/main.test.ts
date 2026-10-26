@@ -187,7 +187,10 @@ it("keeps recording visuals and actions aligned with backend lifecycle events", 
     expect(button.textContent).toBe(label);
     expect(button.getAttribute("aria-label")).toBe(label);
     expect(button.disabled).toBe(disabled);
-    expect(element<HTMLElement>(".activity-indicator").hidden).toBe(status !== "recording");
+    const statusLabel = element<HTMLElement>(".status-chip");
+    expect(statusLabel.dataset.status).toBe(status);
+    expect(statusLabel.closest(".recording-controls")).not.toBeNull();
+    expect(element(".top-bar").querySelector(".status-chip")).toBeNull();
   }
 });
 

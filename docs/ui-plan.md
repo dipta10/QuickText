@@ -148,9 +148,10 @@ Starting and finalizing states have explicit disabled action labels.
 
 Use readable type at the actual desktop window size: 14px for primary controls,
 recording status, and settings inputs/labels; 12px for supporting text and section
-headings; a 32px timer; and 16px transcript and empty-state text. Keep the native
-system UI font and platform font smoothing rather than forcing thinner
-antialiasing. Preserve this scale at the 360px minimum width; wrap toolbars when
+headings; a 32px timer; and 16px transcript and empty-state text. Bundle Inter 4.1 variable fonts (normal and italic) locally under the SIL Open
+Font License, with system fonts as fallback and native platform font smoothing.
+Font loading must not require an external service or a system installation.
+Keep the recording timer and compact metadata in monospace. Preserve this scale at the 360px minimum width; wrap toolbars when
 necessary instead of shrinking their text.
 
 Settings uses the same charcoal surfaces and amber section labels, separated

@@ -1,3 +1,4 @@
+import { closeCredentialEditor, renderCredentialEditor } from "./credential-editor";
 import type { AppState } from "./app-state";
 import {
   canChangeProvider, canCleanTranscript, setCleanupCredentials,
@@ -22,6 +23,7 @@ export const renderCleanupControls = (view: AppView, state: AppState) => {
   view.cleanupFeedback.hidden = !state.cleanup.cleaned &&
     state.cleanupApiKeyConfigured && !state.cleanup.message;
   const disabled = !canChangeProvider(state) || state.cleanup.running || state.cleanupCredentialBusy || state.cleanupActionPending;
+  renderCredentialEditor(view.cleanupApiKeyInput, state.cleanupApiKeyConfigured);
   view.cleanupApiKeyInput.disabled = disabled;
   view.cleanupApiKeySaveButton.disabled = disabled;
   view.cleanupApiKeyDeleteButton.disabled = disabled || !state.cleanupApiKeyConfigured;
@@ -41,6 +43,7 @@ export const connectCleanupControls = (
     try {
       if (remove) await deleteCleanupApiKey();
       else await saveCleanupApiKey(view.cleanupApiKeyInput.value);
+      if (!remove) closeCredentialEditor(view.cleanupApiKeyInput);
       credentialRevision += 1;
       view.cleanupApiKeyInput.value = "";
       updateState(setCleanupCredentials(getState(), !remove,
@@ -75,6 +78,8 @@ export const connectCleanupControls = (
   view.cleanupApiKeyDeleteButton.addEventListener("click", () => { void credentialAction(true); });
   view.cleanupSetupButton.addEventListener("click", () => {
     updateState(showSettings(getState()));
+    const editor = view.cleanupApiKeyInput.closest<HTMLDetailsElement>("details");
+    if (editor) editor.open = true;
     view.cleanupApiKeyInput.focus();
     view.cleanupApiKeyInput.scrollIntoView?.({ block: "center" });
   });

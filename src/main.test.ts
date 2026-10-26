@@ -406,3 +406,54 @@ describe("independent window shortcut", () => {
     expect(element(".window-keybind-button").textContent).toBe("Set window shortcut");
   });
 });
+
+describe("organized settings", () => {
+  it("keeps a changed provider key editable across renders, closes after saving, and reopens after removal", async () => {
+    await startApp("soniox");
+    const input = element<HTMLInputElement>(".api-key-input");
+    const editor = input.closest<HTMLDetailsElement>("details")!;
+    expect(editor.open).toBe(false);
+    editor.open = true;
+    input.value = "replacement-test-key";
+    element<HTMLButtonElement>(".view-toggle-button").click();
+    expect(editor.open).toBe(true);
+    expect(input.value).toBe("replacement-test-key");
+    vi.mocked(backend.saveProviderApiKey).mockResolvedValue(true);
+    input.focus();
+    element<HTMLButtonElement>(".api-key-save-button").click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(document.activeElement).toBe(editor.querySelector("summary"));
+    expect(backend.saveProviderApiKey).toHaveBeenCalledWith("soniox", "replacement-test-key");
+    expect(editor.open).toBe(false);
+    expect(input.value).toBe("");
+    element<HTMLButtonElement>(".api-key-delete-button").click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(editor.open).toBe(true);
+    expect(element<HTMLButtonElement>(".api-key-delete-button").hidden).toBe(true);
+  });
+
+  it("keeps live word visibility dependent on live transcript and saves the paste preference", async () => {
+    await startApp("soniox");
+    const live = element<HTMLInputElement>(".live-transcript-checkbox");
+    for (const enabled of [false, true]) {
+      live.checked = enabled;
+      live.dispatchEvent(new Event("change"));
+      expect(element<HTMLElement>(".show-partial-field").hidden).toBe(!enabled);
+    }
+    const paste = element<HTMLInputElement>(".paste-to-target-checkbox");
+    paste.checked = true;
+    paste.dispatchEvent(new Event("change"));
+    expect(backend.setPasteToTargetBackend).toHaveBeenCalledWith(true);
+  });
+
+  it("opens the cleanup editor and focuses its field when setup is requested from Capture", async () => {
+    await startApp("soniox");
+    const input = element<HTMLInputElement>(".cleanup-api-key-input");
+    const editor = input.closest<HTMLDetailsElement>("details")!;
+    editor.open = false;
+    element<HTMLButtonElement>(".cleanup-setup-button").click();
+    expect(element<HTMLElement>(".settings-view").hidden).toBe(false);
+    expect(editor.open).toBe(true);
+    expect(document.activeElement).toBe(input);
+  });
+});

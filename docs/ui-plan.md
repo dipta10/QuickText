@@ -70,17 +70,18 @@ Capture state behavior:
 
 Settings should be a separate view reached from a gear button or Settings tab in the top bar.
 
-Recommended sections:
+Settings uses one scrolling page with six sections, in this order:
 
-- General: launch-on-startup preference.
-- Transcription: active-provider selector and shared `Terms and phrases` field.
-- Soniox: API key status, save/update key, delete key, Description textarea, and a searchable multi-select for transcription languages.
-- Deepgram: API key status, save/update key, delete key, and a clear English-only note with no language control.
-- Transcript cleanup: Google Gemini API key status, masked entry, Save/Delete, a Google AI Studio setup link, and disclosure about sending text and free-tier data use. This section is independent of speech-provider selection.
-- Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
-- Behavior: manual copy default, future auto-copy option, max recording duration display.
-- App: tray/background explanation and explicit quit note.
-- Support: temporary debug logging, export diagnostics, delete local diagnostics, and a concise privacy explanation.
+- General: launch on startup, then an After recording group containing auto-copy and paste into the focused app.
+- Recording: microphone, recording limit in seconds, live transcript, and a Show unconfirmed words option visible only with live transcript enabled.
+- Shortcuts: start/stop recording and its focus/hide preferences, followed by the independent show/hide window shortcut. Focus and hide preferences apply only to recording shortcuts.
+- Transcription: provider selector followed immediately by the selected provider's credentials and languages. Soniox exposes language preferences and optional Topic and context (the persisted transcription description); Deepgram shows its English-only limitation. Shared Terms and phrases follows the provider group. The optional context and terms editors are collapsed by default and preserve drafts when collapsed or when switching providers.
+- Transcript cleanup: optional Clean & Copy setup, Gemini credentials, Google AI Studio setup link, and visible text-processing and free-tier data-use disclosure. This is independent of the speech provider.
+- About: version and copy-build-information action, expandable build/commit details, and tray/quit explanation.
+
+Credentials show saved status and Remove alongside an expandable Change API key editor. Missing credentials expand the setup editor. Successful saves clear the secret input and collapse the editor; failures keep it available for correction. Capture's cleanup setup action opens the editor and focuses the key field. Secure storage and existing recording/session rules remain unchanged.
+
+Support diagnostics, when exposed, belong after these everyday preferences rather than among recording controls.
 
 Settings rules:
 
@@ -91,7 +92,7 @@ Settings rules:
 - Keep the shared terms list when provider validation fails and show an actionable inline error.
 - Describe an empty language selection as Automatic detection and keep language selection available without an API key.
 - Keep settings controls visually quieter than the Capture record button.
-- Keep Description a plain multi-line text box with a 10,000-character maximum.
+- Keep Topic and context (the transcription description) a plain multi-line text box with a 10,000-character maximum.
 - Keep Terms a plain multi-line text box with a 10,000-character maximum and explain that each line is one term. Do not add chips, presets, generated suggestions, sorting, or editor deduplication.
 - Use short labels and direct status text.
 - Keep diagnostics actions in Settings; Capture only shows a compact support reference alongside an error.
@@ -175,17 +176,12 @@ QuickText window
     Copy action
 
   Settings view
-    Provider selector
-    Terms and phrases
-    Soniox API key, Description, and transcription languages
-    Deepgram API key and English-only note
-    Global shortcut
-    Behavior
-    App/tray
-    Support diagnostics
-
-  Bottom line
-    Shortcut hint or active error
+    General: startup, copy, paste
+    Recording: microphone, limit, live display
+    Shortcuts: recording and window visibility
+    Transcription: provider, credentials, languages, context, terms
+    Transcript cleanup: Gemini setup and disclosure
+    About: version, build details, tray behavior
 ```
 
 ## Implementation Plan

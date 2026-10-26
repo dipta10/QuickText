@@ -65,7 +65,6 @@ export type AppView = {
   showPartialCheckbox: HTMLInputElement;
   showPartialField: HTMLLabelElement;
   pasteToTargetCheckbox: HTMLInputElement;
-  pasteToTargetNote: HTMLParagraphElement;
   launchOnStartupCheckbox: HTMLInputElement;
   launchOnStartupStatus: HTMLParagraphElement;
   appVersion: HTMLSpanElement;
@@ -137,7 +136,7 @@ const appTemplate = `
       </section>
 
       <section class="settings-view" aria-label="Settings" hidden>
-        <section class="settings-section">
+        <section class="settings-section" aria-label="General">
           <h2 class="section-title">General</h2>
           <label class="checkbox-field" for="launch-on-startup">
             <input
@@ -150,9 +149,112 @@ const appTemplate = `
           <p class="launch-on-startup-status settings-note" role="status">
             Starts hidden in the tray when you sign in.
           </p>
+          <h3 class="settings-subtitle">After recording</h3>
+          <label class="checkbox-field" for="auto-copy-transcript">
+            <input
+              class="auto-copy-checkbox"
+              id="auto-copy-transcript"
+              type="checkbox"
+            />
+            <span>Automatically copy transcript when done</span>
+          </label>
+          <label class="checkbox-field" for="paste-to-target">
+            <input
+              class="paste-to-target-checkbox"
+              id="paste-to-target"
+              type="checkbox"
+            />
+            <span>Paste transcript into the focused app</span>
+          </label>
         </section>
 
-        <section class="settings-section">
+        <section class="settings-section" aria-label="Recording">
+          <h2 class="section-title">Recording</h2>
+          <label class="settings-field" for="input-device">
+            <span class="settings-field-label">Microphone</span>
+            <select class="input-device-select" id="input-device"></select>
+          </label>
+          <p class="input-device-status" role="status"></p>
+          <p class="settings-note">
+            If the selected microphone is missing when recording starts, the
+            system default is used instead.
+          </p>
+          <label class="settings-field" for="max-recording-seconds">
+            <span class="settings-field-label">Recording limit (seconds)</span>
+            <input
+              class="max-recording-seconds-input"
+              id="max-recording-seconds"
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+            />
+          </label>
+          <label class="checkbox-field live-transcript-field" for="live-transcript">
+            <input
+              class="live-transcript-checkbox"
+              id="live-transcript"
+              type="checkbox"
+            />
+            <span>Show live transcript</span>
+          </label>
+          <label
+            class="checkbox-field show-partial-field"
+            for="show-partial-transcript"
+          >
+            <input
+              class="show-partial-transcript-checkbox"
+              id="show-partial-transcript"
+              type="checkbox"
+            />
+            <span>Show unconfirmed words</span>
+          </label>
+        </section>
+
+        <section class="settings-section" aria-label="Shortcuts">
+          <h2 class="section-title">Shortcuts</h2>
+          <div class="settings-group">
+            <h3 class="settings-subtitle">Start / stop recording</h3>
+            <p class="settings-note">
+              The shortcut works from any app: press once to start recording,
+              press again to stop. The transcript appears in Capture, ready to
+              copy.
+            </p>
+            <button class="keybind-button" type="button">
+              Set shortcut
+            </button>
+            <p class="keybind-status" role="status"></p>
+            <label class="checkbox-field" for="shortcut-focus-on-start">
+              <input
+                class="shortcut-focus-on-start-checkbox"
+                id="shortcut-focus-on-start"
+                type="checkbox"
+              />
+              <span>Focus window when recording starts</span>
+            </label>
+            <label class="checkbox-field" for="shortcut-hide-on-stop">
+              <input
+                class="shortcut-hide-on-stop-checkbox"
+                id="shortcut-hide-on-stop"
+                type="checkbox"
+              />
+              <span>Hide window when recording stops</span>
+            </label>
+          </div>
+          <div class="settings-group">
+            <h3 class="settings-subtitle">Show / hide window</h3>
+            <p class="settings-note">
+              Show and focus QuickText, or hide it to the tray. Recording continues
+              independently. Use a different shortcut from recording.
+            </p>
+            <button class="window-keybind-button keybind-button" type="button">
+              Set window shortcut
+            </button>
+            <p class="window-keybind-status" role="status"></p>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-label="Transcription">
           <h2 class="section-title">Transcription</h2>
           <label class="settings-field" for="transcription-provider">
             <span class="settings-field-label">Provider</span>
@@ -165,264 +267,176 @@ const appTemplate = `
           <p class="provider-status settings-note" role="status" aria-live="polite">
             Provider changes apply to the next recording.
           </p>
-          <label class="settings-field" for="transcription-terms">
-            <span class="settings-field-label">Terms and phrases</span>
-            <textarea
-              class="transcription-terms-input"
-              id="transcription-terms"
-              maxlength="10000"
-              rows="5"
-              placeholder="Soniox&#10;Hyprland&#10;QuickText"
-              aria-describedby="transcription-terms-status"
-            ></textarea>
-          </label>
-          <button class="transcription-terms-save-button" type="button">
-            Save terms
-          </button>
-          <p
-            class="transcription-terms-status settings-note"
-            id="transcription-terms-status"
-            role="status"
-          >
-            Enter one term or phrase per line. Blank lines are ignored.
-          </p>
-        </section>
-
-        <section class="settings-section soniox-section">
-          <h2 class="section-title">Soniox</h2>
-          <label class="api-key-label" for="soniox-api-key">API key</label>
-          <input
-            class="api-key-input"
-            id="soniox-api-key"
-            type="password"
-            autocomplete="off"
-            placeholder="Paste key"
-          />
-          <div class="api-key-actions">
-            <button class="api-key-save-button" type="button">Save</button>
-            <button class="api-key-delete-button" type="button">Delete</button>
-          </div>
-          <p class="api-key-status" role="status"></p>
-          <label class="settings-field" for="transcription-description">
-            <span class="settings-field-label">Description</span>
-            <textarea
-              class="transcription-description-input"
-              id="transcription-description"
-              maxlength="10000"
-              rows="5"
-              placeholder="Describe the topic, project, or background"
-              aria-describedby="transcription-description-status"
-            ></textarea>
-          </label>
-          <button class="transcription-description-save-button" type="button">
-            Save description
-          </button>
-          <p
-            class="transcription-description-status settings-note"
-            id="transcription-description-status"
-            role="status"
-          >
-            Applied to the next recording. Leave empty to send no description.
-          </p>
-          <div class="settings-field">
-            <span class="settings-field-label">Transcription languages</span>
-            <details class="language-picker">
-              <summary>
-                <span class="language-picker-summary">Automatic detection</span>
-              </summary>
-              <div class="language-picker-panel">
-                <input
-                  class="language-search-input"
-                  type="search"
-                  autocomplete="off"
-                  placeholder="Search languages"
-                  aria-label="Search transcription languages"
-                />
-                <div
-                  class="language-options"
-                  role="group"
-                  aria-label="Preferred transcription languages"
-                ></div>
-                <button class="clear-languages-button" type="button">
-                  Clear selections
+          <div class="settings-group soniox-section" aria-label="Soniox settings">
+            <div class="credential-settings">
+              <div class="credential-status-row">
+                <p class="api-key-status settings-note" role="status"></p>
+                <button class="api-key-delete-button" type="button" aria-label="Remove Soniox API key">Remove</button>
+              </div>
+              <details class="settings-disclosure credential-editor" open>
+                <summary>Set up Soniox API key</summary>
+                <div class="settings-group">
+                  <label class="api-key-label" for="soniox-api-key">Soniox API key</label>
+                  <input class="api-key-input" id="soniox-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste key" />
+                  <div class="api-key-actions">
+                    <button class="api-key-save-button" type="button">Save key</button>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <div class="settings-field">
+              <span class="settings-field-label">Transcription languages</span>
+              <details class="language-picker">
+                <summary>
+                  <span class="language-picker-summary">Automatic detection</span>
+                </summary>
+                <div class="language-picker-panel">
+                  <input
+                    class="language-search-input"
+                    type="search"
+                    autocomplete="off"
+                    placeholder="Search languages"
+                    aria-label="Search transcription languages"
+                  />
+                  <div
+                    class="language-options"
+                    role="group"
+                    aria-label="Preferred transcription languages"
+                    ></div>
+                  <button class="clear-languages-button" type="button">
+                    Clear selections
+                  </button>
+                </div>
+              </details>
+            </div>
+            <p class="language-status settings-note" role="status">
+              Automatic detection is used when no language is selected.
+            </p>
+            <details class="settings-disclosure context-disclosure">
+              <summary>Topic and context · Optional</summary>
+              <div class="settings-group">
+                <label class="settings-field" for="transcription-description">
+                  <span class="settings-field-label">Topic and context</span>
+                  <textarea
+                    class="transcription-description-input"
+                    id="transcription-description"
+                    maxlength="10000"
+                    rows="5"
+                    placeholder="Describe the topic, project, or background"
+                    aria-describedby="transcription-description-status"
+                    ></textarea>
+                </label>
+                <button class="transcription-description-save-button" type="button">
+                  Save context
                 </button>
+                <p
+                  class="transcription-description-status settings-note"
+                  id="transcription-description-status"
+                  role="status"
+                >
+                  Applied to the next recording. Leave empty to send no description.
+                </p>
               </div>
             </details>
           </div>
-          <p class="language-status settings-note" role="status">
-            Automatic detection is used when no language is selected.
-          </p>
-        </section>
-
-        <section class="settings-section deepgram-section">
-          <h2 class="section-title">Deepgram</h2>
-          <label class="api-key-label" for="deepgram-api-key">API key</label>
-          <input
-            class="deepgram-api-key-input"
-            id="deepgram-api-key"
-            type="password"
-            autocomplete="off"
-            placeholder="Paste key"
-          />
-          <div class="api-key-actions">
-            <button class="deepgram-api-key-save-button" type="button">Save</button>
-            <button class="deepgram-api-key-delete-button" type="button">Delete</button>
+          <div class="settings-group deepgram-section" aria-label="Deepgram settings">
+            <div class="credential-settings">
+              <div class="credential-status-row">
+                <p class="deepgram-api-key-status settings-note" role="status"></p>
+                <button class="deepgram-api-key-delete-button" type="button" aria-label="Remove Deepgram API key">Remove</button>
+              </div>
+              <details class="settings-disclosure credential-editor" open>
+                <summary>Set up Deepgram API key</summary>
+                <div class="settings-group">
+                  <label class="api-key-label" for="deepgram-api-key">Deepgram API key</label>
+                  <input class="deepgram-api-key-input" id="deepgram-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste key" />
+                  <div class="api-key-actions">
+                    <button class="deepgram-api-key-save-button" type="button">Save key</button>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <p class="settings-note">
+              Deepgram uses Nova 3 with English transcription in this release.
+              Language options will be added later.
+            </p>
           </div>
-          <p class="deepgram-api-key-status" role="status"></p>
-          <p class="settings-note">
-            Deepgram uses Nova 3 with English transcription in this release.
-            Language options will be added later.
-          </p>
+          <details class="settings-disclosure terms-disclosure">
+            <summary>Terms and phrases · Optional</summary>
+            <div class="settings-group">
+              <label class="settings-field" for="transcription-terms">
+                <span class="settings-field-label">Terms and phrases</span>
+                <textarea
+                  class="transcription-terms-input"
+                  id="transcription-terms"
+                  maxlength="10000"
+                  rows="5"
+                  placeholder="Soniox&#10;Hyprland&#10;QuickText"
+                  aria-describedby="transcription-terms-status"
+                  ></textarea>
+              </label>
+              <button class="transcription-terms-save-button" type="button">
+                Save terms
+              </button>
+              <p
+                class="transcription-terms-status settings-note"
+                id="transcription-terms-status"
+                role="status"
+              >
+                Enter one term or phrase per line. Blank lines are ignored.
+              </p>
+            </div>
+          </details>
         </section>
 
         <section class="settings-section cleanup-section">
           <h2 class="section-title">Transcript cleanup</h2>
-          <p class="settings-note">Google Gemini</p>
-          <label class="api-key-label" for="gemini-cleanup-api-key">Gemini API key</label>
-          <input class="cleanup-api-key-input" id="gemini-cleanup-api-key"
-            type="password" autocomplete="off" spellcheck="false" maxlength="4096"
-            placeholder="Enter Gemini API key" aria-describedby="cleanup-api-key-status" />
-          <div class="api-key-actions">
-            <button class="cleanup-api-key-save-button" type="button">Save</button>
-            <button class="cleanup-api-key-delete-button" type="button">Delete</button>
+          <p class="settings-note">Rewrite transcripts with Clean &amp; Copy, powered by Google Gemini.</p>
+          <div class="credential-settings">
+            <div class="credential-status-row">
+              <p class="cleanup-api-key-status settings-note" id="cleanup-api-key-status" role="status"></p>
+              <button class="cleanup-api-key-delete-button" type="button" aria-label="Remove Gemini API key">Remove</button>
+            </div>
+            <details class="settings-disclosure credential-editor" open>
+              <summary>Set up Gemini API key</summary>
+              <div class="settings-group">
+                <label class="api-key-label" for="gemini-cleanup-api-key">Gemini API key</label>
+                <input class="cleanup-api-key-input" id="gemini-cleanup-api-key" type="password" autocomplete="off" spellcheck="false" maxlength="4096" placeholder="Paste key" aria-describedby="cleanup-api-key-status" />
+                <div class="api-key-actions">
+                  <button class="cleanup-api-key-save-button" type="button">Save key</button>
+                </div>
+              </div>
+            </details>
           </div>
-          <p class="cleanup-api-key-status settings-note" id="cleanup-api-key-status" role="status"></p>
           <a class="cleanup-key-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Get an API key in Google AI Studio</a>
           <p class="settings-note">Clean &amp; Copy sends transcript text to Google for rewriting.
-            Free-tier content may be used to improve Google's products. Billing setup is optional.</p>
+          Free-tier content may be used to improve Google's products. Billing setup is optional.</p>
         </section>
 
         <section class="settings-section">
-          <h2 class="section-title">Recording shortcut</h2>
+          <h2 class="section-title">About</h2>
           <p class="settings-note">
-            The shortcut works from any app: press once to start recording,
-            press again to stop. The transcript appears in Capture, ready to
-            copy.
-          </p>
-          <button class="keybind-button" type="button">
-            Set shortcut
-          </button>
-          <p class="keybind-status" role="status"></p>
-          <label class="checkbox-field" for="shortcut-focus-on-start">
-            <input
-              class="shortcut-focus-on-start-checkbox"
-              id="shortcut-focus-on-start"
-              type="checkbox"
-            />
-            <span>Focus window when recording starts</span>
-          </label>
-          <label class="checkbox-field" for="shortcut-hide-on-stop">
-            <input
-              class="shortcut-hide-on-stop-checkbox"
-              id="shortcut-hide-on-stop"
-              type="checkbox"
-            />
-            <span>Hide window when recording stops</span>
-          </label>
-        </section>
-
-        <section class="settings-section">
-          <h2 class="section-title">Window shortcut</h2>
-          <p class="settings-note">
-            Show and focus QuickText, or hide it to the tray. Recording continues
-            independently. Use a different shortcut from recording.
-          </p>
-          <button class="window-keybind-button keybind-button" type="button">
-            Set window shortcut
-          </button>
-          <p class="window-keybind-status" role="status"></p>
-        </section>
-
-        <section class="settings-section">
-          <h2 class="section-title">Microphone</h2>
-          <label class="settings-field" for="input-device">
-            <span class="settings-field-label">Input device</span>
-            <select class="input-device-select" id="input-device"></select>
-          </label>
-          <p class="input-device-status" role="status"></p>
-          <p class="settings-note">
-            If the selected microphone is missing when recording starts, the
-            system default is used instead.
-          </p>
-        </section>
-
-        <section class="settings-section">
-          <h2 class="section-title">Behavior</h2>
-          <label class="settings-field" for="max-recording-seconds">
-            <span class="settings-field-label">Maximum recording seconds</span>
-            <input
-              class="max-recording-seconds-input"
-              id="max-recording-seconds"
-              type="number"
-              min="1"
-              step="1"
-              inputmode="numeric"
-            />
-          </label>
-          <label class="checkbox-field" for="auto-copy-transcript">
-            <input
-              class="auto-copy-checkbox"
-              id="auto-copy-transcript"
-              type="checkbox"
-            />
-            <span>Automatically copy transcript when done</span>
-          </label>
-          <label class="checkbox-field live-transcript-field" for="live-transcript">
-            <input
-              class="live-transcript-checkbox"
-              id="live-transcript"
-              type="checkbox"
-            />
-            <span>Show transcript in real time while recording</span>
-          </label>
-          <label
-            class="checkbox-field show-partial-field"
-            for="show-partial-transcript"
-          >
-            <input
-              class="show-partial-transcript-checkbox"
-              id="show-partial-transcript"
-              type="checkbox"
-            />
-            <span>Show unconfirmed words as they form</span>
-          </label>
-          <label class="checkbox-field" for="paste-to-target">
-            <input
-              class="paste-to-target-checkbox"
-              id="paste-to-target"
-              type="checkbox"
-            />
-            <span>Paste transcript into the focused app</span>
-          </label>
-          <p class="settings-note paste-to-target-note" hidden>
-            Shortcut recordings follow the window focus setting, then hide
-            before pasting. Plain CLI recordings stay hidden, while
-            <code>quicktext toggle focus</code> shows QuickText before hiding
-            it for delivery. Paste goes wherever focus is at that moment.
-            macOS requires Accessibility permission. On Wayland this needs the
-            wtype utility and currently only works on Hyprland.
-          </p>
-        </section>
-
-        <section class="settings-section">
-          <h2 class="section-title">App</h2>
-          <p class="settings-note">
-            Closing the window will hide QuickText when tray mode is connected.
+            Closing the window keeps QuickText running in the tray. Use Quit in the tray menu to exit.
           </p>
           <dl class="build-info" aria-label="Application build information">
             <div class="build-info-row">
               <dt>Version</dt>
               <dd class="app-version">Loading...</dd>
             </div>
-            <div class="build-info-row">
-              <dt>Build</dt>
-              <dd class="build-id">Loading...</dd>
-            </div>
-            <div class="build-info-row">
-              <dt>Commit</dt>
-              <dd class="source-revision">Loading...</dd>
-            </div>
           </dl>
+          <details class="settings-disclosure">
+            <summary>Build details</summary>
+            <dl class="build-info">
+              <div class="build-info-row">
+                <dt>Build</dt>
+                <dd class="build-id">Loading...</dd>
+              </div>
+              <div class="build-info-row">
+                <dt>Commit</dt>
+                <dd class="source-revision">Loading...</dd>
+              </div>
+            </dl>
+          </details>
           <button class="copy-build-info-button" type="button">
             Copy build information
           </button>
@@ -580,9 +594,6 @@ export const createAppView = (root: HTMLElement): AppView => {
   const pasteToTargetCheckbox = root.querySelector<HTMLInputElement>(
     ".paste-to-target-checkbox",
   );
-  const pasteToTargetNote = root.querySelector<HTMLParagraphElement>(
-    ".paste-to-target-note",
-  );
   const launchOnStartupCheckbox = root.querySelector<HTMLInputElement>(
     ".launch-on-startup-checkbox",
   );
@@ -670,7 +681,6 @@ export const createAppView = (root: HTMLElement): AppView => {
     !showPartialField ||
     !showPartialCheckbox ||
     !pasteToTargetCheckbox ||
-    !pasteToTargetNote ||
     !launchOnStartupCheckbox ||
     !launchOnStartupStatus ||
     !appVersion ||
@@ -753,7 +763,6 @@ export const createAppView = (root: HTMLElement): AppView => {
     showPartialField,
     showPartialCheckbox,
     pasteToTargetCheckbox,
-    pasteToTargetNote,
     launchOnStartupCheckbox,
     launchOnStartupStatus,
     appVersion,

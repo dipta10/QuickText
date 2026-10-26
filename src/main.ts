@@ -1,4 +1,5 @@
 import "./styles.css";
+import { closeCredentialEditor, renderCredentialEditor } from "./credential-editor";
 import {
   cancelShortcutCapture,
   canToggleRecording,
@@ -345,6 +346,8 @@ const render = () => {
     "is-active-provider",
     state.activeProvider === "deepgram",
   );
+  renderCredentialEditor(view.apiKeyInput, state.providerApiKeyConfigured.soniox);
+  renderCredentialEditor(view.deepgramApiKeyInput, state.providerApiKeyConfigured.deepgram);
   view.apiKeyInput.disabled = providerControlsDisabled;
   view.apiKeySaveButton.disabled = providerControlsDisabled;
   view.apiKeyDeleteButton.disabled =
@@ -379,7 +382,6 @@ const render = () => {
   view.showPartialCheckbox.checked = state.showPartialTranscript;
   renderInputDeviceSelect();
   view.pasteToTargetCheckbox.checked = state.pasteToTarget;
-  view.pasteToTargetNote.hidden = !state.pasteToTarget;
   view.launchOnStartupCheckbox.checked = state.launchOnStartup;
   view.launchOnStartupStatus.textContent =
     state.launchOnStartupStatus ||
@@ -779,6 +781,7 @@ const saveApiKey = async (provider: ProviderId) => {
   try {
     const hasApiKey = await saveProviderApiKey(provider, input.value);
     input.value = "";
+    if (hasApiKey) closeCredentialEditor(input);
     updateState(
       setProviderApiKeyPresence(
         state,

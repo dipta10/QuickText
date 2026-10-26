@@ -150,6 +150,19 @@ input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; margin: 0; a
 .build-info-row dt { color: var(--muted); }
 .build-info-row dd { margin: 0; overflow-wrap: anywhere; text-align: right; user-select: text; }
 
+.settings-group, .credential-settings { display: grid; gap: 12px; min-width: 0; }
+.settings-subtitle { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--ink); }
+.settings-group + .settings-group { margin-top: 6px; }
+.show-partial-field { color: var(--muted); }
+.settings-disclosure { min-width: 0; }
+.settings-disclosure > summary { padding-block: 8px; font-size: 12px; color: var(--ink); line-height: 1.6; }
+.settings-disclosure > .settings-group, .settings-disclosure > .build-info { margin-top: 10px; }
+.settings-group > button { justify-self: start; }
+.credential-status-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.credential-status-row > p { flex: 1; }
+.credential-status-row > button { flex-shrink: 0; }
+.keybind-status:empty, .input-device-status:empty { display: none; }
+
 @media (max-width: 390px) {
   .top-bar { padding-inline: 15px; }
   .top-bar-actions { gap: 5px; }

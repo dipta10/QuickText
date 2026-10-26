@@ -16,6 +16,7 @@ Publish every push to `main` as its own release instead of replacing a single ro
 
 - Tag scheme: `v0.1.0-pre.<run-number>` (for example `v0.1.0-pre.42`), where the run number increments with each merge, giving readable, sortable, chronological tags.
 - Each release is a regular release, so the newest build always appears as "Latest" on the repo homepage and at the `releases/latest` permalink.
+- Tauri release asset filenames include the exact release tag, architecture, and bundle extension (for example `QuickText_v0.1.0-pre.35_x64-setup.exe` and `QuickText_v0.1.0-pre.35_aarch64.dmg`). This identifies the downloaded build without changing native package versions. Arch keeps its native `pkgver-pkgrel` filename, where `pkgrel` is the same workflow run number.
 - A cleanup job runs after publishing and deletes releases beyond the newest 10, along with their tags. Retention is a workflow-level variable (`KEEP_RELEASES`).
 - The `prepare-release` deletion job from ADR 0009 is removed entirely; nothing deletes the release that was just published.
 - The `concurrency: cd-main` queue is kept: simultaneous merges still publish sequentially so asset uploads never race.

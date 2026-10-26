@@ -89,8 +89,8 @@ jobs:
 
             | Your computer | Download |
             |---|---|
-            | Windows | `QuickText_0.1.0_x64-setup.exe` (installer) or `.msi` |
-            | Mac (Apple Silicon / M1–M4) | `QuickText_0.1.0_aarch64.dmg` |
+            | Windows | `QuickText_${{ env.RELEASE_TAG }}_x64-setup.exe` (installer) or `.msi` |
+            | Mac (Apple Silicon / M1–M4) | `QuickText_${{ env.RELEASE_TAG }}_aarch64.dmg` |
             | Arch / Manjaro (x86_64) | `quicktext-0.1.0-${{ github.run_number }}-x86_64.pkg.tar.zst` |
             | Debian / Ubuntu (x86_64) | `.deb` |
             | Fedora / RPM-based Linux (x86_64) | `.rpm` |
@@ -117,7 +117,7 @@ jobs:
             - **AppImage on newer Wayland/Mesa systems**: prefer the native package above on Arch or Manjaro. If an AppImage opens a blank window and prints `EGL_BAD_PARAMETER`, launch it from its download folder with:
 
               ```bash
-              LD_PRELOAD=/usr/lib/libwayland-client.so.0 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./QuickText_0.1.0_amd64.AppImage
+              LD_PRELOAD=/usr/lib/libwayland-client.so.0 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./QuickText_${{ env.RELEASE_TAG }}_amd64.AppImage
               ```
 
               This is a temporary workaround for an AppImage compatibility issue on newer Mesa/Wayland systems.
@@ -125,6 +125,9 @@ jobs:
             A build like this is published on every merge to main; older builds stay available on the [releases page](../../releases). Bug reports welcome!
         with:
           tagName: ${{ env.RELEASE_TAG }}
+          # Include the build identity in every download, including the macOS app archive.
+          # This changes uploaded filenames only; native package versions stay unchanged.
+          assetNamePattern: 'QuickText_${{ env.RELEASE_TAG }}_[arch][setup][ext]'
           releaseName: "QuickText — Speech-to-Text for Your Desktop (${{ env.RELEASE_TAG }})"
           releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: false

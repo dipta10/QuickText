@@ -20,14 +20,14 @@ The app should always open to Capture when triggered for dictation. Settings sho
 Recommended initial window size:
 
 - Width: 420-520px.
-- Height: 520-680px.
+- Height: 700px by default, with a 520px minimum for smaller screens.
 - Resizable: yes, with sensible minimums.
 - Default theme: dark.
 - Density: compact, but not cramped.
 
 The window should have three stable regions:
 
-- Top bar: app name, current backend status, Settings button.
+- Top bar: app name and Settings/Capture navigation only.
 - Main content: either Capture or Settings.
 - Bottom status line: shortcut hint, tray/background status, or current error.
 
@@ -41,7 +41,7 @@ Required elements:
 
 - Large primary record/stop toggle.
 - Short status label: Ready, Listening, Finalizing, Transcript ready, or Error.
-- Recording affordance: timer plus subtle activity indicator while listening.
+- Recording affordance: backend status directly above the timer, with a status dot and measured microphone level strip.
 - Read-only active-provider label.
 - Transcript display as a readable result surface, not a textarea.
 - Copy and Clean & Copy buttons in the transcript toolbar.
@@ -70,17 +70,18 @@ Capture state behavior:
 
 Settings should be a separate view reached from a gear button or Settings tab in the top bar.
 
-Recommended sections:
+Settings uses one scrolling page with six sections, in this order:
 
-- General: launch-on-startup preference.
-- Transcription: active-provider selector and shared `Terms and phrases` field.
-- Soniox: API key status, save/update key, delete key, Description textarea, and a searchable multi-select for transcription languages.
-- Deepgram: API key status, save/update key, delete key, and a clear English-only note with no language control.
-- Transcript cleanup: Google Gemini API key status, masked entry, Save/Delete, a Google AI Studio setup link, and disclosure about sending text and free-tier data use. This section is independent of speech-provider selection.
-- Shortcut: current global shortcut, capture-new-shortcut control, conflict/error status, and shortcut behavior checkboxes.
-- Behavior: manual copy default, future auto-copy option, max recording duration display.
-- App: tray/background explanation and explicit quit note.
-- Support: temporary debug logging, export diagnostics, delete local diagnostics, and a concise privacy explanation.
+- General: launch on startup, then an After recording group containing auto-copy and paste into the focused app.
+- Recording: microphone, recording limit in seconds, live transcript, and a Show unconfirmed words option visible only with live transcript enabled.
+- Shortcuts: start/stop recording and its focus/hide preferences, followed by the independent show/hide window shortcut. Focus and hide preferences apply only to recording shortcuts.
+- Transcription: provider selector followed immediately by the selected provider's credentials and languages. Soniox exposes language preferences and optional Topic and context (the persisted transcription description); Deepgram shows its English-only limitation. Shared Terms and phrases follows the provider group. The optional context and terms editors are collapsed by default and preserve drafts when collapsed or when switching providers.
+- Transcript cleanup: optional Clean & Copy setup, Gemini credentials, Google AI Studio setup link, and visible text-processing and free-tier data-use disclosure. This is independent of the speech provider.
+- About: version and copy-build-information action, expandable build/commit details, and tray/quit explanation.
+
+Credentials show saved status and Remove alongside an expandable Change API key editor. Missing credentials expand the setup editor. Successful saves clear the secret input and collapse the editor; failures keep it available for correction. Capture's cleanup setup action opens the editor and focuses the key field. Secure storage and existing recording/session rules remain unchanged.
+
+Support diagnostics, when exposed, belong after these everyday preferences rather than among recording controls.
 
 Settings rules:
 
@@ -91,7 +92,7 @@ Settings rules:
 - Keep the shared terms list when provider validation fails and show an actionable inline error.
 - Describe an empty language selection as Automatic detection and keep language selection available without an API key.
 - Keep settings controls visually quieter than the Capture record button.
-- Keep Description a plain multi-line text box with a 10,000-character maximum.
+- Keep Topic and context (the transcription description) a plain multi-line text box with a 10,000-character maximum.
 - Keep Terms a plain multi-line text box with a 10,000-character maximum and explain that each line is one term. Do not add chips, presets, generated suggestions, sorting, or editor deduplication.
 - Use short labels and direct status text.
 - Keep diagnostics actions in Settings; Capture only shows a compact support reference alongside an error.
@@ -129,7 +130,7 @@ Use a modern restrained desktop style:
 
 The selected visual direction is **Signal**: a charcoal desktop instrument with
 an amber primary action, small uppercase labels, and a monospaced recording
-timer. Keep the record/stop button beside the timer in a compact capture strip.
+timer. Show the backend status directly above the timer, replacing the static Capture / microphone label. Keep the record/stop button beside them in a compact capture strip. The header contains only the brand and Settings/Capture navigation; it does not repeat recording status.
 The transcript uses the main window surface rather than a nested card, with
 Copy and Clean & Copy in its toolbar. A stable footer shows the recording
 shortcut, background/tray hint, and current status or recovery message.
@@ -144,6 +145,14 @@ errors, or a new session clear the history. Ignore obsolete session events.
 Reduced-motion preferences disable smoothing while preserving real level
 updates. Recording switches the primary action to a contrasting stop control.
 Starting and finalizing states have explicit disabled action labels.
+
+Use readable type at the actual desktop window size: 14px for primary controls,
+recording status, and settings inputs/labels; 12px for supporting text and section
+headings; a 32px timer; and 16px transcript and empty-state text. Bundle Inter 4.1 variable fonts (normal and italic) locally under the SIL Open
+Font License, with system fonts as fallback and native platform font smoothing.
+Font loading must not require an external service or a system installation.
+Keep the recording timer and compact metadata in monospace. Preserve this scale at the 360px minimum width; wrap toolbars when
+necessary instead of shrinking their text.
 
 Settings uses the same charcoal surfaces and amber section labels, separated
 by thin rules instead of individual cards. Keep native inputs and visible
@@ -164,28 +173,22 @@ Avoid:
 QuickText window
   Top bar
     QuickText
-    Status chip
     Settings/Capture icon button
 
   Capture view
     Record/Stop toggle
-    Timer and recording state
+    Backend status above timer
     Active provider label
     Transcript result panel
     Copy action
 
   Settings view
-    Provider selector
-    Terms and phrases
-    Soniox API key, Description, and transcription languages
-    Deepgram API key and English-only note
-    Global shortcut
-    Behavior
-    App/tray
-    Support diagnostics
-
-  Bottom line
-    Shortcut hint or active error
+    General: startup, copy, paste
+    Recording: microphone, limit, live display
+    Shortcuts: recording and window visibility
+    Transcription: provider, credentials, languages, context, terms
+    Transcript cleanup: Gemini setup and disclosure
+    About: version, build details, tray behavior
 ```
 
 ## Implementation Plan

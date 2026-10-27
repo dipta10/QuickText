@@ -36,6 +36,21 @@ const startApp = async (provider: ProviderId = "deepgram") => {
   await settings.promise;
 };
 
+// Reinitialize the frontend while preserving saved preferences, as on reopening.
+const reopenApp = async () => {
+  for (const [type, listener, options] of vi.mocked(window.addEventListener).mock.calls) {
+    window.removeEventListener(type, listener, options);
+  }
+  vi.mocked(window.addEventListener).mockClear();
+  vi.clearAllTimers();
+  vi.resetModules();
+  vi.mocked(backend.setGlobalShortcut).mockClear();
+  vi.mocked(backend.setWindowShortcut).mockClear();
+  document.body.innerHTML = '<div id="app"></div>';
+  await import("./main");
+  await Promise.resolve();
+};
+
 beforeEach(() => {
   vi.resetModules();
   vi.resetAllMocks();
@@ -281,6 +296,89 @@ it("auto-copies each recording once, excludes cleanup and restore, and manually 
 });
 
 describe("independent window shortcut", () => {
+  it.each(["recording", "window"] as const)("clears only the %s shortcut and keeps it unassigned after reopening", async (target) => {
+    localStorage.setItem("stt.globalShortcut", "F9");
+    localStorage.setItem("stt.windowShortcut", "F10");
+    await import("./main");
+    const register = target === "window" ? backend.setWindowShortcut : backend.setGlobalShortcut;
+    const otherRegister = target === "window" ? backend.setGlobalShortcut : backend.setWindowShortcut;
+    const storageKey = target === "window" ? "stt.windowShortcut" : "stt.globalShortcut";
+    const clearSelector = target === "window" ? ".clear-window-keybind-button" : ".clear-keybind-button";
+    const keySelector = target === "window" ? ".window-keybind-button" : ".keybind-button:not(.window-keybind-button)";
+    const cleared = deferred<void>();
+    vi.mocked(register).mockClear().mockReturnValueOnce(cleared.promise);
+    vi.mocked(otherRegister).mockClear();
+    element<HTMLButtonElement>(clearSelector).click();
+    expect(register).toHaveBeenCalledExactlyOnceWith("");
+    expect(otherRegister).not.toHaveBeenCalled();
+    expect(localStorage.getItem(storageKey)).toBe(target === "window" ? "F10" : "F9");
+    for (const selector of [".keybind-button", ".window-keybind-button", ".clear-keybind-button", ".clear-window-keybind-button"]) {
+      expect(element<HTMLButtonElement>(selector).disabled).toBe(true);
+    }
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F12", code: "F12" }));
+    cleared.resolve();
+    await cleared.promise;
+    expect(localStorage.getItem(storageKey)).toBeNull();
+    expect(element(keySelector).textContent).toBe(target === "window" ? "Set window shortcut" : "Set shortcut");
+    expect(element<HTMLButtonElement>(clearSelector).disabled).toBe(true);
+    expect(localStorage.getItem(target === "window" ? "stt.globalShortcut" : "stt.windowShortcut")).toBe(target === "window" ? "F9" : "F10");
+    expect(backend.toggleBackendRecording).not.toHaveBeenCalled();
+
+    await reopenApp();
+    expect(register).not.toHaveBeenCalled();
+    expect(otherRegister).toHaveBeenCalledExactlyOnceWith(target === "window" ? "F9" : "F10");
+    expect(element<HTMLButtonElement>(clearSelector).disabled).toBe(true);
+  });
+
+  it.each(["recording", "window"] as const)("preserves the %s shortcut after a rejected clear and allows retry", async (target) => {
+    localStorage.setItem("stt.globalShortcut", "F9");
+    localStorage.setItem("stt.windowShortcut", "F10");
+    await import("./main");
+    const register = target === "window" ? backend.setWindowShortcut : backend.setGlobalShortcut;
+    const storageKey = target === "window" ? "stt.windowShortcut" : "stt.globalShortcut";
+    const clearSelector = target === "window" ? ".clear-window-keybind-button" : ".clear-keybind-button";
+    const statusSelector = target === "window" ? ".window-keybind-status" : ".keybind-status";
+    vi.mocked(register).mockClear().mockRejectedValueOnce(new Error("Could not clear shortcut"));
+    element<HTMLButtonElement>(clearSelector).click();
+    await Promise.resolve();
+    expect(localStorage.getItem(storageKey)).toBe(target === "window" ? "F10" : "F9");
+    expect(element(statusSelector).textContent).toBe("Could not clear shortcut");
+    expect(element<HTMLButtonElement>(clearSelector).disabled).toBe(false);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F12", code: "F12" }));
+    expect(register).toHaveBeenCalledTimes(1);
+    element<HTMLButtonElement>(clearSelector).click();
+    await Promise.resolve();
+    expect(localStorage.getItem(storageKey)).toBeNull();
+    expect(element(statusSelector).textContent).toContain("cleared");
+  });
+
+  it.each([false, true])(
+    "preserves a newly saved window shortcut across reopening (restore rejected: %s)",
+    async (restoreRejected) => {
+      localStorage.setItem("stt.globalShortcut", "F9");
+      await import("./main");
+      element<HTMLButtonElement>(".window-keybind-button").click();
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", code: "F10" }));
+      await Promise.resolve();
+      expect(element(".window-keybind-status").textContent).toBe("Window shortcut saved.");
+
+      if (restoreRejected) {
+        vi.mocked(backend.setWindowShortcut).mockRejectedValueOnce(new Error("Shortcut unavailable"));
+      }
+      await reopenApp();
+      expect(backend.setWindowShortcut).toHaveBeenCalledExactlyOnceWith("F10");
+      expect(element(".window-keybind-button").textContent).toBe("F10");
+      expect(localStorage.getItem("stt.windowShortcut")).toBe("F10");
+      expect(localStorage.getItem("stt.globalShortcut")).toBe("F9");
+      if (restoreRejected) {
+        expect(element(".window-keybind-status").textContent).toBe("Shortcut unavailable");
+        await reopenApp();
+        expect(backend.setWindowShortcut).toHaveBeenCalledExactlyOnceWith("F10");
+        expect(element(".window-keybind-button").textContent).toBe("F10");
+      }
+    },
+  );
+
   it.each(["recording", "window"] as const)(
     "does not cancel %s capture when startup restoration finishes",
     async (target) => {

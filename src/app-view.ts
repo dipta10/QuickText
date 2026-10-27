@@ -26,8 +26,10 @@ export type AppView = {
   transcriptPartial: HTMLSpanElement;
   copyButton: HTMLButtonElement;
   keybindButton: HTMLButtonElement;
+  clearKeybindButton: HTMLButtonElement;
   keybindStatus: HTMLParagraphElement;
   windowKeybindButton: HTMLButtonElement;
+  clearWindowKeybindButton: HTMLButtonElement;
   windowKeybindStatus: HTMLParagraphElement;
   shortcutFocusOnStartCheckbox: HTMLInputElement;
   shortcutHideOnStopCheckbox: HTMLInputElement;
@@ -217,9 +219,12 @@ const appTemplate = `
               press again to stop. The transcript appears in Capture, ready to
               copy.
             </p>
-            <button class="keybind-button" type="button">
-              Set shortcut
-            </button>
+            <div class="shortcut-controls">
+              <button class="keybind-button" type="button">
+                Set shortcut
+              </button>
+              <button class="clear-keybind-button" type="button" aria-label="Clear recording shortcut">Clear</button>
+            </div>
             <p class="keybind-status" role="status"></p>
             <label class="checkbox-field" for="shortcut-focus-on-start">
               <input
@@ -244,9 +249,12 @@ const appTemplate = `
               Show and focus QuickText, or hide it to the tray. Recording continues
               independently. Use a different shortcut from recording.
             </p>
-            <button class="window-keybind-button keybind-button" type="button">
-              Set window shortcut
-            </button>
+            <div class="shortcut-controls">
+              <button class="window-keybind-button keybind-button" type="button">
+                Set window shortcut
+              </button>
+              <button class="clear-window-keybind-button" type="button" aria-label="Clear window shortcut">Clear</button>
+            </div>
             <p class="window-keybind-status" role="status"></p>
           </div>
         </section>
@@ -493,6 +501,8 @@ export const createAppView = (root: HTMLElement): AppView => {
     root.querySelector<HTMLButtonElement>(".keybind-button:not(.window-keybind-button)");
   const windowKeybindStatus = root.querySelector<HTMLParagraphElement>(".window-keybind-status");
   const windowKeybindButton = root.querySelector<HTMLButtonElement>(".window-keybind-button");
+  const clearKeybindButton = root.querySelector<HTMLButtonElement>(".clear-keybind-button");
+  const clearWindowKeybindButton = root.querySelector<HTMLButtonElement>(".clear-window-keybind-button");
   const keybindStatus =
     root.querySelector<HTMLParagraphElement>(".keybind-status");
   const shortcutFocusOnStartCheckbox = root.querySelector<HTMLInputElement>(
@@ -637,8 +647,10 @@ export const createAppView = (root: HTMLElement): AppView => {
     !cleanupApiKeyStatus ||
     !copyButton ||
     !keybindButton ||
+    !clearKeybindButton ||
     !keybindStatus ||
     !windowKeybindButton ||
+    !clearWindowKeybindButton ||
     !windowKeybindStatus ||
     !shortcutFocusOnStartCheckbox ||
     !shortcutHideOnStopCheckbox ||
@@ -718,8 +730,10 @@ export const createAppView = (root: HTMLElement): AppView => {
     cleanupApiKeyStatus,
     copyButton,
     keybindButton,
+    clearKeybindButton,
     keybindStatus,
     windowKeybindButton,
+    clearWindowKeybindButton,
     windowKeybindStatus,
     shortcutFocusOnStartCheckbox,
     shortcutHideOnStopCheckbox,

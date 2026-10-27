@@ -199,9 +199,13 @@ export const beginShortcutSave = (state: AppState): AppState => {
   };
 };
 
-export const failShortcutSave = (state: AppState, message: string): AppState => ({
+export const failShortcutSave = (
+  state: AppState,
+  message: string,
+  shortcutCapture: "capturing" | "idle" = "capturing",
+): AppState => ({
   ...setShortcutStatus(state, state.shortcutCaptureTarget, message),
-  shortcutCapture: "capturing",
+  shortcutCapture,
   status: message,
 });
 
@@ -359,20 +363,20 @@ export const saveShortcut = (
   state: AppState,
   selectedShortcut: string,
 ): AppState => ({
-  ...setShortcutStatus(state, "recording", "Saved."),
+  ...setShortcutStatus(state, "recording", selectedShortcut ? "Saved." : "Shortcut cleared."),
   shortcutCapture: "idle",
   selectedShortcut,
-  status: "Saved.",
+  status: selectedShortcut ? "Saved." : "Shortcut cleared.",
 });
 
 export const saveWindowShortcut = (
   state: AppState,
   selectedWindowShortcut: string,
 ): AppState => ({
-  ...setShortcutStatus(state, "window", "Window shortcut saved."),
+  ...setShortcutStatus(state, "window", selectedWindowShortcut ? "Window shortcut saved." : "Window shortcut cleared."),
   shortcutCapture: "idle",
   selectedWindowShortcut,
-  status: "Window shortcut saved.",
+  status: selectedWindowShortcut ? "Window shortcut saved." : "Window shortcut cleared.",
 });
 
 export const setActiveProvider = (

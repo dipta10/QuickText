@@ -146,6 +146,7 @@ input::placeholder, textarea::placeholder { color: #90959e; }
 input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; margin: 0; accent-color: var(--accent); }
 .api-key-actions { gap: 8px; }
 .settings-section > button { justify-self: start; }
+.shortcut-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .keybind-button, .window-keybind-button { justify-self: stretch !important; text-align: left; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; padding: 11px !important; overflow-wrap: anywhere; }
 .settings-note, .keybind-status, .window-keybind-status, .api-key-status, .deepgram-api-key-status, .transcription-description-status, .transcription-terms-status { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
 .window-keybind-status:empty { display: none; }

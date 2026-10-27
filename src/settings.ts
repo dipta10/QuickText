@@ -15,7 +15,8 @@ export const getGlobalShortcut = (): string => {
 };
 
 export const saveGlobalShortcut = (shortcut: string) => {
-  localStorage.setItem(shortcutStorageKey, shortcut);
+  if (shortcut) localStorage.setItem(shortcutStorageKey, shortcut);
+  else localStorage.removeItem(shortcutStorageKey);
 };
 
 export const getMaxRecordingSeconds = (): number => {
@@ -106,5 +107,6 @@ export const getWindowShortcut = (): string => {
 };
 
 export const saveWindowShortcut = (shortcut: string) => {
-  localStorage.setItem(windowShortcutStorageKey, shortcut);
+  if (shortcut) localStorage.setItem(windowShortcutStorageKey, shortcut);
+  else localStorage.removeItem(windowShortcutStorageKey);
 };

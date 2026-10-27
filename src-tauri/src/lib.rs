@@ -1501,7 +1501,13 @@ fn replace_shortcut(
 ) -> Result<String, String> {
     let shortcut = shortcut.trim();
     if shortcut.is_empty() {
-        return Err("Choose a shortcut first.".into());
+        if let Some(previous) = active.as_ref() {
+            app.global_shortcut()
+                .unregister(*previous)
+                .map_err(|error| format!("Could not clear the shortcut: {error}"))?;
+        }
+        *active = None;
+        return Ok(String::new());
     }
     let parsed: Shortcut = shortcut
         .parse()

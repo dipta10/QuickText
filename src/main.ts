@@ -326,6 +326,8 @@ const render = () => {
       : state.selectedWindowShortcut || "Set window shortcut";
   view.keybindButton.disabled = state.shortcutCapture === "saving";
   view.windowKeybindButton.disabled = state.shortcutCapture === "saving";
+  view.clearKeybindButton.disabled = state.shortcutCapture === "saving" || !state.selectedShortcut;
+  view.clearWindowKeybindButton.disabled = state.shortcutCapture === "saving" || !state.selectedWindowShortcut;
   view.keybindStatus.textContent = state.shortcutStatus.recording;
   view.windowKeybindStatus.textContent = state.shortcutStatus.window;
   view.shortcutFocusOnStartCheckbox.checked = state.shortcutFocusOnStart;
@@ -449,7 +451,7 @@ const registerShortcut = async (
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     updateState(
-      restoring ? setShortcutStatus(state, target, message) : failShortcutSave(state, message),
+      restoring ? setShortcutStatus(state, target, message) : failShortcutSave(state, message, shortcut ? "capturing" : "idle"),
     );
   }
 };
@@ -898,6 +900,15 @@ view.windowKeybindButton.addEventListener("click", () => {
 view.keybindButton.addEventListener("click", () => {
   updateState(startShortcutCapture(state));
 });
+
+const clearShortcut = (target: ShortcutTarget) => {
+  if (state.shortcutCapture === "saving") return;
+  updateState(beginShortcutSave(startShortcutCapture(state, target)));
+  void registerShortcut("", target);
+};
+
+view.clearKeybindButton.addEventListener("click", () => clearShortcut("recording"));
+view.clearWindowKeybindButton.addEventListener("click", () => clearShortcut("window"));
 
 view.shortcutFocusOnStartCheckbox.addEventListener("change", () => {
   const focusOnStart = view.shortcutFocusOnStartCheckbox.checked;

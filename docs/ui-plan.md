@@ -81,6 +81,8 @@ Settings uses one scrolling page with six sections, in this order:
 
 Credentials show saved status and Remove alongside an expandable Change API key editor. Missing credentials expand the setup editor. Successful saves clear the secret input and collapse the editor; failures keep it available for correction. Capture's cleanup setup action opens the editor and focuses the key field. Secure storage and existing recording/session rules remain unchanged.
 
+Each shortcut has a Clear action that unregisters only that binding and removes its saved assignment. Escape cancels shortcut editing and preserves the existing assignment. Failed clears keep the saved binding and show an inline error.
+
 Support diagnostics, when exposed, belong after these everyday preferences rather than among recording controls.
 
 Settings rules:

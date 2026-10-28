@@ -13,6 +13,7 @@ const getBuildInfoCommand = "get_build_info";
 const toggleRecordingCommand = "toggle_recording";
 const setWindowShortcutCommand = "set_window_shortcut";
 const setGlobalShortcutCommand = "set_global_shortcut";
+const initializeShortcutsCommand = "initialize_shortcuts";
 const setShortcutBehaviorCommand = "set_shortcut_behavior";
 const setPasteToTargetCommand = "set_paste_to_target";
 const hasProviderApiKeyCommand = "has_provider_api_key";
@@ -69,6 +70,21 @@ const assertTauriRuntime = () => {
   if (!("__TAURI_INTERNALS__" in window)) {
     throw new Error("Run the desktop app with npm run tauri dev.");
   }
+};
+
+export type ShortcutSettingsSnapshot = {
+  recording: string;
+  window: string;
+  recordingError: string | null;
+  windowError: string | null;
+};
+
+export const initializeShortcuts = async (
+  legacyRecording: string,
+  legacyWindow: string,
+): Promise<ShortcutSettingsSnapshot> => {
+  assertTauriRuntime();
+  return invoke(initializeShortcutsCommand, { legacyRecording, legacyWindow });
 };
 
 export const setGlobalShortcut = async (shortcut: string) => {

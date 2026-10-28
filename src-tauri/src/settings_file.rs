@@ -11,7 +11,7 @@ static NEXT_WRITE_ID: AtomicU64 = AtomicU64::new(1);
 // A failed write must leave the user's last saved settings intact.
 pub fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<(), String> {
     let contents = serde_json::to_vec_pretty(value)
-        .map_err(|_| "Could not serialize transcription settings.".to_string())?;
+        .map_err(|_| "Could not serialize settings.".to_string())?;
     let parent = path
         .parent()
         .ok_or_else(|| "Could not resolve the settings folder.".to_string())?;
@@ -25,7 +25,7 @@ pub fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<(), Stri
         .write(true)
         .create_new(true)
         .open(&temporary)
-        .map_err(|_| "Could not save transcription settings.".to_string())?;
+        .map_err(|_| "Could not save settings.".to_string())?;
     let result = (|| {
         file.write_all(&contents)?;
         file.sync_all()?;
@@ -35,7 +35,7 @@ pub fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<(), Stri
     if result.is_err() {
         let _ = fs::remove_file(&temporary);
     }
-    result.map_err(|_| "Could not save transcription settings.".to_string())
+    result.map_err(|_| "Could not save settings.".to_string())
 }
 
 #[cfg(test)]

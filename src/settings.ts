@@ -11,12 +11,13 @@ const launchOnStartupStorageKey = "stt.launchOnStartup";
 export const defaultMaxRecordingSeconds = 300;
 
 export const getGlobalShortcut = (): string => {
-  return localStorage.getItem(shortcutStorageKey) ?? "";
-};
-
-export const saveGlobalShortcut = (shortcut: string) => {
-  if (shortcut) localStorage.setItem(shortcutStorageKey, shortcut);
-  else localStorage.removeItem(shortcutStorageKey);
+  // Legacy migration only; a missing/unreadable value must not block native
+  // shortcut initialization.
+  try {
+    return localStorage.getItem(shortcutStorageKey) ?? "";
+  } catch {
+    return "";
+  }
 };
 
 export const getMaxRecordingSeconds = (): number => {
@@ -103,10 +104,9 @@ export const saveLaunchOnStartup = (launchOnStartup: boolean) => {
 const windowShortcutStorageKey = "stt.windowShortcut";
 
 export const getWindowShortcut = (): string => {
-  return localStorage.getItem(windowShortcutStorageKey) ?? "";
-};
-
-export const saveWindowShortcut = (shortcut: string) => {
-  if (shortcut) localStorage.setItem(windowShortcutStorageKey, shortcut);
-  else localStorage.removeItem(windowShortcutStorageKey);
+  try {
+    return localStorage.getItem(windowShortcutStorageKey) ?? "";
+  } catch {
+    return "";
+  }
 };

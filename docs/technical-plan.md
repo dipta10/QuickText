@@ -120,6 +120,15 @@ Transcription settings should include:
 - Optional launch on system startup (starts hidden in the tray/menu bar).
 - Optional Soniox transcription language preferences (empty by default for automatic detection).
 
+Recording and window-visibility shortcuts are persisted by the Rust backend in
+`shortcuts.json` under Tauri's application configuration directory. Saving returns
+success only after registration and an atomic, synced file write. Backend setup
+restores both bindings before frontend initialization, including hidden launches.
+The frontend imports legacy `localStorage` assignments only when a native slot has
+never been saved. An explicitly cleared binding stays unassigned. Failed startup
+registration retains the preference and exposes an inline error for that binding.
+See [ADR 0021](adrs/0021-native-shortcut-persistence.md).
+
 Provider API keys are stored under separate accounts in the operating system's secure credential storage. Provider selection and shared terms are backend-managed non-secret settings.
 
 The transcription description is a plain string with a 10,000-character maximum. Save and pass it through unchanged: do not trim it, generate defaults, parse terms, or derive structured context. A zero-length string means no context. Soniox's actual context limit is 8,000 tokens, so provider rejection remains possible for unusual text even within the character cap and should use the normal provider-error path. See [ADR 0018](adrs/0018-soniox-transcription-description.md).

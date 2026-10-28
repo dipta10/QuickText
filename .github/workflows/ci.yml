@@ -48,6 +48,22 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
+  windows-shortcut-tests:
+    name: Windows shortcut persistence
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Verify native shortcut persistence across processes
+        working-directory: src-tauri
+        run: cargo test --locked shortcut_bindings::tests
+      - name: Verify atomic settings replacement on Windows
+        working-directory: src-tauri
+        run: cargo test --locked settings_file::tests
+
   frontend-tests:
     name: Frontend tests and typecheck
     runs-on: ubuntu-latest

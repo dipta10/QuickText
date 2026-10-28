@@ -18,6 +18,7 @@ mod ipc_server;
 mod language_preferences;
 mod paste_target;
 mod settings_file;
+mod shortcut_bindings;
 mod soniox_provider;
 mod transcript_cleanup;
 mod transcription;
@@ -159,8 +160,6 @@ mod provider_registry_tests {
 }
 
 struct ShortcutSettings {
-    active_shortcut: Mutex<Option<Shortcut>>,
-    window_shortcut: Mutex<Option<Shortcut>>,
     focus_on_start: Mutex<bool>,
     hide_on_stop: Mutex<bool>,
     paste_to_target: Mutex<bool>,
@@ -169,8 +168,6 @@ struct ShortcutSettings {
 impl Default for ShortcutSettings {
     fn default() -> Self {
         Self {
-            active_shortcut: Mutex::new(None),
-            window_shortcut: Mutex::new(None),
             focus_on_start: Mutex::new(true),
             hide_on_stop: Mutex::new(false),
             paste_to_target: Mutex::new(false),
@@ -1490,93 +1487,115 @@ fn stop_audio_recorder(
     Ok(active_recorder.map(AudioRecorder::stop).unwrap_or_default())
 }
 
-// Hold both slots while replacing one shortcut. Register first so an invalid
-// or unavailable replacement leaves both working shortcuts intact.
-fn replace_shortcut(
-    app: &tauri::AppHandle,
-    active: &mut Option<Shortcut>,
-    other: &Option<Shortcut>,
-    shortcut: &str,
-    toggle_window: bool,
-) -> Result<String, String> {
-    let shortcut = shortcut.trim();
-    if shortcut.is_empty() {
-        if let Some(previous) = active.as_ref() {
-            app.global_shortcut()
-                .unregister(*previous)
-                .map_err(|error| format!("Could not clear the shortcut: {error}"))?;
-        }
-        *active = None;
-        return Ok(String::new());
-    }
-    let parsed: Shortcut = shortcut
-        .parse()
-        .map_err(|error| format!("Invalid shortcut: {error}"))?;
-    if other.as_ref() == Some(&parsed) {
-        return Err("Recording and window visibility must use different shortcuts.".into());
-    }
-    if active.as_ref() == Some(&parsed) {
-        return Ok(shortcut.to_string());
-    }
-    app.global_shortcut()
-        .on_shortcut(parsed, move |app, _shortcut, event| {
-            if event.state() != ShortcutState::Pressed {
-                return;
-            }
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if toggle_window {
-                    if let Err(error) = toggle_main_window(app).await {
-                        eprintln!("Could not toggle window visibility: {error}");
-                    }
-                } else {
-                    run_shortcut_toggle(app).await;
+type ShortcutBindingsState = Mutex<shortcut_bindings::Bindings>;
+
+struct ShortcutRegistry<'a>(&'a tauri::AppHandle);
+
+impl shortcut_bindings::Registry for ShortcutRegistry<'_> {
+    fn register(
+        &self,
+        shortcut: Shortcut,
+        target: shortcut_bindings::Target,
+    ) -> Result<(), String> {
+        self.0
+            .global_shortcut()
+            .on_shortcut(shortcut, move |app, _, event| {
+                if event.state() != ShortcutState::Pressed {
+                    return;
                 }
-            });
-        })
-        .map_err(|error| format!("Could not register shortcut: {error}"))?;
-    if let Some(previous) = active.as_ref() {
-        if let Err(error) = app.global_shortcut().unregister(*previous) {
-            let _ = app.global_shortcut().unregister(parsed);
-            return Err(format!("Could not clear the previous shortcut: {error}"));
-        }
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    match target {
+                        shortcut_bindings::Target::Window => {
+                            if let Err(error) = toggle_main_window(app).await {
+                                eprintln!("Could not toggle window visibility: {error}");
+                            }
+                        }
+                        shortcut_bindings::Target::Recording => run_shortcut_toggle(app).await,
+                    }
+                });
+            })
+            .map_err(|error| format!("Could not register shortcut: {error}"))
     }
-    *active = Some(parsed);
-    Ok(shortcut.to_string())
+
+    fn unregister(&self, shortcut: Shortcut) -> Result<(), String> {
+        self.0
+            .global_shortcut()
+            .unregister(shortcut)
+            .map_err(|error| format!("Could not clear the shortcut: {error}"))
+    }
+}
+
+fn shortcut_settings_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|directory| directory.join("shortcuts.json"))
+        .map_err(|_| "Could not resolve the shortcut settings folder.".to_string())
+}
+
+#[tauri::command]
+fn initialize_shortcuts(
+    app: tauri::AppHandle,
+    bindings: State<'_, ShortcutBindingsState>,
+    legacy_recording: String,
+    legacy_window: String,
+) -> Result<shortcut_bindings::Snapshot, String> {
+    bindings
+        .lock()
+        .map_err(|_| "Could not access shortcut settings.".to_string())?
+        .initialize(
+            &shortcut_settings_path(&app)?,
+            shortcut_bindings::StoredBindings {
+                recording: Some(legacy_recording),
+                window: Some(legacy_window),
+            },
+            &ShortcutRegistry(&app),
+        )
+}
+
+fn update_shortcut(
+    app: &tauri::AppHandle,
+    bindings: &ShortcutBindingsState,
+    target: shortcut_bindings::Target,
+    shortcut: &str,
+) -> Result<String, String> {
+    bindings
+        .lock()
+        .map_err(|_| "Could not access shortcut settings.".to_string())?
+        .set(
+            &shortcut_settings_path(app)?,
+            target,
+            shortcut,
+            &ShortcutRegistry(app),
+        )
 }
 
 #[tauri::command]
 fn set_global_shortcut(
     app: tauri::AppHandle,
-    settings: State<'_, ShortcutSettings>,
+    bindings: State<'_, ShortcutBindingsState>,
     shortcut: String,
 ) -> Result<String, String> {
-    let mut recording = settings
-        .active_shortcut
-        .lock()
-        .map_err(|_| "Could not update shortcut state.".to_string())?;
-    let window = settings
-        .window_shortcut
-        .lock()
-        .map_err(|_| "Could not update shortcut state.".to_string())?;
-    replace_shortcut(&app, &mut recording, &window, &shortcut, false)
+    update_shortcut(
+        &app,
+        &bindings,
+        shortcut_bindings::Target::Recording,
+        &shortcut,
+    )
 }
 
 #[tauri::command]
 fn set_window_shortcut(
     app: tauri::AppHandle,
-    settings: State<'_, ShortcutSettings>,
+    bindings: State<'_, ShortcutBindingsState>,
     shortcut: String,
 ) -> Result<String, String> {
-    let recording = settings
-        .active_shortcut
-        .lock()
-        .map_err(|_| "Could not update shortcut state.".to_string())?;
-    let mut window = settings
-        .window_shortcut
-        .lock()
-        .map_err(|_| "Could not update shortcut state.".to_string())?;
-    replace_shortcut(&app, &mut window, &recording, &shortcut, true)
+    update_shortcut(
+        &app,
+        &bindings,
+        shortcut_bindings::Target::Window,
+        &shortcut,
+    )
 }
 
 #[tauri::command]
@@ -1736,6 +1755,7 @@ pub fn run() {
 fn run_with_options(start_hidden: bool) {
     tauri::Builder::default()
         .manage(ShortcutSettings::default())
+        .manage(ShortcutBindingsState::default())
         .manage(AppControllerState::default())
         .manage(CredentialState::default())
         .manage(CleanupCredentials::default())
@@ -1753,6 +1773,18 @@ fn run_with_options(start_hidden: bool) {
         .plugin(autostart::plugin())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(move |app| {
+            let bindings_state = app.state::<ShortcutBindingsState>();
+            let mut bindings = bindings_state.lock().unwrap();
+            match shortcut_settings_path(app.handle()) {
+                Ok(path) => {
+                    if let Err(error) = bindings.load(&path, &ShortcutRegistry(app.handle())) {
+                        eprintln!("QuickText shortcut settings error: {error}");
+                    }
+                }
+                Err(error) => return Err(error.into()),
+            }
+            drop(bindings);
+
             if let Err(error) = language_preferences::load(
                 app.handle(),
                 app.state::<LanguagePreferencesState>().inner(),
@@ -1809,6 +1841,7 @@ fn run_with_options(start_hidden: bool) {
             restore_original_transcript,
             get_build_info,
             toggle_recording,
+            initialize_shortcuts,
             set_global_shortcut,
             set_window_shortcut,
             set_shortcut_behavior,

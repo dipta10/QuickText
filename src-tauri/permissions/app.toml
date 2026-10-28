@@ -7,6 +7,7 @@ commands.allow = [
   "get_app_state",
   "get_build_info",
   "toggle_recording",
+  "initialize_shortcuts",
   "set_global_shortcut",
   "set_window_shortcut",
   "set_shortcut_behavior",

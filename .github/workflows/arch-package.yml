@@ -1,0 +1,98 @@
+name: Arch release package
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to build and attach the Arch package to
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      release_tag:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ inputs.release_tag }}
+
+jobs:
+  publish-arch-package:
+    name: Build native Arch package
+    runs-on: ubuntu-22.04
+    container: archlinux:base-devel
+    concurrency:
+      group: arch-package-${{ inputs.release_tag }}
+      cancel-in-progress: false
+    steps:
+      - name: Validate release tag and package revision
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v0\.1\.0-pre\.([1-9][0-9]*)$ ]]; then
+            echo "Expected a release tag like v0.1.0-pre.39" >&2
+            exit 1
+          fi
+          echo "QUICKTEXT_PKGREL=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
+
+      - name: Install Arch build and runtime dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            alsa-lib \
+            git \
+            github-cli \
+            gtk3 \
+            libayatana-appindicator \
+            libsecret \
+            nodejs-lts-jod \
+            npm \
+            openssl \
+            rust \
+            webkit2gtk-4.1 \
+            wtype \
+            xdotool
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+
+      - name: Resolve original release build identity
+        run: |
+          revision=$(git rev-parse HEAD)
+          echo "QUICKTEXT_SOURCE_REVISION=$revision" >> "$GITHUB_ENV"
+          echo "Building $RELEASE_TAG from $revision"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare unprivileged package builder
+        run: |
+          useradd --create-home package-builder
+          chown -R package-builder:package-builder "$GITHUB_WORKSPACE"
+
+      - name: Build pacman package
+        working-directory: packaging/arch
+        run: |
+          runuser -u package-builder -- env \
+            QUICKTEXT_BUILD_ID="$RELEASE_TAG" \
+            QUICKTEXT_PKGREL="$QUICKTEXT_PKGREL" \
+            QUICKTEXT_SOURCE_REVISION="$QUICKTEXT_SOURCE_REVISION" \
+            QUICKTEXT_SOURCE_URL="file://$GITHUB_WORKSPACE" \
+            makepkg --cleanbuild --clean --noconfirm
+
+      - name: Inspect package metadata and contents
+        run: |
+          pacman -Qip packaging/arch/quicktext-*.pkg.tar.zst
+          pacman -Qlp packaging/arch/quicktext-*.pkg.tar.zst
+
+      - name: Upload Arch package to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release upload "$RELEASE_TAG"
+          packaging/arch/quicktext-*.pkg.tar.zst
+          --repo "$GITHUB_REPOSITORY"
+          --clobber
+

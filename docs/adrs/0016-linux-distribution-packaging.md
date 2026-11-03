@@ -35,6 +35,19 @@ Linux release coverage is therefore:
 
 Linux ARM64/aarch64 remains unsupported by this decision. Adding it requires a separate native build and test matrix rather than renaming an x86_64 artifact.
 
+## Release recovery
+
+Arch packaging runs through `.github/workflows/arch-package.yml`, called by CD
+and available through **Run workflow** with an existing `release_tag`. It checks
+out that tag and derives the package revision from its suffix, preserving the
+original release's source revision and build identity when backfilling an asset.
+It uploads only the Arch package to the selected release.
+
+CD schedules Arch packaging after the platform matrix even when a platform
+fails, so macOS runner capacity does not suppress the Linux package. Explicit
+workflow cancellation still stops dependent packaging. The release must exist;
+recovery fails instead of creating a release for an unknown tag.
+
 ## Compatibility Checks
 
 An artifact existing is not sufficient evidence of support. Before the Arch package is advertised:

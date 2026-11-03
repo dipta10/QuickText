@@ -34,7 +34,7 @@ use crate::{
 const SONIOX_WEBSOCKET_URL: &str = "wss://stt-rt.soniox.com/transcribe-websocket";
 const SONIOX_WEBSOCKET_HOST: &str = "stt-rt.soniox.com";
 const SONIOX_WEBSOCKET_PORT: u16 = 443;
-const SONIOX_MODEL: &str = "stt-rt-v5";
+const SONIOX_MODEL: &str = "stt-rt-v6";
 const FINALIZATION_TIMEOUT_SECONDS: u64 = 5;
 
 // Stream-boundary control tokens Soniox emits as regular final tokens
@@ -624,7 +624,7 @@ mod tests {
         assert_eq!(
             config,
             serde_json::json!({
-                "model": "stt-rt-v5",
+                "model": "stt-rt-v6",
                 "audio_format": "pcm_s16le",
                 "sample_rate": 16000,
                 "num_channels": 1,

@@ -204,7 +204,24 @@ provider-error path. See Soniox's [WebSocket authentication guide](https://sonio
 and [migration checklist](https://soniox.com/docs/guides/migrate-websocket-authentication).
 First-message authentication stops working on January 15, 2027.
 
-The first configuration should target `stt-rt-v5`, send microphone audio as binary WebSocket frames, and send an empty WebSocket frame to end the stream gracefully. The provider decision is recorded in [ADR 0002](adrs/0002-streaming-soniox-stt.md).
+The configuration targets `stt-rt-v6`, sends microphone audio as binary WebSocket frames, and sends an empty WebSocket frame to end the stream gracefully. The provider decision is recorded in [ADR 0002](adrs/0002-streaming-soniox-stt.md).
+
+### Soniox STT v6 upgrade
+
+As of November 3, 2026, QuickText explicitly requests `stt-rt-v6`. Soniox documents
+v6 as API-compatible with v5, so authentication, audio streaming, language hints,
+context, and finalization use the existing provider implementation. The existing
+configuration test pins the requested model. No agent text input is enabled for
+QuickText's dictation workflow.
+
+V6 improves dictation accuracy and context handling, but changes some written
+formatting: currency is rendered closer to the spoken words, and codes receive
+hyphens only when spoken. Spoken punctuation and editing commands remain words;
+QuickText does not interpret them as editing actions. V5 retires on December 15,
+2026, after which Soniox automatically routes v5 requests to v6.
+
+Sources: [v6 announcement](https://soniox.com/blog/soniox-stt-v6) and
+[model release notes](https://docs.soniox.com/stt/models#november-3-2026).
 
 ## Deepgram Integration Decision
 

@@ -347,3 +347,13 @@ Implement Stage 1 of Milestone 10. Make the documented provider boundary real an
 - [Soniox STT WebSocket API](https://soniox.com/docs/api-reference/stt/websocket-api).
 - [Tauri global shortcut plugin](https://v2.tauri.app/plugin/global-shortcut/).
 - [Tauri plugin overview](https://v2.tauri.app/plugin/).
+
+## Text-to-Speech Extension
+
+Implemented a separate backend reading lifecycle, Soniox streaming synthesis,
+native playback, selection capture, and read/stop IPC. The frontend adds two
+operational tabs with shared Settings and backend-persisted reading preferences
+and shortcuts. Offline regression checks cover streamed response handling,
+cancellation, stale results, settings, and shortcut restoration. See
+[the reading guide](text-to-speech.md) for platform requirements and remaining
+live, installed-app checks.

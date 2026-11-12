@@ -253,3 +253,15 @@ The Terms control also preserves its editor text and remains empty by default. A
 Clean & Copy is enabled only with a saved Gemini key and a nonempty finalized transcript, while no cleanup is pending. Without the key, keep the button visible but disabled and show “Add a Gemini API key in Settings,” which focuses the dedicated key field. An unsaved field value never enables cleanup. Saving securely stores the key without a live validation request; invalid keys and quota failures are reported on cleanup.
 
 Show Cleaning… during a request. Success displays the cleaned text and copies it once; it never automatically pastes. Restore original switches the displayed version without touching the clipboard. Ordinary Copy always copies the displayed text. A new recording invalidates old cleanup results. See [the cleanup plan](transcript-cleanup-implementation-plan.md) for recovery rules and validation.
+
+## Text-to-Speech Workspace
+
+The operational workspace now has Speech to text and Text to speech tabs. Capture
+remains the initial tool. Settings is shared and returns to the last tool. Tabs
+support arrow keys and maintain their selection and panel associations.
+Text-to-speech provides a bounded passage editor, explicit clipboard Paste,
+character count, a single read/stop control, playback state, voice summary, and a
+selection-shortcut hint. Its settings hold the shared Soniox key, voice, language,
+speed, and read-selection/stop and stop-only shortcuts. Keep Stop visible at the
+minimum window height. Draft text survives errors and tab changes during the app
+run, but is never persisted. See [the reading guide](text-to-speech.md).

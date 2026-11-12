@@ -4,6 +4,11 @@ QuickText is a compact desktop speech-to-text app for fast short dictation.
 
 ## Terms
 
+- Reading: Turning a selected or entered text passage into audible speech, independently of speech recognition.
+- Reading session: One reading attempt from accepted start through preparing, playing, completion, stop, or failure. It never captures microphone audio.
+- Read selection: A toggle that reads the current selection in the focused app, or stops the current reading when one is active. It never falls back to stale clipboard text.
+- Reading preferences: The saved voice, language, and speed used by the next reading session. These are independent of transcription language preferences.
+
 - App trigger: Any user action that toggles the core loop. This can be the primary UI button, a global shortcut, or a tray/menu item.
 - IPC command: An external request, such as from the companion CLI, delivered to the resident app over a local socket and dispatched to the same app controller path as UI triggers.
 - Companion CLI: The command-line mode of the app binary (`quicktext toggle`, `quicktext status`) that forwards IPC commands to the resident app for compositor bindings and scripts.
@@ -266,3 +271,16 @@ A ZIP archive created only after explicit user confirmation. It contains the cur
 - The transcription description is user content and must never be written to diagnostics.
 - Transcription terms are parsed and snapshotted when recording starts; changes never alter an in-flight provider session.
 - Transcription terms and any values derived from them are user content and must never be written to diagnostics.
+
+## Reading Boundary
+
+The reading controller owns one active reading session, its cancellation signal,
+and monotonically increasing snapshot revisions. UI controls, reading shortcuts,
+and companion CLI commands share the controller. Native playback receives audio
+incrementally from the synthesis adapter and discards queued samples on stop.
+The synthesis adapter owns Soniox authentication, configuration, response parsing,
+and user-safe errors. The frontend receives playback status, never audio or keys.
+
+Reading settings contain no passage text. Starting dictation stops reading before
+microphone capture. Reading refuses to start while capture/finalization is active.
+A hidden window does not end a reading session. See [ADR 0022](adrs/0022-streaming-text-to-speech.md).

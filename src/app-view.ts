@@ -1,4 +1,8 @@
+import { speechTemplate, speechSettingsTemplate, getSpeechView, type SpeechView } from "./speech-view";
 export type AppView = {
+  speech: SpeechView;
+  captureTab: HTMLButtonElement;
+  speechTab: HTMLButtonElement;
   cleanButton: HTMLButtonElement;
   restoreButton: HTMLButtonElement;
   cleanupSetupButton: HTMLButtonElement;
@@ -78,7 +82,7 @@ export type AppView = {
 };
 
 const appTemplate = `
-  <section class="app-shell" aria-label="Speech to Text">
+  <section class="app-shell" aria-label="QuickText">
     <header class="top-bar">
       <div class="brand-block">
         <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
@@ -94,7 +98,11 @@ const appTemplate = `
     </header>
 
     <main class="main-content">
-      <section class="capture-view" aria-label="Capture">
+      <nav class="tool-tabs" role="tablist" aria-label="Speech tools">
+        <button id="capture-tab" type="button" role="tab" aria-selected="true" aria-controls="capture-panel">Speech to text</button>
+        <button id="speech-tab" type="button" role="tab" aria-selected="false" aria-controls="speech-panel" tabindex="-1">Text to speech<span class="speech-tab-indicator" hidden aria-label="Reading"></span></button>
+      </nav>
+      <section class="capture-view" id="capture-panel" role="tabpanel" aria-labelledby="capture-tab" aria-label="Capture">
         <div class="recording-controls">
           <span class="status-chip" role="status" aria-live="polite">Ready</span>
           <span class="provider-label">Provider: Soniox</span>
@@ -133,6 +141,8 @@ const appTemplate = `
           </div>
         </section>
       </section>
+
+      ${speechTemplate}
 
       <section class="settings-view" aria-label="Settings" hidden>
         <section class="settings-section" aria-label="General">
@@ -394,6 +404,7 @@ const appTemplate = `
           </details>
         </section>
 
+        ${speechSettingsTemplate}
         <section class="settings-section cleanup-section">
           <h2 class="section-title">Transcript cleanup</h2>
           <p class="settings-note">Rewrite transcripts with Clean &amp; Copy, powered by Google Gemini.</p>
@@ -703,6 +714,9 @@ export const createAppView = (root: HTMLElement): AppView => {
   }
 
   return {
+    speech: getSpeechView(root),
+    captureTab: root.querySelector<HTMLButtonElement>("#capture-tab")!,
+    speechTab: root.querySelector<HTMLButtonElement>("#speech-tab")!,
     audioLevelMeter,
     audioLevelBars,
     shortcutHint,

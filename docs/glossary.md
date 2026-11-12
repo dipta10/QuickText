@@ -4,6 +4,11 @@ Terms used across the product and ADR docs. Add entries here when an ADR introdu
 
 ## Terms
 
+- **Reading**: Turning a selected or entered passage into audible speech; separate from recording and transcription.
+- **Reading session**: One accepted reading attempt through completion, cancellation, or failure.
+- **Read selection**: Start reading the current text selection, or stop the active reading. It does not mean reading unrelated clipboard contents.
+- **Reading preferences**: Voice, language, and speed applied to the next reading.
+
 - **Transcript cleanup**: A concise rewrite of finalized dictation that removes fillers and repetition and corrects grammar while preserving distinct ideas, intent, uncertainty, names, numbers, and language. It is distinct from summarization, translation, and speech recognition.
 - **Original transcript**: The finalized speech-recognition result before cleanup.
 - **Cleaned transcript**: An edited version of the original transcript produced by cleanup.

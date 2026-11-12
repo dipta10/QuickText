@@ -32,3 +32,19 @@ The service that rewrites transcript text. It is distinct from the speech provid
 
 **Cleanup API key**:
 The user's credential for the transcript-cleanup service, distinct from their speech-provider credentials.
+
+**Capture**:
+The activity of recording speech and producing a transcript.
+_Avoid_: Reading, playback.
+
+**Reading**:
+The activity of turning a selected or entered passage into audible speech.
+_Avoid_: Recording, transcription.
+
+**Reading session**:
+One reading attempt, from its accepted start until completion, stop, or failure.
+_Avoid_: Recording session, transcription session.
+
+**Read selection**:
+Read the text currently selected by the user. Invoking this action during a reading stops that reading.
+_Avoid_: Read clipboard (clipboard text may be unrelated to the selection).

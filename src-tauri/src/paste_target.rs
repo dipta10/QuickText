@@ -66,3 +66,18 @@ mod imp {
         Ok(())
     }
 }
+
+#[cfg(not(target_os = "linux"))]
+pub fn send_copy_keystroke() -> Result<(), String> {
+    let mut synthesizer = Enigo::new(&Settings::default()).map_err(|_| {
+        "Allow Accessibility access for QuickText, or paste your text into the app.".to_string()
+    })?;
+    synthesizer
+        .key(PASTE_MODIFIER, Direction::Press)
+        .map_err(|_| "Could not copy the selection.".to_string())?;
+    let copied = synthesizer.key(Key::Unicode('c'), Direction::Click);
+    let released = synthesizer.key(PASTE_MODIFIER, Direction::Release);
+    copied
+        .and(released)
+        .map_err(|_| "Could not copy the selection. Paste it into QuickText instead.".into())
+}

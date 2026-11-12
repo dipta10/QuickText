@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type {
   BackendAppSnapshot,
   AudioLevelUpdate,
@@ -77,6 +77,10 @@ export type ShortcutSettingsSnapshot = {
   window: string;
   recordingError: string | null;
   windowError: string | null;
+  speech?: string;
+  speechStop?: string;
+  speechError?: string | null;
+  speechStopError?: string | null;
 };
 
 export const initializeShortcuts = async (
@@ -286,4 +290,44 @@ export const restoreOriginalTranscript = async (): Promise<void> => {
 export const openCleanupKeySetup = async (): Promise<void> => {
   assertTauriRuntime();
   await invoke("open_cleanup_key_setup");
+};
+
+export type SpeechSettings = { voice: string; language: string; speed: number };
+export type SpeechSnapshot = {
+  status: "idle" | "preparing" | "playing" | "completed" | "error";
+  sessionId: number;
+  revision: number;
+  error: string | null;
+};
+export const getSpeechState = async (): Promise<SpeechSnapshot> => {
+  assertTauriRuntime();
+  return invoke("get_speech_state");
+};
+export const getSpeechSettings = async (): Promise<SpeechSettings> => {
+  assertTauriRuntime();
+  return invoke("get_speech_settings");
+};
+export const setSpeechSettings = async (settings: SpeechSettings): Promise<SpeechSettings> => {
+  assertTauriRuntime();
+  return invoke("set_speech_settings", { settings });
+};
+export const toggleSpeech = async (text: string | null): Promise<SpeechSnapshot> => {
+  assertTauriRuntime();
+  return invoke("toggle_speech", { text });
+};
+export const stopSpeech = async (): Promise<SpeechSnapshot> => {
+  assertTauriRuntime();
+  return invoke("stop_speech");
+};
+export const setSpeechShortcut = async (shortcut: string, stopOnly: boolean): Promise<string> => {
+  assertTauriRuntime();
+  return invoke("set_speech_shortcut", { shortcut, stopOnly });
+};
+export const onSpeechStateChanged = async (handler: (snapshot: SpeechSnapshot) => void) => {
+  assertTauriRuntime();
+  return listen<SpeechSnapshot>("speech-state-changed", (event) => handler(event.payload));
+};
+export const readClipboardText = async (): Promise<string> => {
+  assertTauriRuntime();
+  return readText();
 };

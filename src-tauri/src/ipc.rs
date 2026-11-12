@@ -9,6 +9,8 @@ pub const RESPONSE_TIMEOUT_SECONDS: u64 = 15;
 pub enum IpcCommand {
     Toggle,
     ToggleWindow,
+    ReadSelection,
+    StopSpeech,
     Status,
 }
 
@@ -84,6 +86,15 @@ impl IpcResponse {
         }
     }
 
+    pub fn speech(snapshot: &crate::speech::Snapshot) -> Self {
+        Self {
+            ok: true,
+            error: None,
+            snapshot: serde_json::to_value(snapshot).ok(),
+            visible: None,
+        }
+    }
+
     pub fn visibility(visible: bool) -> Self {
         Self {
             ok: true,
@@ -106,6 +117,9 @@ impl IpcResponse {
 pub fn status_label(status: &str) -> &'static str {
     match status {
         "idle" => "Idle",
+        "preparing" => "Preparing speech",
+        "playing" => "Reading aloud",
+        "completed" => "Reading complete",
         "starting" => "Starting",
         "recording" => "Recording",
         "stopping" => "Finalizing",

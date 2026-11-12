@@ -91,3 +91,12 @@ The app should keep running in the background after launch. Closing the main win
 
 - Should there be a maximum recording duration in MVP?
 - What default global shortcut should be least likely to conflict across Linux, macOS, and Windows?
+
+## Text-to-Speech Extension
+
+QuickText also reads selected or entered text aloud through Soniox. Speech to text
+and Text to speech are separate tool tabs with shared Settings. A global
+read-selection shortcut starts or stops a reading; a second independent shortcut
+only stops it. Native streaming playback continues while the window is hidden.
+Voice, language, and speed are saved independently of dictation preferences.
+See [the reading guide](text-to-speech.md).

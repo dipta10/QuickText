@@ -17,9 +17,13 @@ mod ipc;
 mod ipc_server;
 mod language_preferences;
 mod paste_target;
+mod selected_text;
 mod settings_file;
 mod shortcut_bindings;
 mod soniox_provider;
+mod soniox_speech;
+mod speech;
+mod speech_playback;
 mod transcript_cleanup;
 mod transcription;
 mod transcription_description;
@@ -36,6 +40,9 @@ use deepgram_provider::DeepgramProvider;
 use keyring::{Entry, Error as KeyringError};
 use language_preferences::{LanguagePreferencesSnapshot, LanguagePreferencesState};
 use soniox_provider::SonioxProvider;
+use speech::{
+    get_speech_settings, get_speech_state, set_speech_settings, stop_speech, toggle_speech,
+};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -1122,6 +1129,7 @@ pub(crate) async fn toggle_recording_for_app(
                 ) {
                     return Ok(controller.snapshot());
                 }
+                speech::stop(&app)?;
                 let starting = controller.begin_start();
                 app.state::<CleanupRequests>().cancelled.send_modify(|_| {});
                 starting
@@ -1512,6 +1520,12 @@ impl shortcut_bindings::Registry for ShortcutRegistry<'_> {
                             }
                         }
                         shortcut_bindings::Target::Recording => run_shortcut_toggle(app).await,
+                        shortcut_bindings::Target::Speech => {
+                            let _ = speech::toggle(&app, None);
+                        }
+                        shortcut_bindings::Target::SpeechStop => {
+                            let _ = speech::stop(&app);
+                        }
                     }
                 });
             })
@@ -1548,6 +1562,7 @@ fn initialize_shortcuts(
             shortcut_bindings::StoredBindings {
                 recording: Some(legacy_recording),
                 window: Some(legacy_window),
+                ..Default::default()
             },
             &ShortcutRegistry(&app),
         )
@@ -1594,6 +1609,25 @@ fn set_window_shortcut(
         &app,
         &bindings,
         shortcut_bindings::Target::Window,
+        &shortcut,
+    )
+}
+
+#[tauri::command]
+fn set_speech_shortcut(
+    app: tauri::AppHandle,
+    bindings: State<'_, ShortcutBindingsState>,
+    shortcut: String,
+    stop_only: bool,
+) -> Result<String, String> {
+    update_shortcut(
+        &app,
+        &bindings,
+        if stop_only {
+            shortcut_bindings::Target::SpeechStop
+        } else {
+            shortcut_bindings::Target::Speech
+        },
         &shortcut,
     )
 }
@@ -1754,6 +1788,7 @@ pub fn run() {
 
 fn run_with_options(start_hidden: bool) {
     tauri::Builder::default()
+        .manage(speech::SpeechState::default())
         .manage(ShortcutSettings::default())
         .manage(ShortcutBindingsState::default())
         .manage(AppControllerState::default())
@@ -1813,6 +1848,7 @@ fn run_with_options(start_hidden: bool) {
                 eprintln!("QuickText transcription terms settings error: {error}");
             }
 
+            speech::load(app.handle());
             setup_tray(app)?;
 
             if start_hidden {
@@ -1832,6 +1868,12 @@ fn run_with_options(start_hidden: bool) {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_speech_state,
+            get_speech_settings,
+            set_speech_settings,
+            toggle_speech,
+            stop_speech,
+            set_speech_shortcut,
             get_app_state,
             has_cleanup_api_key,
             open_cleanup_key_setup,

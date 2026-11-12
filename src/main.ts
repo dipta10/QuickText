@@ -42,6 +42,7 @@ import type { ProviderId } from "./app-state";
 import { createAppView } from "./app-view";
 import { createAudioLevelMeter } from "./audio-level";
 import { connectCleanupControls, renderCleanupControls } from "./cleanup-controls";
+import { connectSpeechControls } from "./speech-controls";
 import { formatShortcut } from "./shortcut";
 import {
   getAutoCopyTranscript,
@@ -84,6 +85,7 @@ import {
   saveProviderApiKey,
   setActiveProvider as setActiveProviderBackend,
   setGlobalShortcut,
+  setSpeechShortcut,
   initializeShortcuts,
   setWindowShortcut,
   setInputDevice,
@@ -118,6 +120,8 @@ let state = createAppState(
 );
 const view = createAppView(app);
 let shortcutSettingsReady = false;
+let speechControls: ReturnType<typeof connectSpeechControls> | undefined;
+let lastTool: "capture" | "speech" = "capture";
 const audioLevelMeter = createAudioLevelMeter(view.audioLevelMeter, view.audioLevelBars);
 let lastAutoCopiedSessionId: number | null = null;
 let availableLanguages: SupportedLanguage[] = [];
@@ -284,10 +288,16 @@ const render = () => {
   const isSettings = state.activeView === "settings";
   const providerControlsDisabled = !canChangeProvider(state);
   const providerName = state.activeProvider === "soniox" ? "Soniox" : "Deepgram";
-  view.captureView.hidden = isSettings;
+  if (state.activeView !== "settings") lastTool = state.activeView;
+  view.captureView.hidden = state.activeView !== "capture";
+  view.speech.panel.hidden = state.activeView !== "speech";
+  view.captureTab.setAttribute("aria-selected", String(!isSettings && state.activeView === "capture"));
+  view.speechTab.setAttribute("aria-selected", String(!isSettings && state.activeView === "speech"));
+  view.captureTab.tabIndex = lastTool === "capture" ? 0 : -1;
+  view.speechTab.tabIndex = lastTool === "speech" ? 0 : -1;
   view.captureView.dataset.status = state.recording;
   view.settingsView.hidden = !isSettings;
-  view.viewToggleButton.textContent = isSettings ? "Capture" : "Settings";
+  view.viewToggleButton.textContent = isSettings ? lastTool === "speech" ? "Text to speech" : "Capture" : "Settings";
   view.viewToggleButton.setAttribute(
     "aria-label",
     isSettings ? "Open capture" : "Open settings",
@@ -394,6 +404,16 @@ const render = () => {
         ? `Shortcut: ${state.selectedShortcut}`
         : "No shortcut saved.";
   view.shortcutHint.textContent = state.selectedShortcut || "Set a shortcut in Settings";
+  for (const [target, button, clear, status, saved] of [
+    ["speech", view.speech.keybind, view.speech.clearKeybind, view.speech.keybindStatus, state.selectedSpeechShortcut],
+    ["speechStop", view.speech.stopKeybind, view.speech.clearStopKeybind, view.speech.stopKeybindStatus, state.selectedSpeechStopShortcut],
+  ] as const) {
+    button.textContent = isCapturingShortcut(state) && state.shortcutCaptureTarget === target ? "Press keys" : saved || "Set shortcut";
+    button.disabled = !shortcutSettingsReady || state.shortcutCapture === "saving";
+    clear.disabled = button.disabled || !saved;
+    status.textContent = state.shortcutStatus[target];
+  }
+  speechControls?.render();
 };
 
 const updateState = (nextState: typeof state) => {
@@ -432,12 +452,17 @@ const registerShortcut = async (
   target: ShortcutTarget = "recording",
 ) => {
   try {
-    if (target === "window") {
+    if (target === "speech" || target === "speechStop") {
+      await setSpeechShortcut(shortcut, target === "speechStop");
+    } else if (target === "window") {
       await setWindowShortcut(shortcut);
     } else {
       await setGlobalShortcut(shortcut);
     }
-    if (target === "window") {
+    if (target === "speech" || target === "speechStop") {
+      updateState({ ...setShortcutStatus(state, target, shortcut ? "Shortcut saved." : "Shortcut cleared."), shortcutCapture: "idle",
+        [target === "speech" ? "selectedSpeechShortcut" : "selectedSpeechStopShortcut"]: shortcut });
+    } else if (target === "window") {
       updateState(saveWindowShortcutState(state, shortcut));
     } else {
       updateState(saveShortcut(state, shortcut));
@@ -458,14 +483,22 @@ const loadShortcuts = async () => {
       ...state,
       selectedShortcut: saved.recording,
       selectedWindowShortcut: saved.window,
+      selectedSpeechShortcut: saved.speech ?? "",
+      selectedSpeechStopShortcut: saved.speechStop ?? "",
       shortcutStatus: {
         recording: saved.recordingError ?? "",
         window: saved.windowError ?? "",
+        speech: saved.speechError ?? "",
+        speechStop: saved.speechStopError ?? "",
       },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    updateState(setShortcutStatus(setShortcutStatus(state, "recording", message), "window", message));
+    let failed = state;
+    for (const target of ["recording", "window", "speech", "speechStop"] as const) {
+      failed = setShortcutStatus(failed, target, message);
+    }
+    updateState(failed);
   }
 };
 
@@ -577,6 +610,7 @@ const loadLanguagePreferences = async () => {
   try {
     const snapshot = await getLanguagePreferences();
     availableLanguages = snapshot.availableLanguages;
+    speechControls?.setLanguages(availableLanguages);
     selectedLanguageCodes = [...snapshot.selectedCodes];
     confirmedLanguageCodes = [...snapshot.selectedCodes];
     renderLanguagePicker();
@@ -842,9 +876,25 @@ view.recordButton.addEventListener("click", () => {
 
 view.viewToggleButton.addEventListener("click", () => {
   updateState(
-    state.activeView === "settings" ? showCapture(state) : showSettings(state),
+    state.activeView === "settings" ? { ...state, activeView: lastTool } : showSettings(state),
   );
 });
+
+view.captureTab.addEventListener("click", () => updateState(showCapture(state)));
+view.speechTab.addEventListener("click", () => updateState({ ...state, activeView: "speech" }));
+for (const tab of [view.captureTab, view.speechTab]) {
+  tab.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const target = event.key === "Home" ? view.captureTab : event.key === "End" ? view.speechTab : tab === view.captureTab ? view.speechTab : view.captureTab;
+    target.click();
+    target.focus();
+  });
+}
+view.speech.keybind.addEventListener("click", () => { if (shortcutSettingsReady) updateState(startShortcutCapture(state, "speech")); });
+view.speech.stopKeybind.addEventListener("click", () => { if (shortcutSettingsReady) updateState(startShortcutCapture(state, "speechStop")); });
+view.speech.clearKeybind.addEventListener("click", () => clearShortcut("speech"));
+view.speech.clearStopKeybind.addEventListener("click", () => clearShortcut("speechStop"));
 
 view.copyButton.addEventListener("click", () => {
   void copyTranscript();
@@ -1061,6 +1111,7 @@ void onDeviceFallback((message) => {
 });
 
 connectCleanupControls(view, () => state, updateState);
+speechControls = connectSpeechControls(view, () => state, updateState);
 render();
 window.setInterval(render, 1000);
 void loadBackendState();

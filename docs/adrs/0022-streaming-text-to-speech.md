@@ -1,0 +1,9 @@
+# ADR 0022: Own Streaming Text-to-Speech And Playback In The Backend
+
+QuickText now has Speech to text and Text to speech tabs, with a shared Settings view. Reading must work while the window is hidden, so a separate backend reading controller owns selection capture, Soniox synthesis, native audio output, and cancellation. Browser audio would tie the global reading shortcut to webview activation and playback policy; native playback keeps every trigger on the same path and leaves credentials and generated audio outside the frontend.
+
+A reading snapshots its voice, language, and speed. Soniox synthesis uses the existing securely stored Soniox key, independently of the dictation provider. The read-selection action toggles start/stop; a separate stop action is idempotent. Starting dictation cancels reading; reading cannot start during capture or finalization. Stop closes the provider connection and discards queued playback, including during connection or device setup. Session IDs and revisions reject obsolete results.
+
+The first version accepts up to 5,000 Unicode characters and exposes Soniox's two-minute audio limit as an actionable error. Text and audio remain ephemeral. There is no synthesis history or audio-file export. Voice preferences and both reading shortcuts persist in native settings. Linux reads the primary selection through wl-clipboard or xclip; macOS and Windows capture the selection with Copy and restore a text clipboard. The copy transaction completes its restoration even when the reading is cancelled. Rich clipboard formats are not preserved by this fallback. Wayland users can bind `quicktext read-selection` and `quicktext stop-speech` in their compositor.
+
+Sources: [Soniox streaming API](https://docs.soniox.com/api-reference/tts/websocket-api), [models](https://docs.soniox.com/tts/models), [languages](https://docs.soniox.com/tts/concepts/supported-languages), and [speed](https://docs.soniox.com/tts/concepts/speech-speed).

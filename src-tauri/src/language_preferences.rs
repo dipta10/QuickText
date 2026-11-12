@@ -158,7 +158,7 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| format!("Could not resolve the settings folder: {error}"))
 }
 
-fn supported_languages() -> Vec<SupportedLanguage> {
+pub(crate) fn supported_languages() -> Vec<SupportedLanguage> {
     SUPPORTED_LANGUAGES
         .iter()
         .map(|(code, name)| SupportedLanguage {

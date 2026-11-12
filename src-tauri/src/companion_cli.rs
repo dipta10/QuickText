@@ -15,7 +15,7 @@ pub const EXIT_SUCCESS: i32 = 0;
 pub const EXIT_FAILURE: i32 = 1;
 pub const EXIT_NOT_RUNNING: i32 = 2;
 
-const USAGE: &str = "Usage: quicktext [toggle|toggle-window|status] [focus] [--json]\n\nRun without arguments to launch the app. `toggle-window` shows/focuses or hides the resident window without changing recording. `focus` manages the window around a toggle: shown and focused when recording starts, hidden once the transcript is ready.";
+const USAGE: &str = "Usage: quicktext [toggle|toggle-window|read-selection|stop-speech|status] [focus] [--json]\n\nRun without arguments to launch the app. `toggle-window` shows/focuses or hides the resident window without changing recording. `focus` manages the window around a toggle: shown and focused when recording starts, hidden once the transcript is ready.";
 
 pub fn run(args: &[String]) -> i32 {
     let mut json_output = false;
@@ -28,6 +28,8 @@ pub fn run(args: &[String]) -> i32 {
             "focus" => focus_window = true,
             "toggle" => command = Some(IpcCommand::Toggle),
             "toggle-window" => command = Some(IpcCommand::ToggleWindow),
+            "read-selection" => command = Some(IpcCommand::ReadSelection),
+            "stop-speech" => command = Some(IpcCommand::StopSpeech),
             "status" => command = Some(IpcCommand::Status),
             _ => {
                 eprintln!("Unknown argument: {arg}\n{USAGE}");

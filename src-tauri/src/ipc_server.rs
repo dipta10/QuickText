@@ -146,6 +146,17 @@ async fn dispatch(app: &tauri::AppHandle, request: &IpcRequest) -> IpcResponse {
                 Err(_) => IpcResponse::error("QuickText did not toggle window visibility in time."),
             }
         }
+        IpcCommand::ReadSelection | IpcCommand::StopSpeech => {
+            let result = if request.command() == IpcCommand::StopSpeech {
+                crate::speech::stop(app)
+            } else {
+                crate::speech::toggle(app, None)
+            };
+            match result {
+                Ok(snapshot) => IpcResponse::speech(&snapshot),
+                Err(error) => IpcResponse::error(error),
+            }
+        }
         IpcCommand::Status => {
             let controller = app.state::<AppControllerState>();
             let snapshot =

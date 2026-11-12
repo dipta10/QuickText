@@ -4308,6 +4308,7 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 name = "stt-desktop"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "cpal",
  "enigo",
  "futures-util",
@@ -4903,6 +4904,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

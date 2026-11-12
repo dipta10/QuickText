@@ -4,6 +4,12 @@
 identifier = "allow-app-controls"
 description = "Allows the main window to control recording and configure existing app and transcription settings."
 commands.allow = [
+  "get_speech_state",
+  "get_speech_settings",
+  "set_speech_settings",
+  "toggle_speech",
+  "stop_speech",
+  "set_speech_shortcut",
   "get_app_state",
   "get_build_info",
   "toggle_recording",

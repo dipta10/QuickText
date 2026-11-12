@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text",
     "autostart:default",
     "allow-transcript-cleanup",
     "allow-app-controls"

@@ -7,10 +7,17 @@ use tauri_plugin_global_shortcut::Shortcut;
 pub enum Target {
     Recording = 0,
     Window = 1,
+    Speech = 2,
+    SpeechStop = 3,
 }
 
 impl Target {
-    const ALL: [Self; 2] = [Self::Recording, Self::Window];
+    const ALL: [Self; 4] = [
+        Self::Recording,
+        Self::Window,
+        Self::Speech,
+        Self::SpeechStop,
+    ];
 }
 
 pub trait Registry {
@@ -24,6 +31,8 @@ pub trait Registry {
 pub struct StoredBindings {
     pub recording: Option<String>,
     pub window: Option<String>,
+    pub speech: Option<String>,
+    pub speech_stop: Option<String>,
 }
 
 impl StoredBindings {
@@ -31,6 +40,8 @@ impl StoredBindings {
         match target {
             Target::Recording => &self.recording,
             Target::Window => &self.window,
+            Target::Speech => &self.speech,
+            Target::SpeechStop => &self.speech_stop,
         }
     }
 
@@ -38,6 +49,8 @@ impl StoredBindings {
         *match target {
             Target::Recording => &mut self.recording,
             Target::Window => &mut self.window,
+            Target::Speech => &mut self.speech,
+            Target::SpeechStop => &mut self.speech_stop,
         } = Some(value);
     }
 }
@@ -47,6 +60,10 @@ impl StoredBindings {
 pub struct Snapshot {
     pub recording: String,
     pub window: String,
+    pub speech: String,
+    pub speech_stop: String,
+    pub speech_error: Option<String>,
+    pub speech_stop_error: Option<String>,
     pub recording_error: Option<String>,
     pub window_error: Option<String>,
 }
@@ -54,8 +71,8 @@ pub struct Snapshot {
 #[derive(Default)]
 pub struct Bindings {
     saved: StoredBindings,
-    active: [Option<Shortcut>; 2],
-    errors: [Option<String>; 2],
+    active: [Option<Shortcut>; 4],
+    errors: [Option<String>; 4],
     load_error: Option<String>,
 }
 
@@ -173,18 +190,17 @@ impl Bindings {
         let parsed = shortcut
             .parse::<Shortcut>()
             .map_err(|error| format!("Invalid shortcut: {error}"))?;
-        let other = match target {
-            Target::Recording => Target::Window,
-            Target::Window => Target::Recording,
-        };
-        if self
-            .saved
-            .slot(other)
-            .as_deref()
-            .and_then(|value| value.parse::<Shortcut>().ok())
-            == Some(parsed)
-        {
-            return Err("Recording and window visibility must use different shortcuts.".into());
+        for other in Target::ALL {
+            if other as usize != target as usize
+                && self
+                    .saved
+                    .slot(other)
+                    .as_deref()
+                    .and_then(|value| value.parse::<Shortcut>().ok())
+                    == Some(parsed)
+            {
+                return Err("Each action must use a different shortcut.".into());
+            }
         }
         Ok(Some(parsed))
     }
@@ -207,6 +223,10 @@ impl Bindings {
             window: self.saved.window.clone().unwrap_or_default(),
             recording_error: self.errors[0].clone(),
             window_error: self.errors[1].clone(),
+            speech: self.saved.speech.clone().unwrap_or_default(),
+            speech_stop: self.saved.speech_stop.clone().unwrap_or_default(),
+            speech_error: self.errors[2].clone(),
+            speech_stop_error: self.errors[3].clone(),
         }
     }
 }
@@ -273,6 +293,7 @@ mod tests {
         StoredBindings {
             recording: Some("F9".into()),
             window: Some("F10".into()),
+            ..Default::default()
         }
     }
 
@@ -402,6 +423,48 @@ mod tests {
             .is_err());
         assert_eq!(fs::read_to_string(fixture.path()).unwrap(), "invalid json");
         assert!(registry.keys.borrow().is_empty());
+    }
+
+    #[test]
+    fn reading_bindings_restore_clear_and_conflict_with_every_existing_action() {
+        let fixture = Fixture::new();
+        let registry = TestRegistry::default();
+        let mut bindings = Bindings::default();
+        bindings
+            .initialize(&fixture.path(), legacy(), &registry)
+            .unwrap();
+        bindings
+            .set(&fixture.path(), Target::Speech, "F11", &registry)
+            .unwrap();
+        bindings
+            .set(&fixture.path(), Target::SpeechStop, "F12", &registry)
+            .unwrap();
+        for target in Target::ALL {
+            let other = if target as usize == Target::Speech as usize {
+                "F12"
+            } else {
+                "F11"
+            };
+            assert!(bindings
+                .set(&fixture.path(), target, other, &registry)
+                .is_err());
+        }
+        let restored_registry = TestRegistry::default();
+        let mut restored = Bindings::default();
+        restored.load(&fixture.path(), &restored_registry).unwrap();
+        assert_eq!(restored.snapshot().speech, "F11");
+        assert_eq!(restored.snapshot().speech_stop, "F12");
+        assert_eq!(restored_registry.keys.borrow().len(), 4);
+        restored
+            .set(&fixture.path(), Target::Speech, "", &restored_registry)
+            .unwrap();
+        let mut cleared = Bindings::default();
+        cleared
+            .load(&fixture.path(), &TestRegistry::default())
+            .unwrap();
+        assert_eq!(cleared.snapshot().speech, "");
+        assert_eq!(cleared.snapshot().recording, "F9");
+        assert_eq!(cleared.snapshot().speech_stop, "F12");
     }
 
     // Spawn fresh native processes so neither a webview nor in-memory state can

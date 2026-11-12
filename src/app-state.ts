@@ -6,8 +6,8 @@ export type RecordingState =
   | "transcribed"
   | "error";
 export type ShortcutCaptureState = "idle" | "capturing" | "saving";
-export type ShortcutTarget = "recording" | "window";
-export type ActiveView = "capture" | "settings";
+export type ShortcutTarget = "recording" | "window" | "speech" | "speechStop";
+export type ActiveView = "capture" | "speech" | "settings";
 export type ProviderId = "soniox" | "deepgram";
 export type ProviderSelectionStatus = "loading" | "ready" | "error";
 
@@ -64,6 +64,8 @@ export type AppState = {
   shortcutCapture: ShortcutCaptureState;
   selectedShortcut: string;
   selectedWindowShortcut: string;
+  selectedSpeechShortcut: string;
+  selectedSpeechStopShortcut: string;
   shortcutCaptureTarget: ShortcutTarget;
   shortcutStatus: Record<ShortcutTarget, string>;
   shortcutFocusOnStart: boolean;
@@ -113,8 +115,10 @@ export const createAppState = (
   shortcutCapture: "idle",
   selectedShortcut,
   selectedWindowShortcut,
+  selectedSpeechShortcut: "",
+  selectedSpeechStopShortcut: "",
   shortcutCaptureTarget: "recording",
-  shortcutStatus: { recording: "", window: "" },
+  shortcutStatus: { recording: "", window: "", speech: "", speechStop: "" },
   shortcutFocusOnStart,
   shortcutHideOnStop,
   maxRecordingSeconds,

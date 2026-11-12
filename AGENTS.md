@@ -41,6 +41,9 @@ Read the project docs before making architectural changes:
 - `docs/adrs/0017-language-preferences.md`.
 - `docs/adrs/0018-soniox-transcription-description.md`.
 
+- `docs/adrs/0022-streaming-text-to-speech.md`.
+- `docs/text-to-speech.md`.
+
 ## Current Stack
 
 - Desktop shell: Tauri 2.
@@ -135,3 +138,12 @@ The UI should expose separate Capture and Settings regions. `src/main.ts` may ow
 - Once launched, the app should run in the background/tray until explicit quit.
 - Manual copy is the MVP default; auto-copy can be added later as an option.
 - Transcript history, diarization UI, long-form import, and multi-provider UI are out of MVP scope.
+
+## Text-to-Speech
+
+- Keep reading separate from transcription. Reading state and playback are backend-owned.
+- Read-selection and stop-only shortcuts and CLI calls share the reading controller.
+- Start dictation only after cancelling playback; do not start reading during recording or finalization.
+- Reuse secure Soniox credentials without exposing keys or audio to the frontend.
+- Persist voice preferences and shortcuts, never reading text or audio.
+- Keep markup in app-view/speech-view, behavior in speech-controls, and raw command/event names in tauri.

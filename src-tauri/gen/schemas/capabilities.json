@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Default desktop capability","local":true,"windows":["main"],"permissions":["core:default","clipboard-manager:allow-write-text","autostart:default","allow-transcript-cleanup","allow-app-controls"]}}
+{"default":{"identifier":"default","description":"Default desktop capability","local":true,"windows":["main"],"permissions":["core:default","clipboard-manager:allow-write-text","clipboard-manager:allow-read-text","autostart:default","allow-transcript-cleanup","allow-app-controls"]}}

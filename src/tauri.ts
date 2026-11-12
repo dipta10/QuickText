@@ -295,6 +295,7 @@ export const openCleanupKeySetup = async (): Promise<void> => {
 export type SpeechSettings = { voice: string; language: string; speed: number };
 export type SpeechSnapshot = {
   status: "idle" | "preparing" | "playing" | "completed" | "error";
+  playbackSpeed?: number;
   sessionId: number;
   revision: number;
   error: string | null;
@@ -330,4 +331,15 @@ export const onSpeechStateChanged = async (handler: (snapshot: SpeechSnapshot) =
 export const readClipboardText = async (): Promise<string> => {
   assertTauriRuntime();
   return readText();
+};
+
+export const setPlaybackSpeed = async (speed: number): Promise<SpeechSnapshot> => {
+  assertTauriRuntime();
+  return invoke("set_playback_speed", { speed });
+};
+
+export type SpeechVoice = { id: string; description: string; gender: string };
+export const listSpeechVoices = async (): Promise<SpeechVoice[]> => {
+  assertTauriRuntime();
+  return invoke("list_speech_voices");
 };

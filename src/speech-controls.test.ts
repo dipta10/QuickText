@@ -22,6 +22,10 @@ beforeEach(async () => {
   view = createAppView(document.querySelector("#app")!);
   vi.mocked(backend.getSpeechState).mockResolvedValue(idle);
   vi.mocked(backend.getSpeechSettings).mockResolvedValue({voice:"Adrian",language:"en",speed:1});
+  vi.mocked(backend.listSpeechVoices).mockResolvedValue([
+    {id:"Adrian",description:"Clear and measured.",gender:"male"},
+    {id:"Maya",description:"Warm and natural.",gender:"female"},
+  ]);
   vi.mocked(backend.onSpeechStateChanged).mockImplementation(async (handler) => {event=handler;return () => {};});
   controls = connectSpeechControls(view, () => state, next => {state=next;controls.render();});
   controls.setLanguages([{code:"en",name:"English"},{code:"bn",name:"Bengali"}]);
@@ -93,4 +97,76 @@ describe("reading controls", () => {
     resolve("Other text");await flush();
     expect(view.speech.input.value).toBe("Original draft.");
   });
+  it("changes the active reading speed without restarting and keeps Stop available while saving", async () => {
+    event({status:"playing",sessionId:1,revision:1,error:null,playbackSpeed:1});
+    let resolve!: (snapshot: SpeechSnapshot) => void;
+    vi.mocked(backend.setPlaybackSpeed).mockReturnValue(new Promise(r => {resolve=r;}));
+    view.speech.playbackSpeed.value="1.5";
+    view.speech.playbackSpeed.dispatchEvent(new Event("change"));
+    expect(backend.setPlaybackSpeed).toHaveBeenCalledWith(1.5);
+    expect(view.speech.playbackSpeed.disabled).toBe(true);
+    expect(view.speech.play.disabled).toBe(false);
+    expect(view.speech.playLabel.textContent).toBe("Stop reading");
+    resolve({status:"playing",sessionId:1,revision:2,error:null,playbackSpeed:1.5});
+    await flush();
+    expect(view.speech.playbackSpeed.value).toBe("1.5");
+    expect(view.speech.speed.value).toBe("1.5");
+    expect(backend.toggleSpeech).not.toHaveBeenCalled();
+    expect(backend.stopSpeech).not.toHaveBeenCalled();
+    event({status:"playing",sessionId:1,revision:1,error:null,playbackSpeed:1});
+    expect(view.speech.playbackSpeed.value).toBe("1.5");
+  });
+  it("restores the previous speed on save failure without interrupting playback", async () => {
+    write("Keep this passage.");
+    event({status:"playing",sessionId:1,revision:1,error:null,playbackSpeed:1});
+    vi.mocked(backend.setPlaybackSpeed).mockRejectedValue(new Error("Could not save settings."));
+    view.speech.playbackSpeed.value="2";
+    view.speech.playbackSpeed.dispatchEvent(new Event("change"));
+    await flush();
+    expect(view.speech.playbackSpeed.value).toBe("1");
+    expect(view.speech.speedStatus.textContent).toBe("Could not save settings.");
+    expect(view.speech.input.value).toBe("Keep this passage.");
+    expect(view.speech.playLabel.textContent).toBe("Stop reading");
+  });
+  it("keeps voice and language drafts when playback speed is saved independently", async () => {
+    view.speech.customVoice.value="Another voice";
+    view.speech.customVoice.dispatchEvent(new Event("input"));
+    view.speech.language.value="bn";
+    view.speech.language.dispatchEvent(new Event("change"));
+    vi.mocked(backend.setPlaybackSpeed).mockResolvedValue({...idle,revision:1,playbackSpeed:2});
+    view.speech.playbackSpeed.value="2";
+    view.speech.playbackSpeed.dispatchEvent(new Event("change"));
+    await flush();
+    expect(view.speech.voice.value).toBe("Another voice");
+    expect(view.speech.language.value).toBe("bn");
+    vi.mocked(backend.setSpeechSettings).mockResolvedValue({voice:"Another voice",language:"bn",speed:2});
+    view.speech.save.click(); await flush();
+    expect(backend.setSpeechSettings).toHaveBeenCalledWith({voice:"Another voice",language:"bn",speed:2});
+  });
+  it("restores a saved intermediate speed and accepts a newer backend rate over a late settings response", async () => {
+    document.body.innerHTML='<div id="app"></div>';
+    view=createAppView(document.querySelector("#app")!);
+    let resolve!: (settings: backend.SpeechSettings)=>void;
+    vi.mocked(backend.getSpeechSettings).mockReturnValue(new Promise(r=>{resolve=r;}));
+    controls=connectSpeechControls(view,()=>state,next=>{state=next;controls.render();});
+    event({status:"playing",sessionId:1,revision:3,error:null,playbackSpeed:1.15});
+    resolve({voice:"Adrian",language:"en",speed:1});await flush();
+    expect(view.speech.playbackSpeed.value).toBe("1.15");
+    expect(view.speech.playbackSpeed.selectedOptions[0].textContent).toBe("1.15×");
+    expect(view.speech.speed.value).toBe("1.15");
+    expect(backend.setPlaybackSpeed).not.toHaveBeenCalled();
+  });
+
+  it("saves a voice selected from the available list for future readings", async () => {
+    expect(Array.from(view.speech.voice.options).map(option=>option.value)).toContain("Maya");
+    view.speech.voice.value="Maya";
+    view.speech.voice.dispatchEvent(new Event("change"));
+    expect(view.speech.voiceDescription.textContent).toBe("Warm and natural.");
+    vi.mocked(backend.setSpeechSettings).mockResolvedValue({voice:"Maya",language:"en",speed:1});
+    view.speech.save.click();await flush();
+    expect(backend.setSpeechSettings).toHaveBeenCalledWith({voice:"Maya",language:"en",speed:1});
+    expect(view.speech.summary.textContent).toBe("Maya");
+    expect(view.speech.save.disabled).toBe(true);
+  });
+
 });

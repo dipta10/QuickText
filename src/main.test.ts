@@ -61,6 +61,10 @@ beforeEach(() => {
   vi.mocked(backend.getAppState).mockResolvedValue(idle);
   vi.mocked(backend.getSpeechState).mockResolvedValue({ status: "idle", sessionId: 0, revision: 0, error: null });
   vi.mocked(backend.getSpeechSettings).mockResolvedValue({ voice: "Adrian", language: "en", speed: 1 });
+  vi.mocked(backend.listSpeechVoices).mockResolvedValue([
+    {id:"Adrian",description:"Clear and measured.",gender:"male"},
+    {id:"Maya",description:"Warm and natural.",gender:"female"},
+  ]);
   vi.mocked(backend.onSpeechStateChanged).mockResolvedValue(() => {});
   vi.mocked(backend.initializeShortcuts).mockResolvedValue({ recording: "", window: "", recordingError: null, windowError: null });
   vi.mocked(backend.getTranscriptionSettings).mockResolvedValue({ activeProvider: "deepgram" });

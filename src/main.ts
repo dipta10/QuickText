@@ -121,7 +121,6 @@ let state = createAppState(
 const view = createAppView(app);
 let shortcutSettingsReady = false;
 let speechControls: ReturnType<typeof connectSpeechControls> | undefined;
-let lastTool: "capture" | "speech" = "capture";
 const audioLevelMeter = createAudioLevelMeter(view.audioLevelMeter, view.audioLevelBars);
 let lastAutoCopiedSessionId: number | null = null;
 let availableLanguages: SupportedLanguage[] = [];
@@ -288,20 +287,16 @@ const render = () => {
   const isSettings = state.activeView === "settings";
   const providerControlsDisabled = !canChangeProvider(state);
   const providerName = state.activeProvider === "soniox" ? "Soniox" : "Deepgram";
-  if (state.activeView !== "settings") lastTool = state.activeView;
   view.captureView.hidden = state.activeView !== "capture";
   view.speech.panel.hidden = state.activeView !== "speech";
   view.captureTab.setAttribute("aria-selected", String(!isSettings && state.activeView === "capture"));
   view.speechTab.setAttribute("aria-selected", String(!isSettings && state.activeView === "speech"));
-  view.captureTab.tabIndex = lastTool === "capture" ? 0 : -1;
-  view.speechTab.tabIndex = lastTool === "speech" ? 0 : -1;
+  view.captureTab.tabIndex = state.activeView === "capture" ? 0 : -1;
+  view.speechTab.tabIndex = state.activeView === "speech" ? 0 : -1;
+  view.viewToggleButton.tabIndex = isSettings ? 0 : -1;
+  view.viewToggleButton.setAttribute("aria-selected", String(isSettings));
   view.captureView.dataset.status = state.recording;
   view.settingsView.hidden = !isSettings;
-  view.viewToggleButton.textContent = isSettings ? lastTool === "speech" ? "Text to speech" : "Capture" : "Settings";
-  view.viewToggleButton.setAttribute(
-    "aria-label",
-    isSettings ? "Open capture" : "Open settings",
-  );
   view.statusChip.textContent = statusLabel();
   view.statusChip.dataset.status = state.recording;
 
@@ -397,13 +392,11 @@ const render = () => {
   view.launchOnStartupStatus.textContent =
     state.launchOnStartupStatus ||
     "Starts hidden in the tray when you sign in.";
-  view.bottomStatus.textContent =
-    state.activeView === "capture"
-      ? state.status
-      : state.selectedShortcut
-        ? `Shortcut: ${state.selectedShortcut}`
-        : "No shortcut saved.";
-  view.shortcutHint.textContent = state.selectedShortcut || "Set a shortcut in Settings";
+  view.captureFeedback.textContent = state.status;
+  view.captureFeedback.hidden = [
+    "Ready.", "Starting recording...", "Recording.",
+    "Finalizing transcription...", "Transcript ready.",
+  ].includes(state.status);
   for (const [target, button, clear, status, saved] of [
     ["speech", view.speech.keybind, view.speech.clearKeybind, view.speech.keybindStatus, state.selectedSpeechShortcut],
     ["speechStop", view.speech.stopKeybind, view.speech.clearStopKeybind, view.speech.stopKeybindStatus, state.selectedSpeechStopShortcut],
@@ -546,6 +539,7 @@ const loadApiKeyStatus = async (provider: ProviderId) => {
     const hasApiKey = await hasProviderApiKey(provider);
     // Startup loaders run concurrently; apply results to the current state.
     updateState(setProviderApiKeyPresence(state, provider, hasApiKey));
+    if (provider === "soniox") void speechControls?.loadVoices();
   } catch (error) {
     updateState(
       setProviderApiKeyStatus(
@@ -840,6 +834,7 @@ const saveApiKey = async (provider: ProviderId) => {
           : "The API key could not be read after saving.",
       ),
     );
+    if (provider === "soniox") void speechControls?.loadVoices(true);
   } catch (error) {
     updateState(
       setProviderApiKeyStatus(
@@ -859,6 +854,7 @@ const deleteApiKey = async (provider: ProviderId) => {
     updateState(
       setProviderApiKeyPresence(state, provider, false, "API key deleted."),
     );
+    if (provider === "soniox") void speechControls?.loadVoices(true);
   } catch (error) {
     updateState(
       setProviderApiKeyStatus(
@@ -875,18 +871,21 @@ view.recordButton.addEventListener("click", () => {
 });
 
 view.viewToggleButton.addEventListener("click", () => {
-  updateState(
-    state.activeView === "settings" ? { ...state, activeView: lastTool } : showSettings(state),
-  );
+  updateState(showSettings(state));
 });
 
 view.captureTab.addEventListener("click", () => updateState(showCapture(state)));
 view.speechTab.addEventListener("click", () => updateState({ ...state, activeView: "speech" }));
-for (const tab of [view.captureTab, view.speechTab]) {
+const navigationTabs = [view.captureTab, view.speechTab, view.viewToggleButton];
+for (const tab of navigationTabs) {
   tab.addEventListener("keydown", (event) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
-    const target = event.key === "Home" ? view.captureTab : event.key === "End" ? view.speechTab : tab === view.captureTab ? view.speechTab : view.captureTab;
+    const index = navigationTabs.indexOf(tab);
+    const nextIndex = event.key === "Home" ? 0
+      : event.key === "End" ? navigationTabs.length - 1
+        : (index + (event.key === "ArrowRight" ? 1 : -1) + navigationTabs.length) % navigationTabs.length;
+    const target = navigationTabs[nextIndex];
     target.click();
     target.focus();
   });

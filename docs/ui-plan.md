@@ -25,11 +25,10 @@ Recommended initial window size:
 - Default theme: dark.
 - Density: compact, but not cramped.
 
-The window should have three stable regions:
+The window should have two stable regions:
 
-- Top bar: app name and Settings/Capture navigation only.
-- Main content: either Capture or Settings.
-- Bottom status line: shortcut hint, tray/background status, or current error.
+- Top bar: app name only.
+- Main content: Speech to text, Text to speech, or Settings, with feedback beside the relevant controls.
 
 Avoid decorative hero sections, marketing copy, oversized cards, and nested cards.
 
@@ -132,10 +131,10 @@ Use a modern restrained desktop style:
 
 The selected visual direction is **Signal**: a charcoal desktop instrument with
 an amber primary action, small uppercase labels, and a monospaced recording
-timer. Show the backend status directly above the timer, replacing the static Capture / microphone label. Keep the record/stop button beside them in a compact capture strip. The header contains only the brand and Settings/Capture navigation; it does not repeat recording status.
+timer. Show the backend status directly above the timer, replacing the static Capture / microphone label. Keep the record/stop button beside them in a compact capture strip. The header contains only the brand; Speech to text, Text to speech, and Settings share one navigation row below it.
 The transcript uses the main window surface rather than a nested card, with
-Copy and Clean & Copy in its toolbar. A stable footer shows the recording
-shortcut, background/tray hint, and current status or recovery message.
+Copy and Clean & Copy in its toolbar. Recording errors and action feedback appear
+beside Capture controls. The window has no bottom status footer.
 
 The input-level strip shows a short history of actual microphone volume, not a
 looping animation. The audio recorder measures normalized RMS from the same
@@ -196,7 +195,7 @@ QuickText window
 ## Implementation Plan
 
 1. Extend frontend state with `activeView: "capture" | "settings"`.
-2. Refactor `src/app-view.ts` into static view creation for top bar, Capture view, Settings view, and bottom status line.
+2. Refactor `src/app-view.ts` into static view creation for top bar, tool views, and Settings view.
 3. Keep `src/main.ts` as the wiring layer only.
 4. Replace the transcript textarea with a selectable transcript result panel.
 5. Move keybind and API key controls into Settings.
@@ -256,12 +255,16 @@ Show Cleaning… during a request. Success displays the cleaned text and copies 
 
 ## Text-to-Speech Workspace
 
-The operational workspace now has Speech to text and Text to speech tabs. Capture
-remains the initial tool. Settings is shared and returns to the last tool. Tabs
-support arrow keys and maintain their selection and panel associations.
+The operational workspace has Speech to text, Text to speech, and Settings tabs
+in one row. Capture remains the initial tool. Settings stays beside Text to
+speech and uses the same selected state. All three tabs support arrow keys and
+maintain their selection and panel associations.
 Text-to-speech provides a bounded passage editor, explicit clipboard Paste,
-character count, a single read/stop control, playback state, voice summary, and a
-selection-shortcut hint. Its settings hold the shared Soniox key, voice, language,
+character count, a single read/stop control, playback state, voice summary, a
+0.5–2× live speed selector that saves automatically, and a
+selection-shortcut hint. Its settings hold the shared Soniox key, a voice list
+with gender labels and descriptions, a refresh action, an optional custom voice
+ID field, language,
 speed, and read-selection/stop and stop-only shortcuts. Keep Stop visible at the
 minimum window height. Draft text survives errors and tab changes during the app
 run, but is never persisted. See [the reading guide](text-to-speech.md).

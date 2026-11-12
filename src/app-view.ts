@@ -77,8 +77,7 @@ export type AppView = {
   sourceRevision: HTMLSpanElement;
   copyBuildInfoButton: HTMLButtonElement;
   buildInfoStatus: HTMLParagraphElement;
-  bottomStatus: HTMLParagraphElement;
-  shortcutHint: HTMLSpanElement;
+  captureFeedback: HTMLParagraphElement;
 };
 
 const appTemplate = `
@@ -90,17 +89,13 @@ const appTemplate = `
         </svg>
         <h1 class="app-title">QuickText</h1>
       </div>
-      <div class="top-bar-actions">
-        <button class="view-toggle-button" type="button" aria-label="Open settings">
-          Settings
-        </button>
-      </div>
     </header>
 
     <main class="main-content">
       <nav class="tool-tabs" role="tablist" aria-label="Speech tools">
         <button id="capture-tab" type="button" role="tab" aria-selected="true" aria-controls="capture-panel">Speech to text</button>
         <button id="speech-tab" type="button" role="tab" aria-selected="false" aria-controls="speech-panel" tabindex="-1">Text to speech<span class="speech-tab-indicator" hidden aria-label="Reading"></span></button>
+        <button id="settings-tab" class="view-toggle-button" type="button" role="tab" aria-selected="false" aria-controls="settings-panel" tabindex="-1">Settings</button>
       </nav>
       <section class="capture-view" id="capture-panel" role="tabpanel" aria-labelledby="capture-tab" aria-label="Capture">
         <div class="recording-controls">
@@ -120,6 +115,7 @@ const appTemplate = `
           <span class="activity-label" aria-hidden="true">Input level</span>
         </div>
         <p class="device-notice" role="status"></p>
+        <p class="capture-feedback" role="status"></p>
 
         <section class="transcript-panel" aria-label="Transcript">
           <div class="transcript-toolbar">
@@ -144,7 +140,7 @@ const appTemplate = `
 
       ${speechTemplate}
 
-      <section class="settings-view" aria-label="Settings" hidden>
+      <section class="settings-view" id="settings-panel" role="tabpanel" aria-labelledby="settings-tab" aria-label="Settings" hidden>
         <section class="settings-section" aria-label="General">
           <h2 class="section-title">General</h2>
           <label class="checkbox-field" for="launch-on-startup">
@@ -461,13 +457,6 @@ const appTemplate = `
       </section>
     </main>
 
-    <footer class="bottom-bar">
-      <div class="bottom-bar-meta">
-        <span class="shortcut-hint"></span>
-        <span class="resident-label">Tray / background</span>
-      </div>
-      <p class="bottom-status" role="status"></p>
-    </footer>
   </section>
 `;
 
@@ -627,9 +616,8 @@ export const createAppView = (root: HTMLElement): AppView => {
   const buildInfoStatus = root.querySelector<HTMLParagraphElement>(
     ".build-info-status",
   );
-  const bottomStatus =
-    root.querySelector<HTMLParagraphElement>(".bottom-status");
-  const shortcutHint = root.querySelector<HTMLSpanElement>(".shortcut-hint");
+  const captureFeedback =
+    root.querySelector<HTMLParagraphElement>(".capture-feedback");
   const audioLevelMeter = root.querySelector<HTMLElement>(".activity-bars");
   const audioLevelBars = Array.from(root.querySelectorAll<HTMLElement>(".activity-bars i"));
 
@@ -705,8 +693,7 @@ export const createAppView = (root: HTMLElement): AppView => {
     !sourceRevision ||
     !copyBuildInfoButton ||
     !buildInfoStatus ||
-    !bottomStatus ||
-    !shortcutHint ||
+    !captureFeedback ||
     !audioLevelMeter ||
     !audioLevelBars.length
   ) {
@@ -719,7 +706,6 @@ export const createAppView = (root: HTMLElement): AppView => {
     speechTab: root.querySelector<HTMLButtonElement>("#speech-tab")!,
     audioLevelMeter,
     audioLevelBars,
-    shortcutHint,
     statusChip,
     viewToggleButton,
     captureView,
@@ -791,6 +777,6 @@ export const createAppView = (root: HTMLElement): AppView => {
     sourceRevision,
     copyBuildInfoButton,
     buildInfoStatus,
-    bottomStatus,
+    captureFeedback,
   };
 };

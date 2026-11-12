@@ -3,7 +3,14 @@ use crate::{
     speech_playback::AudioPlayback, transcription::ProviderId, AppControllerState, CredentialState,
 };
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path, sync::Mutex};
+use std::{
+    fs,
+    path::Path,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, Mutex,
+    },
+};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::watch;
 
@@ -38,10 +45,7 @@ impl SpeechSettings {
         {
             return Err("Choose a supported speech language.".into());
         }
-        if !self.speed.is_finite() || !(0.7..=1.3).contains(&self.speed) {
-            return Err("Speech speed must be between 0.7 and 1.3×.".into());
-        }
-        Ok(())
+        crate::speech_playback::validate_speed(self.speed)
     }
 }
 #[derive(Clone, Copy, Default, Serialize, PartialEq, Debug)]
@@ -54,13 +58,25 @@ pub enum Status {
     Completed,
     Error,
 }
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub status: Status,
     pub session_id: u64,
     pub revision: u64,
     pub error: Option<String>,
+    pub playback_speed: f32,
+}
+impl Default for Snapshot {
+    fn default() -> Self {
+        Self {
+            status: Status::Idle,
+            session_id: 0,
+            revision: 0,
+            error: None,
+            playback_speed: 1.0,
+        }
+    }
 }
 #[derive(Default)]
 struct Inner {
@@ -102,6 +118,7 @@ impl Inner {
 pub struct SpeechState {
     inner: Mutex<Inner>,
     settings: Mutex<Result<SpeechSettings, String>>,
+    playback_speed: Arc<AtomicU32>,
 }
 // Result has no Default; keep a load failure visible instead of overwriting a corrupt file.
 
@@ -110,6 +127,7 @@ impl Default for SpeechState {
         Self {
             inner: Mutex::new(Inner::default()),
             settings: Mutex::new(Ok(SpeechSettings::default())),
+            playback_speed: Arc::new(AtomicU32::new(1.0_f32.to_bits())),
         }
     }
 }
@@ -131,7 +149,14 @@ fn read_settings(path: &Path) -> Result<SpeechSettings, String> {
 }
 pub fn load(app: &AppHandle) {
     let saved = settings_path(app).and_then(|p| read_settings(&p));
-    *app.state::<SpeechState>().settings.lock().unwrap() = saved;
+    let state = app.state::<SpeechState>();
+    if let Ok(settings) = &saved {
+        state
+            .playback_speed
+            .store(settings.speed.to_bits(), Ordering::Release);
+        state.inner.lock().unwrap().snapshot.playback_speed = settings.speed;
+    }
+    *state.settings.lock().unwrap() = saved;
 }
 fn publish(app: &AppHandle, inner: &mut Inner) -> Snapshot {
     inner.snapshot.revision += 1;
@@ -161,6 +186,14 @@ pub fn get_speech_state(state: State<'_, SpeechState>) -> Result<Snapshot, Strin
         .clone())
 }
 #[tauri::command]
+pub async fn list_speech_voices(
+    credentials: State<'_, CredentialState>,
+) -> Result<Vec<crate::soniox_speech::Voice>, String> {
+    let key = crate::get_api_key_available(&credentials, ProviderId::Soniox)?
+        .ok_or_else(|| "Add a Soniox API key to load the available voices.".to_string())?;
+    crate::soniox_speech::list_voices(&key).await
+}
+#[tauri::command]
 pub fn get_speech_settings(state: State<'_, SpeechState>) -> Result<SpeechSettings, String> {
     state
         .settings
@@ -174,15 +207,43 @@ pub fn set_speech_settings(
     state: State<'_, SpeechState>,
     settings: SpeechSettings,
 ) -> Result<SpeechSettings, String> {
-    settings.validate()?;
+    save_preferences(&app, &state, |saved| *saved = settings)?;
+    get_speech_settings(state)
+}
+
+// Both save paths use the same lock order as reading start. Save before changing
+// live playback so a disk failure leaves the previous preference and rate intact.
+fn save_preferences(
+    app: &AppHandle,
+    state: &SpeechState,
+    update: impl FnOnce(&mut SpeechSettings),
+) -> Result<Snapshot, String> {
+    let mut inner = state
+        .inner
+        .lock()
+        .map_err(|_| "Speech is unavailable.".to_string())?;
     let mut saved = state
         .settings
         .lock()
         .map_err(|_| "Speech settings are unavailable.".to_string())?;
-    saved.as_ref().map_err(Clone::clone)?;
-    crate::settings_file::write_json(&settings_path(&app)?, &settings)?;
-    *saved = Ok(settings.clone());
-    Ok(settings)
+    let mut next = saved.as_ref().map_err(Clone::clone)?.clone();
+    update(&mut next);
+    next.validate()?;
+    crate::settings_file::write_json(&settings_path(app)?, &next)?;
+    state
+        .playback_speed
+        .store(next.speed.to_bits(), Ordering::Release);
+    inner.snapshot.playback_speed = next.speed;
+    *saved = Ok(next);
+    Ok(publish(app, &mut inner))
+}
+#[tauri::command]
+pub fn set_playback_speed(
+    app: AppHandle,
+    state: State<'_, SpeechState>,
+    speed: f32,
+) -> Result<Snapshot, String> {
+    save_preferences(&app, &state, |saved| saved.speed = speed)
 }
 #[tauri::command]
 pub fn stop_speech(app: AppHandle) -> Result<Snapshot, String> {
@@ -247,6 +308,7 @@ fn toggle_inner(app: &AppHandle, text: Option<String>) -> Result<Snapshot, Strin
     let credentials = app.state::<CredentialState>();
     let key = crate::get_api_key_available(&credentials, ProviderId::Soniox)?
         .ok_or_else(|| "Add a Soniox API key in Settings before reading aloud.".to_string())?;
+    let speed = state.playback_speed.clone();
     let (id, mut cancelled) = inner.begin();
     let snapshot = publish(app, &mut inner);
     let app = app.clone();
@@ -257,7 +319,7 @@ fn toggle_inner(app: &AppHandle, text: Option<String>) -> Result<Snapshot, Strin
                 None => crate::selected_text::read(&app).await?,
             };
             validate_text(&text)?;
-            let mut playback = AudioPlayback::start().await?;
+            let mut playback = AudioPlayback::start(speed).await?;
             let mut started = false;
             crate::soniox_speech::stream(&text, &settings, &key, id, |bytes| {
                 playback.push(bytes)?;
@@ -273,7 +335,7 @@ fn toggle_inner(app: &AppHandle, text: Option<String>) -> Result<Snapshot, Strin
         let outcome = tokio::select! {
             biased;
             _ = cancelled.changed() => return,
-            result = tokio::time::timeout(std::time::Duration::from_secs(180), work) => result.unwrap_or_else(|_| Err("Reading timed out. Try a shorter passage.".into())),
+            result = tokio::time::timeout(std::time::Duration::from_secs(300), work) => result.unwrap_or_else(|_| Err("Reading timed out. Try a shorter passage.".into())),
         };
         match outcome {
             Ok(()) => transition(&app, id, Status::Completed, None),
@@ -333,9 +395,9 @@ mod tests {
         let mut settings = SpeechSettings::default();
         settings.speed = f32::NAN;
         assert!(settings.validate().is_err());
-        settings.speed = 1.31;
+        settings.speed = 2.01;
         assert!(settings.validate().is_err());
-        settings.speed = 0.7;
+        settings.speed = 0.5;
         settings.language = "bn".into();
         settings.voice = "Adrian".into();
         assert!(settings.validate().is_ok());

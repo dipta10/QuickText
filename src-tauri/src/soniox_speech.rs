@@ -15,9 +15,96 @@ const ENDPOINT: &str = "wss://tts-rt.soniox.com/tts-websocket";
 const MODEL: &str = "tts-rt-v2";
 const NETWORK_TIMEOUT: Duration = Duration::from_secs(15);
 
+#[derive(Clone, serde::Serialize, Deserialize)]
+pub struct Voice {
+    pub id: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub gender: String,
+}
+#[derive(Deserialize)]
+struct VoiceModels {
+    models: Vec<VoiceModel>,
+}
+#[derive(Deserialize)]
+struct VoiceModel {
+    id: String,
+    voices: Vec<Voice>,
+}
+
+fn parse_voices(bytes: &[u8]) -> Result<Vec<Voice>, String> {
+    let models: VoiceModels = serde_json::from_slice(bytes)
+        .map_err(|_| "Could not read the voice list. Try refreshing it.".to_string())?;
+    let mut voices = models
+        .models
+        .into_iter()
+        .find(|model| model.id == MODEL)
+        .ok_or_else(|| {
+            "The voice list is unavailable for this speech model. Try again later.".to_string()
+        })?
+        .voices;
+    if voices.len() > 1000
+        || voices.iter().any(|voice| {
+            voice.id.trim().is_empty()
+                || voice.id.chars().count() > 50
+                || voice.id.chars().any(char::is_control)
+                || voice.description.len() > 8000
+                || voice.gender.len() > 40
+        })
+    {
+        return Err("Could not read the voice list. Try refreshing it.".into());
+    }
+    voices.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
+    voices.dedup_by(|a, b| a.id == b.id);
+    if voices.is_empty() {
+        return Err("No voices were returned. Try refreshing the voice list.".into());
+    }
+    Ok(voices)
+}
+pub async fn list_voices(api_key: &str) -> Result<Vec<Voice>, String> {
+    let mut authorization = HeaderValue::from_str(&format!("Bearer {api_key}"))
+        .map_err(|_| "Invalid Soniox API key. Update it in Settings.".to_string())?;
+    authorization.set_sensitive(true);
+    let client = reqwest::Client::builder()
+        .timeout(NETWORK_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|_| "Could not prepare the voice list request.".to_string())?;
+    let mut response = client
+        .get("https://api.soniox.com/v1/tts-models")
+        .header(AUTHORIZATION, authorization)
+        .send()
+        .await
+        .map_err(|_| {
+            "Could not load voices. Check your connection and try refreshing.".to_string()
+        })?;
+    if !response.status().is_success() {
+        return Err(match response.status().as_u16() {
+            401 => "Your Soniox API key was rejected. Update it to load voices.",
+            403 => "Your Soniox key cannot access the voice list. Check its permissions.",
+            429 => "Voice requests are rate limited. Wait a moment before refreshing.",
+            _ => "The voice list is unavailable. Try refreshing it shortly.",
+        }
+        .into());
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| "Could not finish loading voices. Try refreshing.".to_string())?
+    {
+        if bytes.len() + chunk.len() > 2_000_000 {
+            return Err("The voice list response was too large. Try again later.".into());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    parse_voices(&bytes)
+}
+
 fn config(settings: &SpeechSettings, id: &str) -> serde_json::Value {
     json!({"model": MODEL, "stream_id": id, "voice": settings.voice,
-        "language": settings.language, "speed": settings.speed,
+        "language": settings.language, "speed": 1.0,
         "audio_format": "pcm_s16le", "sample_rate": SAMPLE_RATE})
 }
 #[derive(Deserialize)]
@@ -152,9 +239,41 @@ where
 mod tests {
     use super::*;
     #[test]
+    fn voice_catalog_uses_the_active_model_sorts_and_deduplicates() {
+        let voices = parse_voices(br#"{"models":[
+            {"id":"other-model","voices":[{"id":"Wrong"}]},
+            {"id":"tts-rt-v2","voices":[{"id":"Maya","description":"Warm and clear","gender":"female"},{"id":"Adrian","gender":"male"},{"id":"Maya"}]}
+        ]}"#).unwrap();
+        assert_eq!(
+            voices.iter().map(|v| v.id.as_str()).collect::<Vec<_>>(),
+            ["Adrian", "Maya"]
+        );
+        assert_eq!(voices[1].description, "Warm and clear");
+        assert_eq!(voices[1].gender, "female");
+    }
+    #[test]
+    fn malformed_missing_and_empty_catalogs_use_safe_errors() {
+        for input in [
+            r#"private invalid response"#,
+            r#"{"models":[]}"#,
+            r#"{"models":[{"id":"tts-rt-v2","voices":[]}]}"#,
+            r#"{"models":[{"id":"tts-rt-v2","voices":[{"id":""}]}]}"#,
+        ] {
+            let error = parse_voices(input.as_bytes())
+                .err()
+                .expect("Must reject invalid catalog");
+            assert!(!error.contains("private"));
+        }
+    }
+    #[test]
     fn requests_current_model_raw_audio_and_no_secret() {
         let value = config(&SpeechSettings::default(), "test");
         assert_eq!(value["model"], "tts-rt-v2");
+        let fast = SpeechSettings {
+            speed: 2.0,
+            ..Default::default()
+        };
+        assert_eq!(config(&fast, "test")["speed"], 1.0);
         assert_eq!(value["audio_format"], "pcm_s16le");
         assert!(value.get("api_key").is_none());
         assert_eq!(value["sample_rate"], 24000);

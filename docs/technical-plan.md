@@ -258,3 +258,21 @@ WebSocket and playback guard, silencing queued samples without waiting for the
 network. Starting dictation cancels playback; reading cannot begin during
 recording/finalization. See [ADR 0022](adrs/0022-streaming-text-to-speech.md) and
 [the reading guide](text-to-speech.md).
+
+Playback speed is applied locally through the pitch-preserving libsonic stream,
+with only about 100 ms of processed audio buffered ahead of the output. The
+reading controller persists speed from 0.5 to 2× and updates a shared atomic
+value used by the playback worker, so active and future readings use the same
+preference. The synthesis adapter requests natural-speed audio; changing
+playback speed never restarts the provider request. Audio processing stays off
+the real-time device callback. The overall reading timeout allows a two-minute
+generated clip to play at 0.5×. See [libsonic's stream API](https://docs.rs/libsonic/0.1.0/libsonic/struct.SonicStream.html).
+
+The backend retrieves the synthesis voice catalog from Soniox's authenticated
+`GET /v1/tts-models` endpoint and selects only the active model's voices. It bounds
+response size and timeout and maps failures to safe messages. The frontend
+receives only voice IDs, descriptions, and gender labels; selection persists
+through the existing reading-preferences command. Refresh requests retain the
+current selection and ignore responses from replaced credentials. Saved or
+custom IDs remain selectable when absent from the latest catalog. See
+[Soniox's model catalog](https://docs.soniox.com/api-reference/tts/get_tts_models).

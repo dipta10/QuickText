@@ -6,7 +6,9 @@ description = "Allows the main window to control recording and configure existin
 commands.allow = [
   "get_speech_state",
   "get_speech_settings",
+  "list_speech_voices",
   "set_speech_settings",
+  "set_playback_speed",
   "toggle_speech",
   "stop_speech",
   "set_speech_shortcut",

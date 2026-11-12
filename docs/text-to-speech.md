@@ -6,14 +6,27 @@ on macOS) starts reading from the editor. The playback button stops reading
 immediately, including while preparing audio. Closing the window leaves reading
 running in the tray. Text drafts and generated audio are not saved to disk.
 
-Settings → Text-to-speech contains the shared Soniox key, voice name or cloned
-voice ID, language, speed (0.7–1.3×), and two independent shortcut assignments:
+Settings → Text-to-speech contains the shared Soniox key, a voice picker,
+language, playback speed (0.5–2×), and two independent shortcut assignments:
 
 - **Read selection / stop** reads the current selection in the focused application; pressing it again stops reading.
 - **Stop reading** stops an active reading without starting one.
 
+The Voice dropdown loads the voices supported by the current Soniox speech
+model using your saved key. Each option includes its gender, and the selected
+voice's description appears below the picker. Choose a voice and save voice
+preferences to use it on your next reading, including readings started through
+a shortcut or the CLI. Refresh voices retries a failed request or updates the
+list. Your saved choice remains available when offline. The expandable custom
+voice ID field supports cloned voices from the Soniox Console. The catalog
+request stays in the backend; API keys never reach the voice picker.
+
 Soniox's key needs text-to-speech permission. The initial voice is Adrian,
-language is English, and speed is 1×. Preferences apply to the next reading.
+language is English, and speed is 1×. Voice and language apply to the next reading.
+The Speed control beside Play changes the current playback immediately, preserves
+voice pitch, and saves automatically for future readings, including shortcut
+readings. Speed changes do not restart synthesis or resend the text. Settings
+also provides a speed slider that applies when saved.
 Changing the dictation provider does not change the speech synthesis service.
 Speech-to-text language hints and reading language are independent preferences.
 
@@ -41,7 +54,9 @@ clipboard formats cannot be preserved by this capture fallback. If the clipboard
 is not text, copy the desired passage and paste it into QuickText instead.
 
 Native playback uses the system default audio output chosen at reading start.
-A new reading picks up a changed default output. There is no microphone capture
+A new reading picks up a changed default output. A small output buffer lets speed
+changes take effect promptly; Soniox generates at its natural speed and native
+playback adjusts tempo without shifting pitch. There is no microphone capture
 or audio export in this flow.
 
 ## Validation

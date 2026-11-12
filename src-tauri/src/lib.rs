@@ -41,7 +41,8 @@ use keyring::{Entry, Error as KeyringError};
 use language_preferences::{LanguagePreferencesSnapshot, LanguagePreferencesState};
 use soniox_provider::SonioxProvider;
 use speech::{
-    get_speech_settings, get_speech_state, set_speech_settings, stop_speech, toggle_speech,
+    get_speech_settings, get_speech_state, list_speech_voices, set_playback_speed,
+    set_speech_settings, stop_speech, toggle_speech,
 };
 use tauri::{
     menu::{Menu, MenuItem},
@@ -1870,7 +1871,9 @@ fn run_with_options(start_hidden: bool) {
         .invoke_handler(tauri::generate_handler![
             get_speech_state,
             get_speech_settings,
+            list_speech_voices,
             set_speech_settings,
+            set_playback_speed,
             toggle_speech,
             stop_speech,
             set_speech_shortcut,

@@ -38,7 +38,13 @@
       "icons/icon.ico",
       "icons/icon.png"
     ],
+    "linux": {
+      "deb": {
+        "depends": ["libpipewire-0.3-0"]
+      }
+    },
     "macOS": {
+      "minimumSystemVersion": "14.4",
       "signingIdentity": "-"
     }
   }

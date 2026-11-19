@@ -13,7 +13,9 @@ use cpal::{
     SampleFormat, Stream, StreamConfig,
 };
 use serde::Serialize;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, oneshot};
+
+use crate::system_audio;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -59,6 +61,7 @@ pub struct InputDeviceList {
 pub struct StartedRecording {
     pub recorder: AudioRecorder,
     pub fell_back_to_default: bool,
+    pub failure: oneshot::Receiver<String>,
 }
 
 pub fn list_input_devices() -> InputDeviceList {
@@ -92,12 +95,18 @@ pub struct AudioRecorder {
     stats: Arc<Mutex<AudioCaptureStats>>,
     level: Arc<AtomicU32>,
     command_tx: mpsc::Sender<()>,
-    worker: Option<JoinHandle<()>>,
+    worker: Option<JoinHandle<Result<(), String>>>,
     started_at: Instant,
 }
 
 impl AudioRecorder {
-    pub fn input_format(selected_device: Option<&str>) -> Result<AudioFormat, String> {
+    pub fn input_format(
+        selected_device: Option<&str>,
+        include_system_audio: bool,
+    ) -> Result<AudioFormat, String> {
+        if include_system_audio {
+            return Ok(system_audio::format());
+        }
         let (device, _fell_back) = resolve_input_device(selected_device)?;
         let (config, sample_format) = input_config(&device)?;
 
@@ -111,11 +120,13 @@ impl AudioRecorder {
     pub fn start(
         audio_tx: UnboundedSender<Vec<u8>>,
         selected_device: Option<&str>,
+        include_system_audio: bool,
     ) -> Result<StartedRecording, String> {
         let stats = Arc::new(Mutex::new(AudioCaptureStats::default()));
         let level = Arc::new(AtomicU32::new(0));
         let (ready_tx, ready_rx) = mpsc::channel();
         let (command_tx, command_rx) = mpsc::channel();
+        let (failure_tx, failure) = oneshot::channel();
 
         let worker_stats = Arc::clone(&stats);
         let worker_level = Arc::clone(&level);
@@ -123,14 +134,41 @@ impl AudioRecorder {
         let worker = std::thread::Builder::new()
             .name("audio-capture".to_string())
             .spawn(move || {
-                run_capture_loop(
-                    worker_stats,
-                    worker_level,
-                    audio_tx,
-                    ready_tx,
-                    command_rx,
-                    worker_device,
-                )
+                if include_system_audio {
+                    let mixed_stream = resolve_input_device(worker_device.as_deref()).and_then(
+                        |(_, fell_back)| {
+                            let microphone = if fell_back { None } else { worker_device };
+                            system_audio::start(microphone).map(|stream| (stream, fell_back))
+                        },
+                    );
+                    let (stream, fell_back) = match mixed_stream {
+                        Ok(started) => started,
+                        Err(error) => {
+                            let _ = ready_tx.send(Err(error));
+                            return Ok(());
+                        }
+                    };
+                    if ready_tx.send(Ok(fell_back)).is_err() {
+                        return Ok(());
+                    }
+                    let result = system_audio::run(stream, command_rx, |samples| {
+                        record_audio_chunk(samples, &worker_stats, &worker_level, &audio_tx);
+                    });
+                    if let Err(error) = &result {
+                        let _ = failure_tx.send(error.clone());
+                    }
+                    result
+                } else {
+                    run_capture_loop(
+                        worker_stats,
+                        worker_level,
+                        audio_tx,
+                        ready_tx,
+                        command_rx,
+                        worker_device,
+                    );
+                    Ok(())
+                }
             })
             .map_err(|error| format!("Could not spawn microphone capture thread: {error}"))?;
 
@@ -147,6 +185,7 @@ impl AudioRecorder {
                 started_at: Instant::now(),
             },
             fell_back_to_default,
+            failure,
         })
     }
 
@@ -156,18 +195,21 @@ impl AudioRecorder {
         f32::from_bits(self.level.swap(0, Ordering::Relaxed))
     }
 
-    pub fn stop(mut self) -> AudioCaptureStats {
-        self.shutdown();
+    pub fn stop(mut self) -> Result<AudioCaptureStats, String> {
+        self.shutdown()?;
         let mut stats = self.stats();
         stats.elapsed_ms = self.started_at.elapsed().as_millis();
-        stats
+        Ok(stats)
     }
 
-    fn shutdown(&mut self) {
+    fn shutdown(&mut self) -> Result<(), String> {
         let _ = self.command_tx.send(());
         if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
+            worker
+                .join()
+                .map_err(|_| "Audio capture thread exited unexpectedly.".to_string())??;
         }
+        Ok(())
     }
 
     fn stats(&self) -> AudioCaptureStats {
@@ -180,7 +222,7 @@ impl AudioRecorder {
 
 impl Drop for AudioRecorder {
     fn drop(&mut self) {
-        self.shutdown();
+        let _ = self.shutdown();
     }
 }
 

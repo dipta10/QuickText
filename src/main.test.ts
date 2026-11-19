@@ -59,6 +59,7 @@ beforeEach(() => {
   localStorage.clear();
   document.body.innerHTML = '<div id="app"></div>';
   vi.mocked(backend.getAppState).mockResolvedValue(idle);
+  vi.mocked(backend.getIncludeSystemAudio).mockResolvedValue(false);
   vi.mocked(backend.getTranscriptHistory).mockResolvedValue({ entries: [], warning: null });
   vi.mocked(backend.initializeShortcuts).mockResolvedValue({ recording: "", window: "", recordingError: null, windowError: null });
   vi.mocked(backend.getTranscriptionSettings).mockResolvedValue({ activeProvider: "deepgram" });
@@ -88,6 +89,38 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
   document.body.innerHTML = "";
+});
+
+describe("system audio", () => {
+  it("is off by default and saves the checkbox preference", async () => {
+    await startApp();
+    const checkbox = element<HTMLInputElement>(".include-system-audio-checkbox");
+    expect(checkbox.checked).toBe(false);
+    expect(checkbox.disabled).toBe(false);
+
+    checkbox.click();
+    expect(backend.setIncludeSystemAudio).toHaveBeenCalledExactlyOnceWith(true);
+    await Promise.resolve();
+    expect(checkbox.checked).toBe(true);
+    expect(element(".activity-label").textContent).toBe("Mic + system audio");
+
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    onState({ ...idle, status: "recording", sessionId: 1 });
+    expect(checkbox.disabled).toBe(true);
+  });
+
+  it("restores the saved checkbox and keeps it checked if disabling fails", async () => {
+    vi.mocked(backend.getIncludeSystemAudio).mockResolvedValue(true);
+    vi.mocked(backend.setIncludeSystemAudio).mockRejectedValue(new Error("Could not save"));
+    await startApp();
+    const checkbox = element<HTMLInputElement>(".include-system-audio-checkbox");
+    expect(checkbox.checked).toBe(true);
+
+    checkbox.click();
+    await Promise.resolve();
+    expect(checkbox.checked).toBe(true);
+    expect(element(".system-audio-status").textContent).toContain("Could not save");
+  });
 });
 
 describe("transcript history", () => {

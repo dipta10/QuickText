@@ -4,5 +4,7 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>QuickText needs microphone access to transcribe your speech.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>QuickText captures playback for transcription only while recording with Include system audio enabled.</string>
 </dict>
 </plist>

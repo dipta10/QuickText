@@ -74,7 +74,7 @@ Settings should be a separate view reached from a gear button or Settings tab in
 Settings uses one scrolling page with six sections, in this order:
 
 - General: launch on startup, then an After recording group containing auto-copy and paste into the focused app.
-- Recording: microphone, recording limit in seconds, live transcript, and a Show unconfirmed words option visible only with live transcript enabled.
+- Recording: microphone, an off-by-default Include system audio checkbox, recording limit in seconds, live transcript, and a Show unconfirmed words option visible only with live transcript enabled.
 - Shortcuts: start/stop recording and its focus/hide preferences, followed by the independent show/hide window shortcut. Focus and hide preferences apply only to recording shortcuts.
 - Transcription: provider selector followed immediately by the selected provider's credentials and languages. Soniox exposes language preferences and optional Topic and context (the persisted transcription description); Deepgram shows its English-only limitation. Shared Terms and phrases follows the provider group. The optional context and terms editors are collapsed by default and preserve drafts when collapsed or when switching providers.
 - Transcript cleanup: optional Clean & Copy setup, Gemini credentials, Google AI Studio setup link, and visible text-processing and free-tier data-use disclosure. This is independent of the speech provider.

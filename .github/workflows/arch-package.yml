@@ -41,11 +41,13 @@ jobs:
         run: |
           pacman -Syu --noconfirm --needed \
             alsa-lib \
+            clang \
             git \
             github-cli \
             gtk3 \
             libayatana-appindicator \
             libsecret \
+            libpipewire \
             nodejs-lts-jod \
             npm \
             openssl \
@@ -95,4 +97,3 @@ jobs:
           packaging/arch/quicktext-*.pkg.tar.zst
           --repo "$GITHUB_REPOSITORY"
           --clobber
-

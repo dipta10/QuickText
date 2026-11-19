@@ -126,6 +126,16 @@ export const getTranscriptHistory = async (): Promise<TranscriptHistorySnapshot>
   return invoke(getTranscriptHistoryCommand);
 };
 
+export const getIncludeSystemAudio = async (): Promise<boolean> => {
+  assertTauriRuntime();
+  return invoke("get_include_system_audio");
+};
+
+export const setIncludeSystemAudio = async (enabled: boolean): Promise<void> => {
+  assertTauriRuntime();
+  await invoke("set_include_system_audio", { enabled });
+};
+
 export const getBuildInfo = async (): Promise<BuildInfo> => {
   assertTauriRuntime();
   return await invoke<BuildInfo>(getBuildInfoCommand);

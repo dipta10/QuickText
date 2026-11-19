@@ -44,6 +44,7 @@ import { createAudioLevelMeter } from "./audio-level";
 import { connectCleanupControls, renderCleanupControls } from "./cleanup-controls";
 import { createTranscriptHistory } from "./transcript-history";
 import { formatShortcut } from "./shortcut";
+import { connectSystemAudioControls } from "./system-audio-controls";
 import {
   getAutoCopyTranscript,
   getGlobalShortcut,
@@ -118,6 +119,7 @@ let state = createAppState(
   "",
 );
 const view = createAppView(app);
+const renderSystemAudioControls = connectSystemAudioControls(view, () => state);
 let shortcutSettingsReady = false;
 const audioLevelMeter = createAudioLevelMeter(view.audioLevelMeter, view.audioLevelBars);
 const transcriptHistory = createTranscriptHistory();
@@ -283,6 +285,7 @@ const renderLanguagePicker = () => {
 
 const render = () => {
   audioLevelMeter.sync(state);
+  renderSystemAudioControls();
   const isSettings = state.activeView === "settings";
   const providerControlsDisabled = !canChangeProvider(state);
   const providerName = state.activeProvider === "soniox" ? "Soniox" : "Deepgram";

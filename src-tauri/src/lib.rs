@@ -20,6 +20,7 @@ mod paste_target;
 mod settings_file;
 mod shortcut_bindings;
 mod soniox_provider;
+mod system_audio;
 mod transcript_cleanup;
 mod transcript_history;
 mod transcription;
@@ -37,6 +38,7 @@ use deepgram_provider::DeepgramProvider;
 use keyring::{Entry, Error as KeyringError};
 use language_preferences::{LanguagePreferencesSnapshot, LanguagePreferencesState};
 use soniox_provider::SonioxProvider;
+use system_audio::SystemAudioPreference;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -614,6 +616,10 @@ async fn fail_recording_when_provider_unreachable(
         },
     };
 
+    fail_active_recording(&app, session_id, provider_unavailable_error(error_message));
+}
+
+fn fail_active_recording(app: &tauri::AppHandle, session_id: u64, error: AppError) {
     let controller = app.state::<AppControllerState>();
     // Keep the session check, resource cleanup, and error transition together
     // so a delayed failure cannot stop a newer recording.
@@ -627,20 +633,11 @@ async fn fail_recording_when_provider_unreachable(
     }
 
     let _ = stop_audio_recorder(&app.state::<AudioRecorderState>());
-    let active_session = {
-        let transcription = app.state::<TranscriptionState>();
-        lock_transcription(&transcription)
-            .ok()
-            .and_then(|mut session| session.take())
-    };
-    if let Some(session) = active_session {
-        session.cancel();
-    }
-
-    clear_pending_paste(&app);
-    let error_snapshot = controller.fail_recording(provider_unavailable_error(error_message));
+    cancel_active_transcription(app);
+    clear_pending_paste(app);
+    let error_snapshot = controller.fail_recording(error);
     drop(controller);
-    emit_app_snapshot(&app, &error_snapshot);
+    emit_app_snapshot(app, &error_snapshot);
 }
 
 fn paste_failed_error(message: String) -> AppError {
@@ -832,6 +829,27 @@ fn get_transcript_history(
         .lock()
         .map(|history| history.snapshot())
         .map_err(|_| "Could not load transcript history.".to_string())
+}
+
+#[tauri::command]
+fn get_include_system_audio(preference: State<'_, SystemAudioPreference>) -> bool {
+    preference.enabled()
+}
+
+#[tauri::command]
+fn set_include_system_audio(
+    controller: State<'_, AppControllerState>,
+    preference: State<'_, SystemAudioPreference>,
+    enabled: bool,
+) -> Result<(), String> {
+    let controller = lock_controller(&controller)?;
+    if matches!(
+        controller.snapshot().status,
+        AppStatus::Starting | AppStatus::Recording | AppStatus::Stopping
+    ) {
+        return Err("Stop recording before changing the system audio preference.".to_string());
+    }
+    preference.save(enabled)
 }
 
 #[tauri::command]
@@ -1180,8 +1198,11 @@ pub(crate) async fn toggle_recording_for_app(
             };
 
             let selected_device = lock_input_device(&input_device)?.clone();
+            let include_system_audio = app.state::<SystemAudioPreference>().enabled();
 
-            let audio_format = match AudioRecorder::input_format(selected_device.as_deref()) {
+            let input_format =
+                AudioRecorder::input_format(selected_device.as_deref(), include_system_audio);
+            let audio_format = match input_format {
                 Ok(audio_format) => audio_format,
                 Err(error) => {
                     let error_snapshot = {
@@ -1233,6 +1254,7 @@ pub(crate) async fn toggle_recording_for_app(
             let started = match AudioRecorder::start(
                 provider_session.audio_sender(),
                 selected_device.as_deref(),
+                include_system_audio,
             ) {
                 Ok(started) => started,
                 Err(error) => {
@@ -1272,6 +1294,19 @@ pub(crate) async fn toggle_recording_for_app(
             emit_app_snapshot(&app, &recording);
             if let Some(session_id) = session_id {
                 tauri::async_runtime::spawn(forward_audio_levels(app.clone(), session_id));
+                if include_system_audio {
+                    let app = app.clone();
+                    let failure = started.failure;
+                    tauri::async_runtime::spawn(async move {
+                        if let Ok(error) = failure.await {
+                            fail_active_recording(
+                                &app,
+                                session_id,
+                                microphone_unavailable_error(error),
+                            );
+                        }
+                    });
+                }
                 schedule_max_recording_duration(app.clone(), session_id, max_recording_seconds);
                 if let Some(provider_ready_rx) = provider_ready_rx {
                     tauri::async_runtime::spawn(fail_recording_when_provider_unreachable(
@@ -1372,6 +1407,7 @@ async fn finalize_recording(app: &tauri::AppHandle) -> Result<AppSnapshot, Strin
     let audio_stats = match stop_audio_recorder(&app.state::<AudioRecorderState>()) {
         Ok(audio_stats) => audio_stats,
         Err(error) => {
+            cancel_active_transcription(app);
             clear_pending_paste(app);
             let error_snapshot = {
                 let mut controller = lock_controller(&controller)?;
@@ -1505,7 +1541,20 @@ fn stop_audio_recorder(
         recorder.take()
     };
 
-    Ok(active_recorder.map(AudioRecorder::stop).unwrap_or_default())
+    Ok(active_recorder
+        .map(AudioRecorder::stop)
+        .transpose()?
+        .unwrap_or_default())
+}
+
+fn cancel_active_transcription(app: &tauri::AppHandle) {
+    let transcription = app.state::<TranscriptionState>();
+    let active_session = lock_transcription(&transcription)
+        .ok()
+        .and_then(|mut session| session.take());
+    if let Some(session) = active_session {
+        session.cancel();
+    }
 }
 
 type ShortcutBindingsState = Mutex<shortcut_bindings::Bindings>;
@@ -1794,6 +1843,13 @@ fn run_with_options(start_hidden: bool) {
         .plugin(autostart::plugin())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(move |app| {
+            let system_audio_path = app
+                .path()
+                .app_config_dir()
+                .ok()
+                .map(|path| path.join("system-audio.json"));
+            app.manage(SystemAudioPreference::load(system_audio_path));
+
             let history_path = app
                 .path()
                 .app_local_data_dir()
@@ -1862,6 +1918,8 @@ fn run_with_options(start_hidden: bool) {
         .invoke_handler(tauri::generate_handler![
             get_app_state,
             get_transcript_history,
+            get_include_system_audio,
+            set_include_system_audio,
             has_cleanup_api_key,
             open_cleanup_key_setup,
             save_cleanup_api_key,

@@ -11,6 +11,7 @@ The architecture should keep the app responsive even while audio capture, networ
 - Desktop shell: owns windows, tray/menu bar behavior, global shortcut registration, clipboard integration, and OS permissions.
 - UI: record/stop control, transcript display, copy action, settings entry point, and status/error states.
 - Audio recorder: captures microphone input and emits audio in the format expected by the transcription provider.
+- When Include system audio is enabled, the backend snapshots the preference at recording start and sends a mic/default-output mix as 16 kHz mono PCM16 through the existing provider path. Linux uses PipeWire, Windows uses WASAPI loopback, and macOS uses Core Audio taps (14.4+ with consent). If the source fails, show an error instead of silently dropping playback from the recording.
 - Transcription service: provider-agnostic interface used by the app.
 - Provider registry: resolves the backend-persisted active provider to one adapter and exposes typed capability metadata.
 - Soniox client: Soniox-specific authentication, streaming or upload protocol, response parsing, and error mapping.

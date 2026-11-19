@@ -21,6 +21,7 @@ export type AppView = {
   recordingTimer: HTMLSpanElement;
   audioLevelMeter: HTMLElement;
   audioLevelBars: HTMLElement[];
+  audioLevelLabel: HTMLSpanElement;
   transcriptText: HTMLDivElement;
   transcriptPlaceholder: HTMLParagraphElement;
   transcriptFinal: HTMLSpanElement;
@@ -65,6 +66,8 @@ export type AppView = {
   languageStatus: HTMLParagraphElement;
   inputDeviceSelect: HTMLSelectElement;
   inputDeviceStatus: HTMLParagraphElement;
+  includeSystemAudioCheckbox: HTMLInputElement;
+  systemAudioStatus: HTMLParagraphElement;
   maxRecordingSecondsInput: HTMLInputElement;
   autoCopyCheckbox: HTMLInputElement;
   liveTranscriptCheckbox: HTMLInputElement;
@@ -110,7 +113,7 @@ const appTemplate = `
           </div>
         </div>
         <div class="capture-activity">
-          <div class="activity-bars" role="meter" aria-label="Microphone input level"
+           <div class="activity-bars" role="meter" aria-label="Recording audio level"
             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
           >${"<i aria-hidden=\"true\"></i>".repeat(48)}</div>
           <span class="activity-label" aria-hidden="true">Input level</span>
@@ -193,6 +196,15 @@ const appTemplate = `
             If the selected microphone is missing when recording starts, the
             system default is used instead.
           </p>
+          <label class="checkbox-field">
+            <input class="include-system-audio-checkbox" type="checkbox" aria-describedby="system-audio-note" disabled />
+            <span>Include system audio</span>
+          </label>
+          <p class="settings-note" id="system-audio-note">
+            While recording, mix your microphone with audio from the default output and send both
+            to your transcription provider. This may include other people’s voices.
+          </p>
+          <p class="system-audio-status settings-note" role="status" hidden></p>
           <label class="settings-field" for="max-recording-seconds">
             <span class="settings-field-label">Recording limit (seconds)</span>
             <input
@@ -632,6 +644,9 @@ export const createAppView = (root: HTMLElement): AppView => {
   );
   const audioLevelMeter = root.querySelector<HTMLElement>(".activity-bars");
   const audioLevelBars = Array.from(root.querySelectorAll<HTMLElement>(".activity-bars i"));
+  const audioLevelLabel = root.querySelector<HTMLSpanElement>(".activity-label");
+  const includeSystemAudioCheckbox = root.querySelector<HTMLInputElement>(".include-system-audio-checkbox");
+  const systemAudioStatus = root.querySelector<HTMLParagraphElement>(".system-audio-status");
 
   if (
     !statusChip ||
@@ -712,6 +727,9 @@ export const createAppView = (root: HTMLElement): AppView => {
     !copyBuildInfoButton ||
     !buildInfoStatus ||
     !audioLevelMeter ||
+    !audioLevelLabel ||
+    !includeSystemAudioCheckbox ||
+    !systemAudioStatus ||
     !audioLevelBars.length
   ) {
     throw new Error("App controls were not found");
@@ -720,6 +738,9 @@ export const createAppView = (root: HTMLElement): AppView => {
   return {
     audioLevelMeter,
     audioLevelBars,
+    audioLevelLabel,
+    includeSystemAudioCheckbox,
+    systemAudioStatus,
     statusChip,
     viewToggleButton,
     captureView,

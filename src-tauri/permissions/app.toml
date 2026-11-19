@@ -6,6 +6,8 @@ description = "Allows the main window to control recording and configure existin
 commands.allow = [
   "get_app_state",
   "get_transcript_history",
+  "get_include_system_audio",
+  "set_include_system_audio",
   "get_build_info",
   "toggle_recording",
   "initialize_shortcuts",

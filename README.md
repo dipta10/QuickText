@@ -24,7 +24,7 @@ Download an unsigned prebuilt package from the rolling [pre-release](https://git
 | Your computer | Download |
 |---|---|
 | Windows | `QuickText_0.1.0_x64-setup.exe` (installer) or `.msi` |
-| Mac (Apple Silicon) | `QuickText_0.1.0_aarch64.dmg` |
+| Mac (Apple Silicon, macOS 14.4+) | `QuickText_0.1.0_aarch64.dmg` |
 | Linux | `.AppImage` (just run it) or `.deb` / `.rpm` |
 
 ### Prerequisites
@@ -32,6 +32,7 @@ Download an unsigned prebuilt package from the rolling [pre-release](https://git
 - Node.js and npm
 - Rust toolchain
 - Tauri 2 [system dependencies](https://tauri.app/start/prerequisites/) for your platform
+- On Linux, PipeWire development headers and libclang.
 
 ### Build From Source
 
@@ -53,6 +54,8 @@ Launch `quicktext` to start the app. It stays resident in the tray until you qui
 3. Copy the transcript from the window.
 
 Choose a provider and save its API key in Settings. Keys are stored separately in the system keyring, never in plain files. Soniox supports automatic detection and language preferences; Deepgram uses English in this release.
+
+In **Settings → Recording**, turn on **Include system audio** to mix your microphone with playback from the default output device. QuickText sends that mix to the selected provider only while recording. This requires a running PipeWire session on Linux, macOS 14.4 or later with system-audio permission, or Windows 10/11. If you’re recording a meeting, get any required consent before starting.
 
 ## CLI On Linux
 

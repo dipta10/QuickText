@@ -59,6 +59,7 @@ beforeEach(() => {
   localStorage.clear();
   document.body.innerHTML = '<div id="app"></div>';
   vi.mocked(backend.getAppState).mockResolvedValue(idle);
+  vi.mocked(backend.getTranscriptHistory).mockResolvedValue({ entries: [], warning: null });
   vi.mocked(backend.initializeShortcuts).mockResolvedValue({ recording: "", window: "", recordingError: null, windowError: null });
   vi.mocked(backend.getTranscriptionSettings).mockResolvedValue({ activeProvider: "deepgram" });
   vi.mocked(backend.hasProviderApiKey).mockResolvedValue(true);
@@ -87,6 +88,75 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
   document.body.innerHTML = "";
+});
+
+describe("transcript history", () => {
+  it("opens on the latest saved transcript and copies the entry selected with the arrows", async () => {
+    vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
+      entries: ["Latest transcript", "Older transcript"],
+      warning: null,
+    });
+    await startApp();
+
+    const older = element<HTMLButtonElement>(".older-transcript-button");
+    const newer = element<HTMLButtonElement>(".newer-transcript-button");
+    expect(document.querySelector("footer")).toBeNull();
+    expect(element(".transcript-final").textContent).toBe("Latest transcript");
+    expect(element(".history-position").textContent).toBe("1 of 2");
+    expect(newer.disabled).toBe(true);
+    expect(older.disabled).toBe(false);
+
+    older.click();
+    expect(element(".transcript-final").textContent).toBe("Older transcript");
+    expect(element(".history-position").textContent).toBe("2 of 2");
+    expect(older.disabled).toBe(true);
+    expect(element<HTMLButtonElement>(".clean-button").hidden).toBe(true);
+    expect(backend.copyTextToClipboard).not.toHaveBeenCalled();
+    element<HTMLButtonElement>(".copy-button").click();
+    expect(backend.copyTextToClipboard).toHaveBeenCalledExactlyOnceWith("Older transcript");
+
+    newer.click();
+    expect(element(".transcript-final").textContent).toBe("Latest transcript");
+  });
+
+  it("returns to the latest entry after a new recording", async () => {
+    vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
+      entries: ["Latest transcript", "Older transcript"],
+      warning: null,
+    });
+    await startApp();
+    element<HTMLButtonElement>(".older-transcript-button").click();
+
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    onState({ ...idle, status: "recording", sessionId: 1 });
+    expect(element<HTMLElement>(".history-nav").hidden).toBe(true);
+    expect(element(".transcript-final").textContent).toBe("");
+
+    vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
+      entries: ["New transcript", "Latest transcript", "Older transcript"],
+      warning: null,
+    });
+    onState({
+      ...idle, status: "transcribed", sessionId: 1,
+      transcript: { text: "New transcript", provider: "soniox" },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(element(".transcript-final").textContent).toBe("New transcript");
+    expect(element(".history-position").textContent).toBe("1 of 3");
+  });
+
+  it("shows recording errors inline without a footer", async () => {
+    await startApp();
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    onState({
+      ...idle, status: "error", sessionId: 1,
+      error: { type: "microphone_unavailable", message: "Choose another microphone." },
+    });
+
+    expect(document.querySelector("footer")).toBeNull();
+    expect(element(".capture-status").textContent).toBe("Choose another microphone.");
+  });
 });
 
 describe("provider restoration in the app", () => {

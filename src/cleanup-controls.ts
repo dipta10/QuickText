@@ -12,16 +12,17 @@ import {
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
-export const renderCleanupControls = (view: AppView, state: AppState) => {
-  view.cleanButton.disabled = !canCleanTranscript(state);
+export const renderCleanupControls = (view: AppView, state: AppState, viewingSaved = false) => {
+  view.cleanButton.hidden = viewingSaved;
+  view.cleanButton.disabled = viewingSaved || !canCleanTranscript(state);
   view.cleanButton.textContent = state.cleanup.running ? "Cleaning…" : "Clean & Copy";
   view.restoreButton.hidden = !state.cleanup.cleaned;
   view.restoreButton.disabled = state.cleanup.running || state.cleanupActionPending;
   view.cleanupSetupButton.hidden = state.cleanupApiKeyConfigured;
   view.cleanupStatus.textContent = state.cleanup.message;
   view.cleanupStatus.hidden = !state.cleanup.message;
-  view.cleanupFeedback.hidden = !state.cleanup.cleaned &&
-    state.cleanupApiKeyConfigured && !state.cleanup.message;
+  view.cleanupFeedback.hidden = viewingSaved || (!state.cleanup.cleaned &&
+    state.cleanupApiKeyConfigured && !state.cleanup.message);
   const disabled = !canChangeProvider(state) || state.cleanup.running || state.cleanupCredentialBusy || state.cleanupActionPending;
   renderCredentialEditor(view.cleanupApiKeyInput, state.cleanupApiKeyConfigured);
   view.cleanupApiKeyInput.disabled = disabled;

@@ -25,11 +25,10 @@ Recommended initial window size:
 - Default theme: dark.
 - Density: compact, but not cramped.
 
-The window should have three stable regions:
+The window should have two stable regions:
 
 - Top bar: app name and Settings/Capture navigation only.
 - Main content: either Capture or Settings.
-- Bottom status line: shortcut hint, tray/background status, or current error.
 
 Avoid decorative hero sections, marketing copy, oversized cards, and nested cards.
 
@@ -56,6 +55,8 @@ Transcript presentation:
 - Do not use a textarea for the final transcript.
 - Show empty state text only before the first transcript.
 - Put Copy near the transcript title or bottom action row.
+- Show Older/Newer arrows and the current position when history is available. `1 of N` is the newest; the arrows stop at the ends. Hide history controls during capture and return to the newest result when recording finishes.
+- Copy uses the displayed text. Clean & Copy and Restore original apply only to the current recording, not saved history entries.
 
 Capture state behavior:
 
@@ -134,8 +135,8 @@ The selected visual direction is **Signal**: a charcoal desktop instrument with
 an amber primary action, small uppercase labels, and a monospaced recording
 timer. Show the backend status directly above the timer, replacing the static Capture / microphone label. Keep the record/stop button beside them in a compact capture strip. The header contains only the brand and Settings/Capture navigation; it does not repeat recording status.
 The transcript uses the main window surface rather than a nested card, with
-Copy and Clean & Copy in its toolbar. A stable footer shows the recording
-shortcut, background/tray hint, and current status or recovery message.
+Copy and Clean & Copy in its toolbar. Show recovery and other feedback inline
+when needed; shortcuts and tray information stay in Settings.
 
 The input-level strip shows a short history of actual microphone volume, not a
 looping animation. The audio recorder measures normalized RMS from the same

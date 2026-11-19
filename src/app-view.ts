@@ -17,6 +17,7 @@ export type AppView = {
   recordButton: HTMLButtonElement;
   providerLabel: HTMLSpanElement;
   deviceNotice: HTMLParagraphElement;
+  captureStatus: HTMLParagraphElement;
   recordingTimer: HTMLSpanElement;
   audioLevelMeter: HTMLElement;
   audioLevelBars: HTMLElement[];
@@ -24,6 +25,11 @@ export type AppView = {
   transcriptPlaceholder: HTMLParagraphElement;
   transcriptFinal: HTMLSpanElement;
   transcriptPartial: HTMLSpanElement;
+  historyNav: HTMLDivElement;
+  olderTranscriptButton: HTMLButtonElement;
+  newerTranscriptButton: HTMLButtonElement;
+  historyPosition: HTMLSpanElement;
+  historyWarning: HTMLParagraphElement;
   copyButton: HTMLButtonElement;
   keybindButton: HTMLButtonElement;
   clearKeybindButton: HTMLButtonElement;
@@ -73,8 +79,6 @@ export type AppView = {
   sourceRevision: HTMLSpanElement;
   copyBuildInfoButton: HTMLButtonElement;
   buildInfoStatus: HTMLParagraphElement;
-  bottomStatus: HTMLParagraphElement;
-  shortcutHint: HTMLSpanElement;
 };
 
 const appTemplate = `
@@ -112,6 +116,8 @@ const appTemplate = `
           <span class="activity-label" aria-hidden="true">Input level</span>
         </div>
         <p class="device-notice" role="status"></p>
+        <p class="capture-status" role="status"></p>
+        <p class="history-warning" role="status"></p>
 
         <section class="transcript-panel" aria-label="Transcript">
           <div class="transcript-toolbar">
@@ -121,7 +127,16 @@ const appTemplate = `
               <button class="copy-button" type="button">Copy</button>
             </div>
           </div>
-          <div class="transcript-text" tabindex="0"
+          <div class="history-nav" role="group" aria-label="Transcript history" hidden>
+            <button class="older-transcript-button" type="button" aria-controls="transcript-text">
+              <span aria-hidden="true">‹</span> Older
+            </button>
+            <span class="history-position" role="status"></span>
+            <button class="newer-transcript-button" type="button" aria-controls="transcript-text">
+              Newer <span aria-hidden="true">›</span>
+            </button>
+          </div>
+          <div class="transcript-text" id="transcript-text" tabindex="0"
             ><p class="transcript-placeholder">Your words, ready to use.<br />Start a recording to see your transcript here.</p
             ><span class="transcript-final"></span
             ><span class="transcript-partial" aria-label="Unconfirmed words"></span
@@ -450,13 +465,6 @@ const appTemplate = `
       </section>
     </main>
 
-    <footer class="bottom-bar">
-      <div class="bottom-bar-meta">
-        <span class="shortcut-hint"></span>
-        <span class="resident-label">Tray / background</span>
-      </div>
-      <p class="bottom-status" role="status"></p>
-    </footer>
   </section>
 `;
 
@@ -475,6 +483,12 @@ export const createAppView = (root: HTMLElement): AppView => {
     root.querySelector<HTMLSpanElement>(".provider-label");
   const deviceNotice =
     root.querySelector<HTMLParagraphElement>(".device-notice");
+  const captureStatus = root.querySelector<HTMLParagraphElement>(".capture-status");
+  const historyWarning = root.querySelector<HTMLParagraphElement>(".history-warning");
+  const historyNav = root.querySelector<HTMLDivElement>(".history-nav");
+  const olderTranscriptButton = root.querySelector<HTMLButtonElement>(".older-transcript-button");
+  const newerTranscriptButton = root.querySelector<HTMLButtonElement>(".newer-transcript-button");
+  const historyPosition = root.querySelector<HTMLSpanElement>(".history-position");
   const recordingTimer =
     root.querySelector<HTMLSpanElement>(".recording-timer");
   const transcriptText =
@@ -616,9 +630,6 @@ export const createAppView = (root: HTMLElement): AppView => {
   const buildInfoStatus = root.querySelector<HTMLParagraphElement>(
     ".build-info-status",
   );
-  const bottomStatus =
-    root.querySelector<HTMLParagraphElement>(".bottom-status");
-  const shortcutHint = root.querySelector<HTMLSpanElement>(".shortcut-hint");
   const audioLevelMeter = root.querySelector<HTMLElement>(".activity-bars");
   const audioLevelBars = Array.from(root.querySelectorAll<HTMLElement>(".activity-bars i"));
 
@@ -630,6 +641,12 @@ export const createAppView = (root: HTMLElement): AppView => {
     !recordButton ||
     !providerLabel ||
     !deviceNotice ||
+    !captureStatus ||
+    !historyWarning ||
+    !historyNav ||
+    !olderTranscriptButton ||
+    !newerTranscriptButton ||
+    !historyPosition ||
     !recordingTimer ||
     !transcriptText ||
     !transcriptPlaceholder ||
@@ -694,8 +711,6 @@ export const createAppView = (root: HTMLElement): AppView => {
     !sourceRevision ||
     !copyBuildInfoButton ||
     !buildInfoStatus ||
-    !bottomStatus ||
-    !shortcutHint ||
     !audioLevelMeter ||
     !audioLevelBars.length
   ) {
@@ -705,7 +720,6 @@ export const createAppView = (root: HTMLElement): AppView => {
   return {
     audioLevelMeter,
     audioLevelBars,
-    shortcutHint,
     statusChip,
     viewToggleButton,
     captureView,
@@ -713,6 +727,12 @@ export const createAppView = (root: HTMLElement): AppView => {
     recordButton,
     providerLabel,
     deviceNotice,
+    captureStatus,
+    historyWarning,
+    historyNav,
+    olderTranscriptButton,
+    newerTranscriptButton,
+    historyPosition,
     recordingTimer,
     transcriptText,
     transcriptPlaceholder,
@@ -777,6 +797,5 @@ export const createAppView = (root: HTMLElement): AppView => {
     sourceRevision,
     copyBuildInfoButton,
     buildInfoStatus,
-    bottomStatus,
   };
 };

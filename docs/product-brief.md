@@ -35,6 +35,7 @@ The app should keep running in the background after launch. Closing the main win
 - Visible transcription/progress state.
 - Transcript display area.
 - Copy-to-clipboard button.
+- Local history of the last 50 finalized transcripts, browsable from Capture.
 - Selectable Soniox or Deepgram transcription provider, with Soniox as the default.
 - Separate secure API key configuration for Soniox and Deepgram.
 - Shared terms and phrases that adapt to the selected provider.
@@ -48,7 +49,6 @@ The app should keep running in the background after launch. Closing the main win
 
 ## Non-Goals for MVP
 
-- Transcript history.
 - Speaker diarization UI.
 - Long-form audio file import.
 - Rich text formatting.
@@ -60,7 +60,6 @@ The app should keep running in the background after launch. Closing the main win
 
 - Auto-copy transcript after completion.
 - Paste transcript into the currently focused app.
-- Local transcript history.
 - Structured context hints beyond the transcription description and explicit terms.
 - Streaming partial transcript display while speaking.
 - Offline fallback provider.

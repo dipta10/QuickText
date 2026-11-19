@@ -42,6 +42,7 @@ import type { ProviderId } from "./app-state";
 import { createAppView } from "./app-view";
 import { createAudioLevelMeter } from "./audio-level";
 import { connectCleanupControls, renderCleanupControls } from "./cleanup-controls";
+import { createTranscriptHistory } from "./transcript-history";
 import { formatShortcut } from "./shortcut";
 import {
   getAutoCopyTranscript,
@@ -119,6 +120,7 @@ let state = createAppState(
 const view = createAppView(app);
 let shortcutSettingsReady = false;
 const audioLevelMeter = createAudioLevelMeter(view.audioLevelMeter, view.audioLevelBars);
+const transcriptHistory = createTranscriptHistory();
 let lastAutoCopiedSessionId: number | null = null;
 let availableLanguages: SupportedLanguage[] = [];
 let selectedLanguageCodes: string[] = [];
@@ -306,14 +308,21 @@ const render = () => {
     ? `Provider: ${providerName}`
     : "Choose a provider in Settings";
   view.deviceNotice.textContent = state.deviceNotice;
+  view.captureStatus.textContent = state.status;
   view.recordingTimer.textContent = formatElapsedTime(state.recordingStartedAt);
-  view.copyButton.disabled = !state.transcript;
-  renderCleanupControls(view, state);
+  const displayedTranscript = transcriptHistory.displayedText(state);
+  view.copyButton.disabled = !displayedTranscript;
+  transcriptHistory.render(view, state);
+  renderCleanupControls(view, state, transcriptHistory.isViewingSavedTranscript(state));
   const hasTranscriptText =
-    Boolean(state.transcript) || Boolean(state.partialTranscript);
+    Boolean(displayedTranscript) || Boolean(state.partialTranscript);
   view.transcriptPlaceholder.hidden = hasTranscriptText;
-  view.transcriptFinal.textContent = state.transcript;
-  view.transcriptPartial.textContent = state.partialTranscript;
+  if (view.transcriptFinal.textContent !== displayedTranscript) {
+    view.transcriptFinal.textContent = displayedTranscript;
+  }
+  if (view.transcriptPartial.textContent !== state.partialTranscript) {
+    view.transcriptPartial.textContent = state.partialTranscript;
+  }
   view.transcriptText.classList.toggle("is-empty", !hasTranscriptText);
 
   view.keybindButton.textContent =
@@ -387,18 +396,16 @@ const render = () => {
   view.launchOnStartupStatus.textContent =
     state.launchOnStartupStatus ||
     "Starts hidden in the tray when you sign in.";
-  view.bottomStatus.textContent =
-    state.activeView === "capture"
-      ? state.status
-      : state.selectedShortcut
-        ? `Shortcut: ${state.selectedShortcut}`
-        : "No shortcut saved.";
-  view.shortcutHint.textContent = state.selectedShortcut || "Set a shortcut in Settings";
 };
 
 const updateState = (nextState: typeof state) => {
   const wasSettings = state.activeView === "settings";
+  const sessionChanged = nextState.activeSessionId !== state.activeSessionId;
+  const transcriptFinalized = Boolean(nextState.transcript.trim()) &&
+    (sessionChanged || !state.transcript.trim());
   state = nextState;
+  if (sessionChanged) transcriptHistory.reset();
+  if (transcriptFinalized) void transcriptHistory.reload().then(render);
   render();
 
   if (!wasSettings && state.activeView === "settings") {
@@ -406,13 +413,11 @@ const updateState = (nextState: typeof state) => {
   }
 };
 
-const copyTranscript = async (successMessage = "Transcript copied.") => {
-  if (!state.transcript) {
-    return;
-  }
+const copyTranscript = async (text: string, successMessage = "Transcript copied.") => {
+  if (!text) return;
 
   try {
-    await copyTextToClipboard(state.transcript);
+    await copyTextToClipboard(text);
     updateState(setStatus(state, successMessage));
   } catch (error) {
     updateState(
@@ -424,7 +429,7 @@ const copyTranscript = async (successMessage = "Transcript copied.") => {
 const maybeAutoCopyTranscript = () => {
   if (!shouldAutoCopyTranscript(state, lastAutoCopiedSessionId)) return;
   lastAutoCopiedSessionId = state.activeSessionId;
-  void copyTranscript("Transcript copied automatically.");
+  void copyTranscript(state.transcript, "Transcript copied automatically.");
 };
 
 const registerShortcut = async (
@@ -847,7 +852,19 @@ view.viewToggleButton.addEventListener("click", () => {
 });
 
 view.copyButton.addEventListener("click", () => {
-  void copyTranscript();
+  void copyTranscript(transcriptHistory.displayedText(state));
+});
+
+view.olderTranscriptButton.addEventListener("click", () => {
+  transcriptHistory.move(1, state);
+  view.transcriptText.scrollTop = 0;
+  render();
+});
+
+view.newerTranscriptButton.addEventListener("click", () => {
+  transcriptHistory.move(-1, state);
+  view.transcriptText.scrollTop = 0;
+  render();
 });
 
 view.copyBuildInfoButton.addEventListener("click", () => {
@@ -1064,6 +1081,7 @@ connectCleanupControls(view, () => state, updateState);
 render();
 window.setInterval(render, 1000);
 void loadBackendState();
+void transcriptHistory.reload().then(render);
 void loadBuildInfo();
 void loadTranscriptionSettings();
 void loadApiKeyStatus("soniox");

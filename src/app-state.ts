@@ -133,7 +133,7 @@ export const createAppState = (
   inputDeviceDefaultLabel: "",
   selectedInputDeviceId,
   deviceNotice: "",
-  status: "Ready.",
+  status: "",
   transcript: "",
   cleanup: emptyCleanup(),
   cleanupApiKeyConfigured: false,
@@ -171,7 +171,6 @@ export const startShortcutCapture = (
       ...(isCapturingShortcut(state) ? { [state.shortcutCaptureTarget]: "" } : {}),
       [shortcutCaptureTarget]: "Press a shortcut. Esc cancels.",
     },
-    status: "Press a shortcut. Esc cancels.",
   };
 };
 
@@ -179,7 +178,6 @@ export const cancelShortcutCapture = (state: AppState): AppState => ({
   ...state,
   shortcutCapture: "idle",
   shortcutStatus: { ...state.shortcutStatus, [state.shortcutCaptureTarget]: "Canceled." },
-  status: "Canceled.",
 });
 
 export const setShortcutStatus = (
@@ -206,7 +204,6 @@ export const failShortcutSave = (
 ): AppState => ({
   ...setShortcutStatus(state, state.shortcutCaptureTarget, message),
   shortcutCapture,
-  status: message,
 });
 
 const statusText = (snapshot: BackendAppSnapshot): string => {
@@ -214,20 +211,7 @@ const statusText = (snapshot: BackendAppSnapshot): string => {
     return snapshot.error.message;
   }
 
-  switch (snapshot.status) {
-    case "idle":
-      return "Ready.";
-    case "starting":
-      return "Starting recording...";
-    case "recording":
-      return "Recording.";
-    case "stopping":
-      return "Finalizing transcription...";
-    case "transcribed":
-      return "Transcript ready.";
-    case "error":
-      return "Recording failed.";
-  }
+  return snapshot.status === "error" ? "Recording failed." : "";
 };
 
 const recordingStartedAt = (

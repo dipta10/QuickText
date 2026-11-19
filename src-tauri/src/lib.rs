@@ -21,6 +21,7 @@ mod settings_file;
 mod shortcut_bindings;
 mod soniox_provider;
 mod transcript_cleanup;
+mod transcript_history;
 mod transcription;
 mod transcription_description;
 mod transcription_settings;
@@ -43,6 +44,7 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use transcript_cleanup::{CleanupError, GeminiCleaner};
+use transcript_history::{TranscriptHistory, TranscriptHistorySnapshot};
 use transcription::{
     PartialTranscript, ProviderId, TranscriptionOptions, TranscriptionProvider,
     TranscriptionSession,
@@ -823,6 +825,16 @@ fn get_app_state(controller: State<'_, AppControllerState>) -> Result<AppSnapsho
 }
 
 #[tauri::command]
+fn get_transcript_history(
+    history: State<'_, Mutex<TranscriptHistory>>,
+) -> Result<TranscriptHistorySnapshot, String> {
+    history
+        .lock()
+        .map(|history| history.snapshot())
+        .map_err(|_| "Could not load transcript history.".to_string())
+}
+
+#[tauri::command]
 fn has_cleanup_api_key(credentials: State<'_, CleanupCredentials>) -> Result<bool, String> {
     Ok(credentials.key()?.is_some())
 }
@@ -1385,6 +1397,15 @@ async fn finalize_recording(app: &tauri::AppHandle) -> Result<AppSnapshot, Strin
     // Serialize finalization delivery with cleanup before publishing the result.
     let cleanup_requests = app.state::<CleanupRequests>();
     let _delivery = cleanup_requests.delivery.lock().await;
+    let history_app = app.clone();
+    let history_text = transcript.text.clone();
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        let history = history_app.state::<Mutex<TranscriptHistory>>();
+        if let Ok(mut history) = history.lock() {
+            history.record(history_text);
+        };
+    })
+    .await;
     let transcribed = {
         let mut controller = lock_controller(&controller)?;
         controller.finish_stop(transcript.clone(), audio_stats)
@@ -1773,6 +1794,13 @@ fn run_with_options(start_hidden: bool) {
         .plugin(autostart::plugin())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(move |app| {
+            let history_path = app
+                .path()
+                .app_local_data_dir()
+                .ok()
+                .map(|path| path.join("transcript-history.json"));
+            app.manage(Mutex::new(TranscriptHistory::load(history_path)));
+
             let bindings_state = app.state::<ShortcutBindingsState>();
             let mut bindings = bindings_state.lock().unwrap();
             match shortcut_settings_path(app.handle()) {
@@ -1833,6 +1861,7 @@ fn run_with_options(start_hidden: bool) {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_state,
+            get_transcript_history,
             has_cleanup_api_key,
             open_cleanup_key_setup,
             save_cleanup_api_key,

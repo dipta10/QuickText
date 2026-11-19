@@ -21,9 +21,14 @@ pub fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<(), Stri
         std::process::id(),
         NEXT_WRITE_ID.fetch_add(1, Ordering::Relaxed),
     ));
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
         .open(&temporary)
         .map_err(|_| "Could not save settings.".to_string())?;
     let result = (|| {

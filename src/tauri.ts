@@ -9,6 +9,7 @@ import type {
 } from "./app-state";
 
 const getAppStateCommand = "get_app_state";
+const getTranscriptHistoryCommand = "get_transcript_history";
 const getBuildInfoCommand = "get_build_info";
 const toggleRecordingCommand = "toggle_recording";
 const setWindowShortcutCommand = "set_window_shortcut";
@@ -50,6 +51,11 @@ export type BuildInfo = {
   version: string;
   buildId: string;
   sourceRevision: string;
+};
+
+export type TranscriptHistorySnapshot = {
+  entries: string[];
+  warning: string | null;
 };
 
 export type SupportedLanguage = {
@@ -113,6 +119,11 @@ export const setPasteToTargetBackend = async (enabled: boolean) => {
 export const getAppState = async (): Promise<BackendAppSnapshot> => {
   assertTauriRuntime();
   return await invoke<BackendAppSnapshot>(getAppStateCommand);
+};
+
+export const getTranscriptHistory = async (): Promise<TranscriptHistorySnapshot> => {
+  assertTauriRuntime();
+  return invoke(getTranscriptHistoryCommand);
 };
 
 export const getBuildInfo = async (): Promise<BuildInfo> => {

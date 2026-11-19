@@ -32,7 +32,7 @@ The core product promise is a fast toggle loop:
 - Transcription terms: optional one-term-per-line backend-persisted text, parsed and snapshotted at recording start, then mapped by the selected provider.
 - Linux distribution: native Debian, RPM, and Arch x86_64 packages, with AppImage retained as a qualified compatibility fallback.
 - Maximum recording duration: 5 minutes for MVP, with configurability deferred.
-- Transcript history: out of MVP.
+- Transcript history: retain the last 50 finalized transcripts locally with Older/Newer controls in Capture.
 
 ## Architecture
 

@@ -8,9 +8,10 @@ The main UI should separate the active dictation workflow from configuration. Re
 
 ## Product Shape
 
-QuickText has two main views:
+QuickText has three views:
 
 - Capture: the default operational view for recording, stopping, reviewing, and copying the transcript.
+- History: browse the most recent saved transcripts and select one to open it in Capture.
 - Settings: configuration for the transcription provider, provider credentials, shared terms, global shortcut, tray behavior, Soniox language preferences, and future preferences.
 
 The app should always open to Capture when triggered for dictation. Settings should never block the core record/stop loop unless a required setup item is missing.
@@ -28,7 +29,7 @@ Recommended initial window size:
 The window should have two stable regions:
 
 - Top bar: app name and Settings/Capture navigation only.
-- Main content: either Capture or Settings.
+- Main content: Capture, History, or Settings.
 
 Avoid decorative hero sections, marketing copy, oversized cards, and nested cards.
 
@@ -55,7 +56,7 @@ Transcript presentation:
 - Do not use a textarea for the final transcript.
 - Show empty state text only before the first transcript.
 - Put Copy near the transcript title or bottom action row.
-- Show Older/Newer arrows and the current position when history is available. `1 of N` is the newest; the arrows stop at the ends. Hide history controls during capture and return to the newest result when recording finishes.
+- Open a dedicated History view from the transcript toolbar. Show previews newest first, grouped by local date, with a Capture back button. Selecting an entry returns to Capture with that transcript ready to copy. Keep older entries without timestamps in an undated group and return to Capture when a recording starts.
 - Copy uses the displayed text. Clean & Copy and Restore original apply only to the current recording, not saved history entries.
 
 Capture state behavior:

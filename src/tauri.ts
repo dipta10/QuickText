@@ -54,8 +54,13 @@ export type BuildInfo = {
 };
 
 export type TranscriptHistorySnapshot = {
-  entries: string[];
+  entries: TranscriptHistoryEntry[];
   warning: string | null;
+};
+
+export type TranscriptHistoryEntry = {
+  text: string;
+  recordedAtMs: number | null;
 };
 
 export type SupportedLanguage = {

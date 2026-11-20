@@ -35,7 +35,7 @@ The app should keep running in the background after launch. Closing the main win
 - Visible transcription/progress state.
 - Transcript display area.
 - Copy-to-clipboard button.
-- Local history of the last 50 finalized transcripts, browsable from Capture.
+- Local history of the last 300 finalized transcripts, browsable from Capture.
 - Selectable Soniox or Deepgram transcription provider, with Soniox as the default.
 - Separate secure API key configuration for Soniox and Deepgram.
 - Shared terms and phrases that adapt to the selected provider.

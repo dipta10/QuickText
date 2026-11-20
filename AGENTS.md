@@ -134,4 +134,4 @@ The UI should expose separate Capture and Settings regions. `src/main.ts` may ow
 - The primary control should remain a single start/stop action.
 - Once launched, the app should run in the background/tray until explicit quit.
 - Manual copy is the MVP default; auto-copy can be added later as an option.
-- Transcript history retains the latest 50 finalized transcripts locally. Diarization UI, long-form import, and multi-provider UI are out of MVP scope.
+- Transcript history retains the latest 300 finalized transcripts locally. Diarization UI, long-form import, and multi-provider UI are out of MVP scope.

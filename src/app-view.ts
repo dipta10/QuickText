@@ -26,10 +26,11 @@ export type AppView = {
   transcriptPlaceholder: HTMLParagraphElement;
   transcriptFinal: HTMLSpanElement;
   transcriptPartial: HTMLSpanElement;
-  historyNav: HTMLDivElement;
-  olderTranscriptButton: HTMLButtonElement;
-  newerTranscriptButton: HTMLButtonElement;
-  historyPosition: HTMLSpanElement;
+  historyView: HTMLElement;
+  openHistoryButton: HTMLButtonElement;
+  closeHistoryButton: HTMLButtonElement;
+  historyList: HTMLDivElement;
+  historyEmpty: HTMLParagraphElement;
   historyWarning: HTMLParagraphElement;
   copyButton: HTMLButtonElement;
   keybindButton: HTMLButtonElement;
@@ -120,24 +121,15 @@ const appTemplate = `
         </div>
         <p class="device-notice" role="status"></p>
         <p class="capture-status" role="status"></p>
-        <p class="history-warning" role="status"></p>
 
         <section class="transcript-panel" aria-label="Transcript">
           <div class="transcript-toolbar">
             <h2 class="section-title">Transcript</h2>
             <div class="transcript-actions">
+              <button class="open-history-button" type="button" aria-controls="history-view">History</button>
               <button class="clean-button" type="button" disabled>Clean &amp; Copy</button>
               <button class="copy-button" type="button">Copy</button>
             </div>
-          </div>
-          <div class="history-nav" role="group" aria-label="Transcript history" hidden>
-            <button class="older-transcript-button" type="button" aria-controls="transcript-text">
-              <span aria-hidden="true">‹</span> Older
-            </button>
-            <span class="history-position" role="status"></span>
-            <button class="newer-transcript-button" type="button" aria-controls="transcript-text">
-              Newer <span aria-hidden="true">›</span>
-            </button>
           </div>
           <div class="transcript-text" id="transcript-text" tabindex="0"
             ><p class="transcript-placeholder">Your words, ready to use.<br />Start a recording to see your transcript here.</p
@@ -150,6 +142,16 @@ const appTemplate = `
             <p class="cleanup-status settings-note" role="status" aria-live="polite"></p>
           </div>
         </section>
+      </section>
+
+      <section class="history-view" id="history-view" aria-labelledby="history-title" hidden>
+        <div class="history-toolbar">
+          <button class="close-history-button" type="button"><span aria-hidden="true">‹</span> Capture</button>
+          <h2 class="section-title" id="history-title">History</h2>
+        </div>
+        <p class="history-warning" role="status"></p>
+        <p class="history-empty" role="status"></p>
+        <div class="history-list"></div>
       </section>
 
       <section class="settings-view" aria-label="Settings" hidden>
@@ -497,10 +499,11 @@ export const createAppView = (root: HTMLElement): AppView => {
     root.querySelector<HTMLParagraphElement>(".device-notice");
   const captureStatus = root.querySelector<HTMLParagraphElement>(".capture-status");
   const historyWarning = root.querySelector<HTMLParagraphElement>(".history-warning");
-  const historyNav = root.querySelector<HTMLDivElement>(".history-nav");
-  const olderTranscriptButton = root.querySelector<HTMLButtonElement>(".older-transcript-button");
-  const newerTranscriptButton = root.querySelector<HTMLButtonElement>(".newer-transcript-button");
-  const historyPosition = root.querySelector<HTMLSpanElement>(".history-position");
+  const historyView = root.querySelector<HTMLElement>(".history-view");
+  const openHistoryButton = root.querySelector<HTMLButtonElement>(".open-history-button");
+  const closeHistoryButton = root.querySelector<HTMLButtonElement>(".close-history-button");
+  const historyList = root.querySelector<HTMLDivElement>(".history-list");
+  const historyEmpty = root.querySelector<HTMLParagraphElement>(".history-empty");
   const recordingTimer =
     root.querySelector<HTMLSpanElement>(".recording-timer");
   const transcriptText =
@@ -658,10 +661,11 @@ export const createAppView = (root: HTMLElement): AppView => {
     !deviceNotice ||
     !captureStatus ||
     !historyWarning ||
-    !historyNav ||
-    !olderTranscriptButton ||
-    !newerTranscriptButton ||
-    !historyPosition ||
+    !historyView ||
+    !openHistoryButton ||
+    !closeHistoryButton ||
+    !historyList ||
+    !historyEmpty ||
     !recordingTimer ||
     !transcriptText ||
     !transcriptPlaceholder ||
@@ -750,10 +754,11 @@ export const createAppView = (root: HTMLElement): AppView => {
     deviceNotice,
     captureStatus,
     historyWarning,
-    historyNav,
-    olderTranscriptButton,
-    newerTranscriptButton,
-    historyPosition,
+    historyView,
+    openHistoryButton,
+    closeHistoryButton,
+    historyList,
+    historyEmpty,
     recordingTimer,
     transcriptText,
     transcriptPlaceholder,

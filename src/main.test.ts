@@ -124,47 +124,59 @@ describe("system audio", () => {
 });
 
 describe("transcript history", () => {
-  it("opens on the latest saved transcript and copies the entry selected with the arrows", async () => {
+  const entry = (text: string, recordedAtMs: number | null = null) => ({ text, recordedAtMs });
+  const openHistory = () => element<HTMLButtonElement>(".open-history-button").click();
+  const historyEntries = () => [...document.querySelectorAll<HTMLButtonElement>(".history-entry")];
+
+  it("opens a dated list and returns to Capture with the selected transcript ready to copy", async () => {
     vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
-      entries: ["Latest transcript", "Older transcript"],
+      entries: [entry("Latest transcript", Date.now()), entry("Older\ntranscript")],
       warning: null,
     });
     await startApp();
 
-    const older = element<HTMLButtonElement>(".older-transcript-button");
-    const newer = element<HTMLButtonElement>(".newer-transcript-button");
     expect(document.querySelector("footer")).toBeNull();
     expect(element(".transcript-final").textContent).toBe("Latest transcript");
-    expect(element(".history-position").textContent).toBe("1 of 2");
-    expect(newer.disabled).toBe(true);
-    expect(older.disabled).toBe(false);
+    openHistory();
+    expect(element<HTMLElement>(".capture-view").hidden).toBe(true);
+    expect(element<HTMLElement>(".history-view").hidden).toBe(false);
+    expect(document.activeElement).toBe(element(".close-history-button"));
+    expect(element(".history-day").textContent).toBe("Today");
+    const [latest, older] = historyEntries();
+    expect(latest.querySelector("time")).not.toBeNull();
+    expect(older.querySelector("time")).toBeNull();
+    expect(older.textContent).toBe("Older transcript");
 
     older.click();
-    expect(element(".transcript-final").textContent).toBe("Older transcript");
-    expect(element(".history-position").textContent).toBe("2 of 2");
-    expect(older.disabled).toBe(true);
+    expect(element<HTMLElement>(".history-view").hidden).toBe(true);
+    expect(element<HTMLElement>(".capture-view").hidden).toBe(false);
+    expect(element(".transcript-final").textContent).toBe("Older\ntranscript");
     expect(element<HTMLButtonElement>(".clean-button").hidden).toBe(true);
     expect(backend.copyTextToClipboard).not.toHaveBeenCalled();
     element<HTMLButtonElement>(".copy-button").click();
-    expect(backend.copyTextToClipboard).toHaveBeenCalledExactlyOnceWith("Older transcript");
+    expect(backend.copyTextToClipboard).toHaveBeenCalledExactlyOnceWith("Older\ntranscript");
 
-    newer.click();
-    expect(element(".transcript-final").textContent).toBe("Latest transcript");
+    openHistory();
+    expect(older.getAttribute("aria-current")).toBe("true");
+    element<HTMLButtonElement>(".close-history-button").click();
+    expect(document.activeElement).toBe(element(".open-history-button"));
+    expect(element(".transcript-final").textContent).toBe("Older\ntranscript");
   });
 
-  it("updates the count only after a live transcript is finalized and history is refreshed", async () => {
+  it("returns to Capture on recording and refreshes History only after finalization", async () => {
     vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
-      entries: ["Latest transcript", "Older transcript"],
+      entries: [entry("Latest transcript"), entry("Older transcript")],
       warning: null,
     });
     await startApp();
-    element<HTMLButtonElement>(".older-transcript-button").click();
+    openHistory();
 
     const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
     const onPartial = vi.mocked(backend.onPartialTranscript).mock.calls[0][0];
     onState({ ...idle, status: "recording", sessionId: 1 });
     onPartial({ recordingSessionId: 1, providerSessionId: 1, finalText: "New transcript", partialText: "" });
-    expect(element<HTMLElement>(".history-nav").hidden).toBe(true);
+    expect(element<HTMLElement>(".history-view").hidden).toBe(true);
+    expect(element<HTMLButtonElement>(".open-history-button").disabled).toBe(true);
     expect(element(".transcript-final").textContent).toBe("New transcript");
     expect(backend.getTranscriptHistory).toHaveBeenCalledTimes(1);
 
@@ -178,25 +190,26 @@ describe("transcript history", () => {
     onState(finalized);
     onState(finalized);
     expect(backend.getTranscriptHistory).toHaveBeenCalledTimes(2);
-    expect(element<HTMLElement>(".history-nav").hidden).toBe(true);
     expect(element(".transcript-final").textContent).toBe("New transcript");
+    openHistory();
+    expect(element(".history-empty").textContent).toBe("Loading history…");
+    expect(element<HTMLElement>(".history-list").hidden).toBe(true);
 
     refreshedHistory.resolve({
-      entries: ["New transcript", "Latest transcript", "Older transcript"],
+      entries: [entry("New transcript"), entry("Latest transcript"), entry("Older transcript")],
       warning: null,
     });
     await refreshedHistory.promise;
     await Promise.resolve();
-    expect(element(".transcript-final").textContent).toBe("New transcript");
-    expect(element(".history-position").textContent).toBe("1 of 3");
-    element<HTMLButtonElement>(".older-transcript-button").click();
+    expect(historyEntries()).toHaveLength(3);
+    expect(historyEntries()[0].textContent).toBe("New transcript");
+    historyEntries()[1].click();
     expect(element(".transcript-final").textContent).toBe("Latest transcript");
-    expect(element(".history-position").textContent).toBe("2 of 3");
   });
 
   it("does not refresh history when live text is followed by a blank final result", async () => {
     vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
-      entries: ["Saved transcript"],
+      entries: [entry("Saved transcript")],
       warning: null,
     });
     await startApp();
@@ -210,8 +223,15 @@ describe("transcript history", () => {
     });
 
     expect(backend.getTranscriptHistory).toHaveBeenCalledTimes(1);
-    expect(element(".history-position").textContent).toBe("1 of 1");
     expect(element(".transcript-final").textContent).toBe("Saved transcript");
+    openHistory();
+    expect(historyEntries()).toHaveLength(1);
+  });
+
+  it("shows a clear empty state when no transcripts have been saved", async () => {
+    await startApp();
+    openHistory();
+    expect(element(".history-empty").textContent).toBe("No saved transcripts yet.");
   });
 
   it("shows recording errors inline without a footer", async () => {

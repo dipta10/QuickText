@@ -35,6 +35,7 @@ import {
   setPasteToTarget,
   setStatus,
   showCapture,
+  showHistory,
   showSettings,
   startShortcutCapture,
 } from "./app-state";
@@ -122,7 +123,11 @@ const view = createAppView(app);
 const renderSystemAudioControls = connectSystemAudioControls(view, () => state);
 let shortcutSettingsReady = false;
 const audioLevelMeter = createAudioLevelMeter(view.audioLevelMeter, view.audioLevelBars);
-const transcriptHistory = createTranscriptHistory();
+const transcriptHistory = createTranscriptHistory(view, () => {
+  updateState(showCapture(state));
+  view.transcriptText.scrollTop = 0;
+  view.transcriptText.focus();
+});
 let lastHistorySessionId: number | null = null;
 let lastAutoCopiedSessionId: number | null = null;
 let availableLanguages: SupportedLanguage[] = [];
@@ -288,9 +293,12 @@ const render = () => {
   audioLevelMeter.sync(state);
   renderSystemAudioControls();
   const isSettings = state.activeView === "settings";
+  const isHistory = state.activeView === "history";
   const providerControlsDisabled = !canChangeProvider(state);
   const providerName = state.activeProvider === "soniox" ? "Soniox" : "Deepgram";
-  view.captureView.hidden = isSettings;
+  view.captureView.hidden = state.activeView !== "capture";
+  view.historyView.hidden = !isHistory;
+  view.viewToggleButton.hidden = isHistory;
   view.captureView.dataset.status = state.recording;
   view.settingsView.hidden = !isSettings;
   view.viewToggleButton.textContent = isSettings ? "Capture" : "Settings";
@@ -316,7 +324,7 @@ const render = () => {
   view.recordingTimer.textContent = formatElapsedTime(state.recordingStartedAt);
   const displayedTranscript = transcriptHistory.displayedText(state);
   view.copyButton.disabled = !displayedTranscript;
-  transcriptHistory.render(view, state);
+  transcriptHistory.render(state);
   renderCleanupControls(view, state, transcriptHistory.isViewingSavedTranscript(state));
   const hasTranscriptText =
     Boolean(displayedTranscript) || Boolean(state.partialTranscript);
@@ -871,16 +879,14 @@ view.copyButton.addEventListener("click", () => {
   void copyTranscript(transcriptHistory.displayedText(state));
 });
 
-view.olderTranscriptButton.addEventListener("click", () => {
-  transcriptHistory.move(1, state);
-  view.transcriptText.scrollTop = 0;
-  render();
+view.openHistoryButton.addEventListener("click", () => {
+  updateState(showHistory(state));
+  view.closeHistoryButton.focus();
 });
 
-view.newerTranscriptButton.addEventListener("click", () => {
-  transcriptHistory.move(-1, state);
-  view.transcriptText.scrollTop = 0;
-  render();
+view.closeHistoryButton.addEventListener("click", () => {
+  updateState(showCapture(state));
+  view.openHistoryButton.focus();
 });
 
 view.copyBuildInfoButton.addEventListener("click", () => {

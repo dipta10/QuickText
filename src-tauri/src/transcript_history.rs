@@ -1,12 +1,43 @@
-use std::{fs, io::ErrorKind, path::PathBuf};
+use std::{
+    fs,
+    io::ErrorKind,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::settings_file::write_json;
 
-const HISTORY_LIMIT: usize = 50;
+const HISTORY_LIMIT: usize = 300;
+
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryEntry {
+    text: String,
+    recorded_at_ms: Option<u64>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum StoredEntry {
+    Dated(HistoryEntry),
+    Legacy(String),
+}
+
+impl From<StoredEntry> for HistoryEntry {
+    fn from(entry: StoredEntry) -> Self {
+        match entry {
+            StoredEntry::Dated(entry) => entry,
+            StoredEntry::Legacy(text) => Self {
+                text,
+                recorded_at_ms: None,
+            },
+        }
+    }
+}
 
 #[derive(Clone, Default, serde::Serialize)]
 pub struct TranscriptHistorySnapshot {
-    entries: Vec<String>,
+    entries: Vec<HistoryEntry>,
     warning: Option<&'static str>,
 }
 
@@ -21,7 +52,9 @@ impl TranscriptHistory {
             .as_ref()
             .ok_or(())
             .and_then(|path| match fs::read(path) {
-                Ok(contents) => serde_json::from_slice::<Vec<String>>(&contents).map_err(|_| ()),
+                Ok(contents) => {
+                    serde_json::from_slice::<Vec<StoredEntry>>(&contents).map_err(|_| ())
+                }
                 Err(error) if error.kind() == ErrorKind::NotFound => Ok(Vec::new()),
                 Err(_) => Err(()),
             });
@@ -32,7 +65,7 @@ impl TranscriptHistory {
                 Self {
                     path,
                     snapshot: TranscriptHistorySnapshot {
-                        entries,
+                        entries: entries.into_iter().map(HistoryEntry::from).collect(),
                         warning: None,
                     },
                 }
@@ -57,7 +90,17 @@ impl TranscriptHistory {
             return;
         }
 
-        self.snapshot.entries.insert(0, text);
+        let recorded_at_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()
+            .and_then(|duration| duration.as_millis().try_into().ok());
+        self.snapshot.entries.insert(
+            0,
+            HistoryEntry {
+                text,
+                recorded_at_ms,
+            },
+        );
         self.snapshot.entries.truncate(HISTORY_LIMIT);
 
         if let Some(path) = &self.path {
@@ -85,17 +128,22 @@ mod tests {
     }
 
     #[test]
-    fn retains_the_newest_fifty_nonblank_transcripts_across_restarts() {
+    fn retains_the_newest_300_nonblank_transcripts_across_restarts() {
         let path = test_path();
         let mut history = TranscriptHistory::load(Some(path.clone()));
-        for index in 0..52 {
+        for index in 0..302 {
             history.record(format!("Transcript {index}"));
         }
         history.record(" \n ".to_string());
 
         let restored = TranscriptHistory::load(Some(path.clone())).snapshot();
-        let expected: Vec<_> = (2..52).rev().map(|i| format!("Transcript {i}")).collect();
-        assert_eq!(restored.entries, expected);
+        let expected: Vec<_> = (2..302).rev().map(|i| format!("Transcript {i}")).collect();
+        let text: Vec<_> = restored.entries.iter().map(|entry| &entry.text).collect();
+        assert_eq!(text, expected.iter().collect::<Vec<_>>());
+        assert!(restored
+            .entries
+            .iter()
+            .all(|entry| entry.recorded_at_ms.is_some()));
         assert!(restored.warning.is_none());
         fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
@@ -107,9 +155,24 @@ mod tests {
         let mut history = TranscriptHistory::load(Some(path.clone()));
         history.record("New transcript".to_string());
 
-        assert_eq!(history.snapshot().entries, ["New transcript"]);
+        assert_eq!(history.snapshot().entries[0].text, "New transcript");
         assert!(history.snapshot().warning.is_some());
         assert_eq!(fs::read_to_string(&path).unwrap(), "invalid JSON");
+        fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn retains_legacy_transcripts_without_inventing_timestamps() {
+        let path = test_path();
+        fs::write(&path, r#"["Legacy transcript"]"#).unwrap();
+        let mut history = TranscriptHistory::load(Some(path.clone()));
+        history.record("New transcript".into());
+
+        let restored = TranscriptHistory::load(Some(path.clone())).snapshot();
+        assert_eq!(restored.entries[0].text, "New transcript");
+        assert!(restored.entries[0].recorded_at_ms.is_some());
+        assert_eq!(restored.entries[1].text, "Legacy transcript");
+        assert!(restored.entries[1].recorded_at_ms.is_none());
         fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 }

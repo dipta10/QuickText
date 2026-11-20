@@ -17,7 +17,7 @@ The architecture should keep the app responsive even while audio capture, networ
 - Soniox client: Soniox-specific authentication, streaming or upload protocol, response parsing, and error mapping.
 - Deepgram client: Deepgram Nova 3 v1 authentication, streaming protocol, response parsing, keyterm mapping, and error mapping.
 - Settings store: saves non-secret user preferences locally.
-- Transcript history: the backend writes the latest 50 nonblank, original finalized transcripts to a local app-data file. It does not persist audio, partials, or cleanup variants, and the history file is separate from diagnostics.
+- Transcript history: the backend writes the latest 300 nonblank, original finalized transcripts to a local app-data file. It does not persist audio, partials, or cleanup variants, and the history file is separate from diagnostics.
 - Credential store: saves separate Soniox and Deepgram API keys in OS-backed secret storage.
 - IPC listener: local socket/named pipe inside the resident app that dispatches external `toggle`/`status` commands to the app controller and enforces single instance.
 - Diagnostics service: owns structured local events, run/session/error correlation IDs, redaction, bounded retention, and user-controlled support export.

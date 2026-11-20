@@ -7,7 +7,7 @@ export type RecordingState =
   | "error";
 export type ShortcutCaptureState = "idle" | "capturing" | "saving";
 export type ShortcutTarget = "recording" | "window";
-export type ActiveView = "capture" | "settings";
+export type ActiveView = "capture" | "settings" | "history";
 export type ProviderId = "soniox" | "deepgram";
 export type ProviderSelectionStatus = "loading" | "ready" | "error";
 
@@ -341,6 +341,11 @@ export const showCapture = (state: AppState): AppState => ({
 export const showSettings = (state: AppState): AppState => ({
   ...state,
   activeView: "settings",
+});
+
+export const showHistory = (state: AppState): AppState => ({
+  ...state,
+  activeView: "history",
 });
 
 export const saveShortcut = (

@@ -9,6 +9,7 @@ import type {
 } from "./app-state";
 
 const getAppStateCommand = "get_app_state";
+const getTranscriptHistoryCommand = "get_transcript_history";
 const getBuildInfoCommand = "get_build_info";
 const toggleRecordingCommand = "toggle_recording";
 const setWindowShortcutCommand = "set_window_shortcut";
@@ -50,6 +51,16 @@ export type BuildInfo = {
   version: string;
   buildId: string;
   sourceRevision: string;
+};
+
+export type TranscriptHistorySnapshot = {
+  entries: TranscriptHistoryEntry[];
+  warning: string | null;
+};
+
+export type TranscriptHistoryEntry = {
+  text: string;
+  recordedAtMs: number | null;
 };
 
 export type SupportedLanguage = {
@@ -113,6 +124,21 @@ export const setPasteToTargetBackend = async (enabled: boolean) => {
 export const getAppState = async (): Promise<BackendAppSnapshot> => {
   assertTauriRuntime();
   return await invoke<BackendAppSnapshot>(getAppStateCommand);
+};
+
+export const getTranscriptHistory = async (): Promise<TranscriptHistorySnapshot> => {
+  assertTauriRuntime();
+  return invoke(getTranscriptHistoryCommand);
+};
+
+export const getIncludeSystemAudio = async (): Promise<boolean> => {
+  assertTauriRuntime();
+  return invoke("get_include_system_audio");
+};
+
+export const setIncludeSystemAudio = async (enabled: boolean): Promise<void> => {
+  assertTauriRuntime();
+  await invoke("set_include_system_audio", { enabled });
 };
 
 export const getBuildInfo = async (): Promise<BuildInfo> => {

@@ -11,11 +11,13 @@ The architecture should keep the app responsive even while audio capture, networ
 - Desktop shell: owns windows, tray/menu bar behavior, global shortcut registration, clipboard integration, and OS permissions.
 - UI: record/stop control, transcript display, copy action, settings entry point, and status/error states.
 - Audio recorder: captures microphone input and emits audio in the format expected by the transcription provider.
+- When Include system audio is enabled, the backend snapshots the preference at recording start and sends a mic/default-output mix as 16 kHz mono PCM16 through the existing provider path. Linux uses PipeWire, Windows uses WASAPI loopback, and macOS uses Core Audio taps (14.4+ with consent). If the source fails, show an error instead of silently dropping playback from the recording.
 - Transcription service: provider-agnostic interface used by the app.
 - Provider registry: resolves the backend-persisted active provider to one adapter and exposes typed capability metadata.
 - Soniox client: Soniox-specific authentication, streaming or upload protocol, response parsing, and error mapping.
 - Deepgram client: Deepgram Nova 3 v1 authentication, streaming protocol, response parsing, keyterm mapping, and error mapping.
 - Settings store: saves non-secret user preferences locally.
+- Transcript history: the backend writes the latest 300 nonblank, original finalized transcripts to a local app-data file. It does not persist audio, partials, or cleanup variants, and the history file is separate from diagnostics.
 - Credential store: saves separate Soniox and Deepgram API keys in OS-backed secret storage.
 - IPC listener: local socket/named pipe inside the resident app that dispatches external `toggle`/`status` commands to the app controller and enforces single instance.
 - Diagnostics service: owns structured local events, run/session/error correlation IDs, redaction, bounded retention, and user-controlled support export.

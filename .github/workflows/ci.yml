@@ -28,6 +28,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libasound2-dev \
+            libclang-dev \
+            libpipewire-0.3-dev \
             libwebkit2gtk-4.1-dev \
             build-essential \
             curl \
@@ -63,6 +65,22 @@ jobs:
       - name: Verify atomic settings replacement on Windows
         working-directory: src-tauri
         run: cargo test --locked settings_file::tests
+      - name: Verify system audio settings and PCM conversion
+        working-directory: src-tauri
+        run: cargo test --locked system_audio::tests
+
+  macos-system-audio-tests:
+    name: macOS system audio tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Verify system audio settings and PCM conversion
+        working-directory: src-tauri
+        run: cargo test --locked system_audio::tests
 
   frontend-tests:
     name: Frontend tests and typecheck
@@ -101,6 +119,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libasound2-dev \
+            libclang-dev \
+            libpipewire-0.3-dev \
             libwebkit2gtk-4.1-dev \
             build-essential \
             curl \
@@ -144,6 +164,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libasound2-dev \
+            libclang-dev \
+            libpipewire-0.3-dev \
             libwebkit2gtk-4.1-dev \
             build-essential \
             curl \

@@ -17,13 +17,21 @@ export type AppView = {
   recordButton: HTMLButtonElement;
   providerLabel: HTMLSpanElement;
   deviceNotice: HTMLParagraphElement;
+  captureStatus: HTMLParagraphElement;
   recordingTimer: HTMLSpanElement;
   audioLevelMeter: HTMLElement;
   audioLevelBars: HTMLElement[];
+  audioLevelLabel: HTMLSpanElement;
   transcriptText: HTMLDivElement;
   transcriptPlaceholder: HTMLParagraphElement;
   transcriptFinal: HTMLSpanElement;
   transcriptPartial: HTMLSpanElement;
+  historyView: HTMLElement;
+  openHistoryButton: HTMLButtonElement;
+  closeHistoryButton: HTMLButtonElement;
+  historyList: HTMLDivElement;
+  historyEmpty: HTMLParagraphElement;
+  historyWarning: HTMLParagraphElement;
   copyButton: HTMLButtonElement;
   keybindButton: HTMLButtonElement;
   clearKeybindButton: HTMLButtonElement;
@@ -59,6 +67,8 @@ export type AppView = {
   languageStatus: HTMLParagraphElement;
   inputDeviceSelect: HTMLSelectElement;
   inputDeviceStatus: HTMLParagraphElement;
+  includeSystemAudioCheckbox: HTMLInputElement;
+  systemAudioStatus: HTMLParagraphElement;
   maxRecordingSecondsInput: HTMLInputElement;
   autoCopyCheckbox: HTMLInputElement;
   liveTranscriptCheckbox: HTMLInputElement;
@@ -73,8 +83,6 @@ export type AppView = {
   sourceRevision: HTMLSpanElement;
   copyBuildInfoButton: HTMLButtonElement;
   buildInfoStatus: HTMLParagraphElement;
-  bottomStatus: HTMLParagraphElement;
-  shortcutHint: HTMLSpanElement;
 };
 
 const appTemplate = `
@@ -106,22 +114,24 @@ const appTemplate = `
           </div>
         </div>
         <div class="capture-activity">
-          <div class="activity-bars" role="meter" aria-label="Microphone input level"
+           <div class="activity-bars" role="meter" aria-label="Recording audio level"
             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
           >${"<i aria-hidden=\"true\"></i>".repeat(48)}</div>
           <span class="activity-label" aria-hidden="true">Input level</span>
         </div>
         <p class="device-notice" role="status"></p>
+        <p class="capture-status" role="status"></p>
 
         <section class="transcript-panel" aria-label="Transcript">
           <div class="transcript-toolbar">
             <h2 class="section-title">Transcript</h2>
             <div class="transcript-actions">
+              <button class="open-history-button" type="button" aria-controls="history-view">History</button>
               <button class="clean-button" type="button" disabled>Clean &amp; Copy</button>
               <button class="copy-button" type="button">Copy</button>
             </div>
           </div>
-          <div class="transcript-text" tabindex="0"
+          <div class="transcript-text" id="transcript-text" tabindex="0"
             ><p class="transcript-placeholder">Your words, ready to use.<br />Start a recording to see your transcript here.</p
             ><span class="transcript-final"></span
             ><span class="transcript-partial" aria-label="Unconfirmed words"></span
@@ -132,6 +142,16 @@ const appTemplate = `
             <p class="cleanup-status settings-note" role="status" aria-live="polite"></p>
           </div>
         </section>
+      </section>
+
+      <section class="history-view" id="history-view" aria-labelledby="history-title" hidden>
+        <div class="history-toolbar">
+          <button class="close-history-button" type="button"><span aria-hidden="true">‹</span> Capture</button>
+          <h2 class="section-title" id="history-title">History</h2>
+        </div>
+        <p class="history-warning" role="status"></p>
+        <p class="history-empty" role="status"></p>
+        <div class="history-list"></div>
       </section>
 
       <section class="settings-view" aria-label="Settings" hidden>
@@ -178,6 +198,15 @@ const appTemplate = `
             If the selected microphone is missing when recording starts, the
             system default is used instead.
           </p>
+          <label class="checkbox-field">
+            <input class="include-system-audio-checkbox" type="checkbox" aria-describedby="system-audio-note" disabled />
+            <span>Include system audio</span>
+          </label>
+          <p class="settings-note" id="system-audio-note">
+            While recording, mix your microphone with audio from the default output and send both
+            to your transcription provider. This may include other people’s voices.
+          </p>
+          <p class="system-audio-status settings-note" role="status" hidden></p>
           <label class="settings-field" for="max-recording-seconds">
             <span class="settings-field-label">Recording limit (seconds)</span>
             <input
@@ -450,13 +479,6 @@ const appTemplate = `
       </section>
     </main>
 
-    <footer class="bottom-bar">
-      <div class="bottom-bar-meta">
-        <span class="shortcut-hint"></span>
-        <span class="resident-label">Tray / background</span>
-      </div>
-      <p class="bottom-status" role="status"></p>
-    </footer>
   </section>
 `;
 
@@ -475,6 +497,13 @@ export const createAppView = (root: HTMLElement): AppView => {
     root.querySelector<HTMLSpanElement>(".provider-label");
   const deviceNotice =
     root.querySelector<HTMLParagraphElement>(".device-notice");
+  const captureStatus = root.querySelector<HTMLParagraphElement>(".capture-status");
+  const historyWarning = root.querySelector<HTMLParagraphElement>(".history-warning");
+  const historyView = root.querySelector<HTMLElement>(".history-view");
+  const openHistoryButton = root.querySelector<HTMLButtonElement>(".open-history-button");
+  const closeHistoryButton = root.querySelector<HTMLButtonElement>(".close-history-button");
+  const historyList = root.querySelector<HTMLDivElement>(".history-list");
+  const historyEmpty = root.querySelector<HTMLParagraphElement>(".history-empty");
   const recordingTimer =
     root.querySelector<HTMLSpanElement>(".recording-timer");
   const transcriptText =
@@ -616,11 +645,11 @@ export const createAppView = (root: HTMLElement): AppView => {
   const buildInfoStatus = root.querySelector<HTMLParagraphElement>(
     ".build-info-status",
   );
-  const bottomStatus =
-    root.querySelector<HTMLParagraphElement>(".bottom-status");
-  const shortcutHint = root.querySelector<HTMLSpanElement>(".shortcut-hint");
   const audioLevelMeter = root.querySelector<HTMLElement>(".activity-bars");
   const audioLevelBars = Array.from(root.querySelectorAll<HTMLElement>(".activity-bars i"));
+  const audioLevelLabel = root.querySelector<HTMLSpanElement>(".activity-label");
+  const includeSystemAudioCheckbox = root.querySelector<HTMLInputElement>(".include-system-audio-checkbox");
+  const systemAudioStatus = root.querySelector<HTMLParagraphElement>(".system-audio-status");
 
   if (
     !statusChip ||
@@ -630,6 +659,13 @@ export const createAppView = (root: HTMLElement): AppView => {
     !recordButton ||
     !providerLabel ||
     !deviceNotice ||
+    !captureStatus ||
+    !historyWarning ||
+    !historyView ||
+    !openHistoryButton ||
+    !closeHistoryButton ||
+    !historyList ||
+    !historyEmpty ||
     !recordingTimer ||
     !transcriptText ||
     !transcriptPlaceholder ||
@@ -694,9 +730,10 @@ export const createAppView = (root: HTMLElement): AppView => {
     !sourceRevision ||
     !copyBuildInfoButton ||
     !buildInfoStatus ||
-    !bottomStatus ||
-    !shortcutHint ||
     !audioLevelMeter ||
+    !audioLevelLabel ||
+    !includeSystemAudioCheckbox ||
+    !systemAudioStatus ||
     !audioLevelBars.length
   ) {
     throw new Error("App controls were not found");
@@ -705,7 +742,9 @@ export const createAppView = (root: HTMLElement): AppView => {
   return {
     audioLevelMeter,
     audioLevelBars,
-    shortcutHint,
+    audioLevelLabel,
+    includeSystemAudioCheckbox,
+    systemAudioStatus,
     statusChip,
     viewToggleButton,
     captureView,
@@ -713,6 +752,13 @@ export const createAppView = (root: HTMLElement): AppView => {
     recordButton,
     providerLabel,
     deviceNotice,
+    captureStatus,
+    historyWarning,
+    historyView,
+    openHistoryButton,
+    closeHistoryButton,
+    historyList,
+    historyEmpty,
     recordingTimer,
     transcriptText,
     transcriptPlaceholder,
@@ -777,6 +823,5 @@ export const createAppView = (root: HTMLElement): AppView => {
     sourceRevision,
     copyBuildInfoButton,
     buildInfoStatus,
-    bottomStatus,
   };
 };

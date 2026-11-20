@@ -35,14 +35,17 @@ import {
   setPasteToTarget,
   setStatus,
   showCapture,
+  showHistory,
   showSettings,
   startShortcutCapture,
 } from "./app-state";
-import type { ProviderId } from "./app-state";
+import type { BackendAppSnapshot, ProviderId } from "./app-state";
 import { createAppView } from "./app-view";
 import { createAudioLevelMeter } from "./audio-level";
 import { connectCleanupControls, renderCleanupControls } from "./cleanup-controls";
+import { createTranscriptHistory } from "./transcript-history";
 import { formatShortcut } from "./shortcut";
+import { connectSystemAudioControls } from "./system-audio-controls";
 import {
   getAutoCopyTranscript,
   getGlobalShortcut,
@@ -117,8 +120,15 @@ let state = createAppState(
   "",
 );
 const view = createAppView(app);
+const renderSystemAudioControls = connectSystemAudioControls(view, () => state);
 let shortcutSettingsReady = false;
 const audioLevelMeter = createAudioLevelMeter(view.audioLevelMeter, view.audioLevelBars);
+const transcriptHistory = createTranscriptHistory(view, () => {
+  updateState(showCapture(state));
+  view.transcriptText.scrollTop = 0;
+  view.transcriptText.focus();
+});
+let lastHistorySessionId: number | null = null;
 let lastAutoCopiedSessionId: number | null = null;
 let availableLanguages: SupportedLanguage[] = [];
 let selectedLanguageCodes: string[] = [];
@@ -281,10 +291,14 @@ const renderLanguagePicker = () => {
 
 const render = () => {
   audioLevelMeter.sync(state);
+  renderSystemAudioControls();
   const isSettings = state.activeView === "settings";
+  const isHistory = state.activeView === "history";
   const providerControlsDisabled = !canChangeProvider(state);
   const providerName = state.activeProvider === "soniox" ? "Soniox" : "Deepgram";
-  view.captureView.hidden = isSettings;
+  view.captureView.hidden = state.activeView !== "capture";
+  view.historyView.hidden = !isHistory;
+  view.viewToggleButton.hidden = isHistory;
   view.captureView.dataset.status = state.recording;
   view.settingsView.hidden = !isSettings;
   view.viewToggleButton.textContent = isSettings ? "Capture" : "Settings";
@@ -306,14 +320,21 @@ const render = () => {
     ? `Provider: ${providerName}`
     : "Choose a provider in Settings";
   view.deviceNotice.textContent = state.deviceNotice;
+  view.captureStatus.textContent = state.status;
   view.recordingTimer.textContent = formatElapsedTime(state.recordingStartedAt);
-  view.copyButton.disabled = !state.transcript;
-  renderCleanupControls(view, state);
+  const displayedTranscript = transcriptHistory.displayedText(state);
+  view.copyButton.disabled = !displayedTranscript;
+  transcriptHistory.render(state);
+  renderCleanupControls(view, state, transcriptHistory.isViewingSavedTranscript(state));
   const hasTranscriptText =
-    Boolean(state.transcript) || Boolean(state.partialTranscript);
+    Boolean(displayedTranscript) || Boolean(state.partialTranscript);
   view.transcriptPlaceholder.hidden = hasTranscriptText;
-  view.transcriptFinal.textContent = state.transcript;
-  view.transcriptPartial.textContent = state.partialTranscript;
+  if (view.transcriptFinal.textContent !== displayedTranscript) {
+    view.transcriptFinal.textContent = displayedTranscript;
+  }
+  if (view.transcriptPartial.textContent !== state.partialTranscript) {
+    view.transcriptPartial.textContent = state.partialTranscript;
+  }
   view.transcriptText.classList.toggle("is-empty", !hasTranscriptText);
 
   view.keybindButton.textContent =
@@ -387,18 +408,13 @@ const render = () => {
   view.launchOnStartupStatus.textContent =
     state.launchOnStartupStatus ||
     "Starts hidden in the tray when you sign in.";
-  view.bottomStatus.textContent =
-    state.activeView === "capture"
-      ? state.status
-      : state.selectedShortcut
-        ? `Shortcut: ${state.selectedShortcut}`
-        : "No shortcut saved.";
-  view.shortcutHint.textContent = state.selectedShortcut || "Set a shortcut in Settings";
 };
 
 const updateState = (nextState: typeof state) => {
   const wasSettings = state.activeView === "settings";
+  const sessionChanged = nextState.activeSessionId !== state.activeSessionId;
   state = nextState;
+  if (sessionChanged) transcriptHistory.reset();
   render();
 
   if (!wasSettings && state.activeView === "settings") {
@@ -406,13 +422,26 @@ const updateState = (nextState: typeof state) => {
   }
 };
 
-const copyTranscript = async (successMessage = "Transcript copied.") => {
-  if (!state.transcript) {
-    return;
+const updateFromBackend = (snapshot: BackendAppSnapshot) => {
+  const nextState = applyBackendSnapshot(state, snapshot);
+  if (
+    nextState !== state &&
+    snapshot.sessionId !== null &&
+    snapshot.sessionId !== lastHistorySessionId &&
+    (snapshot.status === "transcribed" || snapshot.status === "error") &&
+    snapshot.transcript?.text.trim()
+  ) {
+    lastHistorySessionId = snapshot.sessionId;
+    void transcriptHistory.reload().then(render);
   }
+  updateState(nextState);
+};
+
+const copyTranscript = async (text: string, successMessage = "Transcript copied.") => {
+  if (!text) return;
 
   try {
-    await copyTextToClipboard(state.transcript);
+    await copyTextToClipboard(text);
     updateState(setStatus(state, successMessage));
   } catch (error) {
     updateState(
@@ -424,7 +453,7 @@ const copyTranscript = async (successMessage = "Transcript copied.") => {
 const maybeAutoCopyTranscript = () => {
   if (!shouldAutoCopyTranscript(state, lastAutoCopiedSessionId)) return;
   lastAutoCopiedSessionId = state.activeSessionId;
-  void copyTranscript("Transcript copied automatically.");
+  void copyTranscript(state.transcript, "Transcript copied automatically.");
 };
 
 const registerShortcut = async (
@@ -691,7 +720,7 @@ const saveTranscriptionTerms = async () => {
 const loadBackendState = async () => {
   try {
     const snapshot = await getAppState();
-    updateState(applyBackendSnapshot(state, snapshot));
+    updateFromBackend(snapshot);
   } catch (error) {
     updateState(
       setStatus(state, error instanceof Error ? error.message : String(error)),
@@ -778,7 +807,7 @@ const toggleRecording = async () => {
     const nextState = showCapture(state);
     state = nextState;
     const snapshot = await toggleBackendRecording(state.maxRecordingSeconds);
-    updateState(applyBackendSnapshot(state, snapshot));
+    updateFromBackend(snapshot);
     maybeAutoCopyTranscript();
   } catch (error) {
     updateState(
@@ -847,7 +876,17 @@ view.viewToggleButton.addEventListener("click", () => {
 });
 
 view.copyButton.addEventListener("click", () => {
-  void copyTranscript();
+  void copyTranscript(transcriptHistory.displayedText(state));
+});
+
+view.openHistoryButton.addEventListener("click", () => {
+  updateState(showHistory(state));
+  view.closeHistoryButton.focus();
+});
+
+view.closeHistoryButton.addEventListener("click", () => {
+  updateState(showCapture(state));
+  view.openHistoryButton.focus();
 });
 
 view.copyBuildInfoButton.addEventListener("click", () => {
@@ -1032,7 +1071,7 @@ window.addEventListener("keydown", (event) => {
 });
 
 void onAppStateChanged((snapshot) => {
-  updateState(applyBackendSnapshot(state, snapshot));
+  updateFromBackend(snapshot);
   maybeAutoCopyTranscript();
 }).catch(() => {
   updateState(
@@ -1064,6 +1103,7 @@ connectCleanupControls(view, () => state, updateState);
 render();
 window.setInterval(render, 1000);
 void loadBackendState();
+void transcriptHistory.reload().then(render);
 void loadBuildInfo();
 void loadTranscriptionSettings();
 void loadApiKeyStatus("soniox");

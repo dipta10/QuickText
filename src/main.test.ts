@@ -59,6 +59,8 @@ beforeEach(() => {
   localStorage.clear();
   document.body.innerHTML = '<div id="app"></div>';
   vi.mocked(backend.getAppState).mockResolvedValue(idle);
+  vi.mocked(backend.getIncludeSystemAudio).mockResolvedValue(false);
+  vi.mocked(backend.getTranscriptHistory).mockResolvedValue({ entries: [], warning: null });
   vi.mocked(backend.initializeShortcuts).mockResolvedValue({ recording: "", window: "", recordingError: null, windowError: null });
   vi.mocked(backend.getTranscriptionSettings).mockResolvedValue({ activeProvider: "deepgram" });
   vi.mocked(backend.hasProviderApiKey).mockResolvedValue(true);
@@ -87,6 +89,162 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
   document.body.innerHTML = "";
+});
+
+describe("system audio", () => {
+  it("is off by default and saves the checkbox preference", async () => {
+    await startApp();
+    const checkbox = element<HTMLInputElement>(".include-system-audio-checkbox");
+    expect(checkbox.checked).toBe(false);
+    expect(checkbox.disabled).toBe(false);
+
+    checkbox.click();
+    expect(backend.setIncludeSystemAudio).toHaveBeenCalledExactlyOnceWith(true);
+    await Promise.resolve();
+    expect(checkbox.checked).toBe(true);
+    expect(element(".activity-label").textContent).toBe("Mic + system audio");
+
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    onState({ ...idle, status: "recording", sessionId: 1 });
+    expect(checkbox.disabled).toBe(true);
+  });
+
+  it("restores the saved checkbox and keeps it checked if disabling fails", async () => {
+    vi.mocked(backend.getIncludeSystemAudio).mockResolvedValue(true);
+    vi.mocked(backend.setIncludeSystemAudio).mockRejectedValue(new Error("Could not save"));
+    await startApp();
+    const checkbox = element<HTMLInputElement>(".include-system-audio-checkbox");
+    expect(checkbox.checked).toBe(true);
+
+    checkbox.click();
+    await Promise.resolve();
+    expect(checkbox.checked).toBe(true);
+    expect(element(".system-audio-status").textContent).toContain("Could not save");
+  });
+});
+
+describe("transcript history", () => {
+  const entry = (text: string, recordedAtMs: number | null = null) => ({ text, recordedAtMs });
+  const openHistory = () => element<HTMLButtonElement>(".open-history-button").click();
+  const historyEntries = () => [...document.querySelectorAll<HTMLButtonElement>(".history-entry")];
+
+  it("opens a dated list and returns to Capture with the selected transcript ready to copy", async () => {
+    vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
+      entries: [entry("Latest transcript", Date.now()), entry("Older\ntranscript")],
+      warning: null,
+    });
+    await startApp();
+
+    expect(document.querySelector("footer")).toBeNull();
+    expect(element(".transcript-final").textContent).toBe("Latest transcript");
+    openHistory();
+    expect(element<HTMLElement>(".capture-view").hidden).toBe(true);
+    expect(element<HTMLElement>(".history-view").hidden).toBe(false);
+    expect(document.activeElement).toBe(element(".close-history-button"));
+    expect(element(".history-day").textContent).toBe("Today");
+    const [latest, older] = historyEntries();
+    expect(latest.querySelector("time")).not.toBeNull();
+    expect(older.querySelector("time")).toBeNull();
+    expect(older.textContent).toBe("Older transcript");
+
+    older.click();
+    expect(element<HTMLElement>(".history-view").hidden).toBe(true);
+    expect(element<HTMLElement>(".capture-view").hidden).toBe(false);
+    expect(element(".transcript-final").textContent).toBe("Older\ntranscript");
+    expect(element<HTMLButtonElement>(".clean-button").hidden).toBe(true);
+    expect(backend.copyTextToClipboard).not.toHaveBeenCalled();
+    element<HTMLButtonElement>(".copy-button").click();
+    expect(backend.copyTextToClipboard).toHaveBeenCalledExactlyOnceWith("Older\ntranscript");
+
+    openHistory();
+    expect(older.getAttribute("aria-current")).toBe("true");
+    element<HTMLButtonElement>(".close-history-button").click();
+    expect(document.activeElement).toBe(element(".open-history-button"));
+    expect(element(".transcript-final").textContent).toBe("Older\ntranscript");
+  });
+
+  it("returns to Capture on recording and refreshes History only after finalization", async () => {
+    vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
+      entries: [entry("Latest transcript"), entry("Older transcript")],
+      warning: null,
+    });
+    await startApp();
+    openHistory();
+
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    const onPartial = vi.mocked(backend.onPartialTranscript).mock.calls[0][0];
+    onState({ ...idle, status: "recording", sessionId: 1 });
+    onPartial({ recordingSessionId: 1, providerSessionId: 1, finalText: "New transcript", partialText: "" });
+    expect(element<HTMLElement>(".history-view").hidden).toBe(true);
+    expect(element<HTMLButtonElement>(".open-history-button").disabled).toBe(true);
+    expect(element(".transcript-final").textContent).toBe("New transcript");
+    expect(backend.getTranscriptHistory).toHaveBeenCalledTimes(1);
+
+    const refreshedHistory = deferred<backend.TranscriptHistorySnapshot>();
+    vi.mocked(backend.getTranscriptHistory).mockReturnValueOnce(refreshedHistory.promise);
+    const finalized: BackendAppSnapshot = {
+      ...idle, status: "transcribed", sessionId: 1,
+      transcript: { text: "New transcript", provider: "soniox" },
+    };
+    onState({ ...idle, status: "stopping", sessionId: 1 });
+    onState(finalized);
+    onState(finalized);
+    expect(backend.getTranscriptHistory).toHaveBeenCalledTimes(2);
+    expect(element(".transcript-final").textContent).toBe("New transcript");
+    openHistory();
+    expect(element(".history-empty").textContent).toBe("Loading history…");
+    expect(element<HTMLElement>(".history-list").hidden).toBe(true);
+
+    refreshedHistory.resolve({
+      entries: [entry("New transcript"), entry("Latest transcript"), entry("Older transcript")],
+      warning: null,
+    });
+    await refreshedHistory.promise;
+    await Promise.resolve();
+    expect(historyEntries()).toHaveLength(3);
+    expect(historyEntries()[0].textContent).toBe("New transcript");
+    historyEntries()[1].click();
+    expect(element(".transcript-final").textContent).toBe("Latest transcript");
+  });
+
+  it("does not refresh history when live text is followed by a blank final result", async () => {
+    vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
+      entries: [entry("Saved transcript")],
+      warning: null,
+    });
+    await startApp();
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    const onPartial = vi.mocked(backend.onPartialTranscript).mock.calls[0][0];
+    onState({ ...idle, status: "recording", sessionId: 1 });
+    onPartial({ recordingSessionId: 1, providerSessionId: 1, finalText: "Live text", partialText: "" });
+    onState({
+      ...idle, status: "transcribed", sessionId: 1,
+      transcript: { text: " ", provider: "soniox" },
+    });
+
+    expect(backend.getTranscriptHistory).toHaveBeenCalledTimes(1);
+    expect(element(".transcript-final").textContent).toBe("Saved transcript");
+    openHistory();
+    expect(historyEntries()).toHaveLength(1);
+  });
+
+  it("shows a clear empty state when no transcripts have been saved", async () => {
+    await startApp();
+    openHistory();
+    expect(element(".history-empty").textContent).toBe("No saved transcripts yet.");
+  });
+
+  it("shows recording errors inline without a footer", async () => {
+    await startApp();
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    onState({
+      ...idle, status: "error", sessionId: 1,
+      error: { type: "microphone_unavailable", message: "Choose another microphone." },
+    });
+
+    expect(document.querySelector("footer")).toBeNull();
+    expect(element(".capture-status").textContent).toBe("Choose another microphone.");
+  });
 });
 
 describe("provider restoration in the app", () => {

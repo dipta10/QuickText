@@ -135,7 +135,7 @@ describe("cleanup settings and actions", () => {
     update(applyBackendSnapshot(state(), { status: "starting", sessionId: 2, transcript: null, error: null }));
     pending.reject(new Error("Old error"));
     await settle();
-    expect(state().status).toBe("Starting recording...");
+    expect(state().status).toBe("");
   });
   it("releases the old pending action on a new session without letting its reply unlock a newer action", async () => {
     vi.mocked(backend.hasCleanupApiKey).mockResolvedValue(true);

@@ -9,6 +9,7 @@ depends=(
   'alsa-lib'
   'gtk3'
   'libayatana-appindicator'
+  'libpipewire'
   'libsecret'
   'openssl'
   'webkit2gtk-4.1'
@@ -16,10 +17,12 @@ depends=(
   'xdotool'
 )
 makedepends=(
+  'clang'
   'git'
   'npm'
   'rust'
 )
+optdepends=('pipewire: system audio capture')
 # GCC LTO objects from ring's C code cannot be linked by Rust's lld linker.
 options=('!debug' '!lto')
 

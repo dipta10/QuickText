@@ -8,9 +8,10 @@ The main UI should separate the active dictation workflow from configuration. Re
 
 ## Product Shape
 
-QuickText has two main views:
+QuickText has three views:
 
 - Capture: the default operational view for recording, stopping, reviewing, and copying the transcript.
+- History: browse the most recent saved transcripts and select one to open it in Capture.
 - Settings: configuration for the transcription provider, provider credentials, shared terms, global shortcut, tray behavior, Soniox language preferences, and future preferences.
 
 The app should always open to Capture when triggered for dictation. Settings should never block the core record/stop loop unless a required setup item is missing.
@@ -25,11 +26,10 @@ Recommended initial window size:
 - Default theme: dark.
 - Density: compact, but not cramped.
 
-The window should have three stable regions:
+The window should have two stable regions:
 
 - Top bar: app name and Settings/Capture navigation only.
-- Main content: either Capture or Settings.
-- Bottom status line: shortcut hint, tray/background status, or current error.
+- Main content: Capture, History, or Settings.
 
 Avoid decorative hero sections, marketing copy, oversized cards, and nested cards.
 
@@ -56,6 +56,8 @@ Transcript presentation:
 - Do not use a textarea for the final transcript.
 - Show empty state text only before the first transcript.
 - Put Copy near the transcript title or bottom action row.
+- Open a dedicated History view from the transcript toolbar. Show previews newest first, grouped by local date, with a Capture back button. Selecting an entry returns to Capture with that transcript ready to copy. Keep older entries without timestamps in an undated group and return to Capture when a recording starts.
+- Copy uses the displayed text. Clean & Copy and Restore original apply only to the current recording, not saved history entries.
 
 Capture state behavior:
 
@@ -73,7 +75,7 @@ Settings should be a separate view reached from a gear button or Settings tab in
 Settings uses one scrolling page with six sections, in this order:
 
 - General: launch on startup, then an After recording group containing auto-copy and paste into the focused app.
-- Recording: microphone, recording limit in seconds, live transcript, and a Show unconfirmed words option visible only with live transcript enabled.
+- Recording: microphone, an off-by-default Include system audio checkbox, recording limit in seconds, live transcript, and a Show unconfirmed words option visible only with live transcript enabled.
 - Shortcuts: start/stop recording and its focus/hide preferences, followed by the independent show/hide window shortcut. Focus and hide preferences apply only to recording shortcuts.
 - Transcription: provider selector followed immediately by the selected provider's credentials and languages. Soniox exposes language preferences and optional Topic and context (the persisted transcription description); Deepgram shows its English-only limitation. Shared Terms and phrases follows the provider group. The optional context and terms editors are collapsed by default and preserve drafts when collapsed or when switching providers.
 - Transcript cleanup: optional Clean & Copy setup, Gemini credentials, Google AI Studio setup link, and visible text-processing and free-tier data-use disclosure. This is independent of the speech provider.
@@ -134,8 +136,8 @@ The selected visual direction is **Signal**: a charcoal desktop instrument with
 an amber primary action, small uppercase labels, and a monospaced recording
 timer. Show the backend status directly above the timer, replacing the static Capture / microphone label. Keep the record/stop button beside them in a compact capture strip. The header contains only the brand and Settings/Capture navigation; it does not repeat recording status.
 The transcript uses the main window surface rather than a nested card, with
-Copy and Clean & Copy in its toolbar. A stable footer shows the recording
-shortcut, background/tray hint, and current status or recovery message.
+Copy and Clean & Copy in its toolbar. Show recovery and other feedback inline
+when needed; shortcuts and tray information stay in Settings.
 
 The input-level strip shows a short history of actual microphone volume, not a
 looping animation. The audio recorder measures normalized RMS from the same

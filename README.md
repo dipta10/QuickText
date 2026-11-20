@@ -27,6 +27,8 @@ Download an unsigned prebuilt package from the rolling [pre-release](https://git
 | Mac (Apple Silicon, macOS 14.4+) | `QuickText_0.1.0_aarch64.dmg` |
 | Linux | `.AppImage` (just run it) or `.deb` / `.rpm` |
 
+The generic Linux bundles are built on Ubuntu 24.04 and may not run on older distributions, including Ubuntu 22.04. Arch and Manjaro users should use the native `.pkg.tar.zst` package.
+
 ### Prerequisites
 
 - Node.js and npm

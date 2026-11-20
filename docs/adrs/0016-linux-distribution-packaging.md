@@ -6,7 +6,7 @@ Accepted for the Linux distribution-hardening slice.
 
 ## Context
 
-QuickText's CD workflow currently builds Linux artifacts on Ubuntu 22.04 and publishes an AppImage, a Debian package, and an RPM package. The AppImage is intended to cover distributions without a matching native package.
+QuickText's CD workflow publishes an AppImage, a Debian package, and an RPM package. The AppImage is intended to cover distributions without a matching native package.
 
 That portability boundary is not reliable for a Tauri/WebKitGTK application. On a current Manjaro Hyprland system with Mesa 26 and Wayland 1.26, the Ubuntu-built AppImage loads an older bundled `libwayland-client` alongside host graphics libraries. WebKit's render process then aborts with `EGL_BAD_PARAMETER` and leaves a blank window. Tauri tracks the same default-bundler failure in [tauri-apps/tauri#15665](https://github.com/tauri-apps/tauri/issues/15665).
 
@@ -17,6 +17,7 @@ Launching with the host Wayland library preloaded is a useful recovery command f
 Treat this as a distribution problem, not an application-code problem.
 
 - Keep the Debian package for Debian-family systems and the RPM package for RPM-family systems.
+- Build the generic Linux bundles on Ubuntu 24.04. Ubuntu 22.04's PipeWire 0.3.48 headers cannot compile the locked Rust bindings used for system audio. Bundles built on 24.04 may no longer run on older distributions, including Ubuntu 22.04. The native Arch package build is unchanged.
 - Add an x86_64 Arch package (`.pkg.tar.zst`) to every CD release. Build it in a pinned Arch Linux environment so it links against and declares Arch's system GTK, WebKitGTK, Wayland, audio, tray, and input dependencies instead of carrying Ubuntu's desktop stack.
 - Publish the Arch package directly on the same GitHub Release as the other installers. An AUR entry is deferred until QuickText has a stable versioned release process; rolling per-main releases and bounded retention make a continuously updated AUR checksum a poor first distribution channel.
 - Keep the AppImage as a fallback for distributions without a native package, but describe it as experimental on newer Wayland/Mesa systems until it passes the compatibility checks below.
@@ -78,4 +79,3 @@ The AppImage warning can be removed only after the unmodified artifact launches 
 - **Hardcode the workaround in Rust:** Rejected because the failure originates in AppImage library composition, paths differ by distribution, and native packages should not inherit AppImage-specific rendering changes.
 - **Build one AppImage on Arch for everyone:** Rejected because a rolling-distribution build raises the glibc baseline and reverses the compatibility problem for older distributions.
 - **Publish only an AUR package:** Deferred because AUR metadata and checksums do not fit the current release-on-every-main-push channel cleanly. The GitHub-hosted pacman package provides a testable first step.
-

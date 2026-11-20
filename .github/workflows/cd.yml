@@ -28,7 +28,8 @@ jobs:
       matrix:
         settings:
           - platform: linux
-            os: ubuntu-22.04
+            # Jammy's PipeWire 0.3.48 headers cannot build the locked libspa crate.
+            os: ubuntu-24.04
           - platform: macos
             os: macos-latest
           - platform: windows
@@ -94,7 +95,7 @@ jobs:
             | Windows | `QuickText_${{ env.RELEASE_TAG }}_x64-setup.exe` (installer) or `.msi` |
             | Mac (Apple Silicon / M1–M4) | `QuickText_${{ env.RELEASE_TAG }}_aarch64.dmg` |
             | Arch / Manjaro (x86_64) | `quicktext-0.1.0-${{ github.run_number }}-x86_64.pkg.tar.zst` |
-            | Debian / Ubuntu (x86_64) | `.deb` |
+            | Ubuntu 24.04+ / compatible Debian-based Linux (x86_64) | `.deb` |
             | Fedora / RPM-based Linux (x86_64) | `.rpm` |
             | Other Linux (x86_64) | `.AppImage` (see the Wayland note below) |
 
@@ -111,6 +112,8 @@ jobs:
             ```
 
             ## Heads-up
+
+            The `.deb`, `.rpm`, and `.AppImage` are built on Ubuntu 24.04 and may not run on older distributions, including Ubuntu 22.04.
 
             This build is **unsigned**, so your OS will act suspicious:
 

@@ -28,7 +28,8 @@ export const createTranscriptHistory = () => {
         }
       } catch {
         if (latestRequest === requestId) {
-          history = { ...history, warning: "Could not load transcript history." };
+          history = { entries: [], warning: "Could not load transcript history." };
+          position = 0;
         }
       } finally {
         if (latestRequest === requestId) loading = false;
@@ -52,8 +53,9 @@ export const createTranscriptHistory = () => {
     render(view: AppView, state: AppState) {
       const count = history.entries.length;
       const disabled = navigationDisabled(state);
-      view.historyNav.hidden = count === 0 || captureInProgress(state);
-      view.historyPosition.textContent = count ? `${position + 1} of ${count}` : "";
+      view.historyNav.hidden = count === 0 || loading || captureInProgress(state);
+      const label = view.historyNav.hidden ? "" : `${position + 1} of ${count}`;
+      if (view.historyPosition.textContent !== label) view.historyPosition.textContent = label;
       view.olderTranscriptButton.disabled = disabled || position >= count - 1;
       view.newerTranscriptButton.disabled = disabled || position === 0;
       view.historyWarning.textContent = history.warning ?? "";

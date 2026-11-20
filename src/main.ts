@@ -38,7 +38,7 @@ import {
   showSettings,
   startShortcutCapture,
 } from "./app-state";
-import type { ProviderId } from "./app-state";
+import type { BackendAppSnapshot, ProviderId } from "./app-state";
 import { createAppView } from "./app-view";
 import { createAudioLevelMeter } from "./audio-level";
 import { connectCleanupControls, renderCleanupControls } from "./cleanup-controls";
@@ -123,6 +123,7 @@ const renderSystemAudioControls = connectSystemAudioControls(view, () => state);
 let shortcutSettingsReady = false;
 const audioLevelMeter = createAudioLevelMeter(view.audioLevelMeter, view.audioLevelBars);
 const transcriptHistory = createTranscriptHistory();
+let lastHistorySessionId: number | null = null;
 let lastAutoCopiedSessionId: number | null = null;
 let availableLanguages: SupportedLanguage[] = [];
 let selectedLanguageCodes: string[] = [];
@@ -404,16 +405,28 @@ const render = () => {
 const updateState = (nextState: typeof state) => {
   const wasSettings = state.activeView === "settings";
   const sessionChanged = nextState.activeSessionId !== state.activeSessionId;
-  const transcriptFinalized = Boolean(nextState.transcript.trim()) &&
-    (sessionChanged || !state.transcript.trim());
   state = nextState;
   if (sessionChanged) transcriptHistory.reset();
-  if (transcriptFinalized) void transcriptHistory.reload().then(render);
   render();
 
   if (!wasSettings && state.activeView === "settings") {
     void refreshInputDevices();
   }
+};
+
+const updateFromBackend = (snapshot: BackendAppSnapshot) => {
+  const nextState = applyBackendSnapshot(state, snapshot);
+  if (
+    nextState !== state &&
+    snapshot.sessionId !== null &&
+    snapshot.sessionId !== lastHistorySessionId &&
+    (snapshot.status === "transcribed" || snapshot.status === "error") &&
+    snapshot.transcript?.text.trim()
+  ) {
+    lastHistorySessionId = snapshot.sessionId;
+    void transcriptHistory.reload().then(render);
+  }
+  updateState(nextState);
 };
 
 const copyTranscript = async (text: string, successMessage = "Transcript copied.") => {
@@ -699,7 +712,7 @@ const saveTranscriptionTerms = async () => {
 const loadBackendState = async () => {
   try {
     const snapshot = await getAppState();
-    updateState(applyBackendSnapshot(state, snapshot));
+    updateFromBackend(snapshot);
   } catch (error) {
     updateState(
       setStatus(state, error instanceof Error ? error.message : String(error)),
@@ -786,7 +799,7 @@ const toggleRecording = async () => {
     const nextState = showCapture(state);
     state = nextState;
     const snapshot = await toggleBackendRecording(state.maxRecordingSeconds);
-    updateState(applyBackendSnapshot(state, snapshot));
+    updateFromBackend(snapshot);
     maybeAutoCopyTranscript();
   } catch (error) {
     updateState(
@@ -1052,7 +1065,7 @@ window.addEventListener("keydown", (event) => {
 });
 
 void onAppStateChanged((snapshot) => {
-  updateState(applyBackendSnapshot(state, snapshot));
+  updateFromBackend(snapshot);
   maybeAutoCopyTranscript();
 }).catch(() => {
   updateState(

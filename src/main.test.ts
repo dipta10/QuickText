@@ -152,7 +152,7 @@ describe("transcript history", () => {
     expect(element(".transcript-final").textContent).toBe("Latest transcript");
   });
 
-  it("returns to the latest entry after a new recording", async () => {
+  it("updates the count only after a live transcript is finalized and history is refreshed", async () => {
     vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
       entries: ["Latest transcript", "Older transcript"],
       warning: null,
@@ -161,22 +161,57 @@ describe("transcript history", () => {
     element<HTMLButtonElement>(".older-transcript-button").click();
 
     const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    const onPartial = vi.mocked(backend.onPartialTranscript).mock.calls[0][0];
     onState({ ...idle, status: "recording", sessionId: 1 });
+    onPartial({ recordingSessionId: 1, providerSessionId: 1, finalText: "New transcript", partialText: "" });
     expect(element<HTMLElement>(".history-nav").hidden).toBe(true);
-    expect(element(".transcript-final").textContent).toBe("");
+    expect(element(".transcript-final").textContent).toBe("New transcript");
+    expect(backend.getTranscriptHistory).toHaveBeenCalledTimes(1);
 
-    vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
+    const refreshedHistory = deferred<backend.TranscriptHistorySnapshot>();
+    vi.mocked(backend.getTranscriptHistory).mockReturnValueOnce(refreshedHistory.promise);
+    const finalized: BackendAppSnapshot = {
+      ...idle, status: "transcribed", sessionId: 1,
+      transcript: { text: "New transcript", provider: "soniox" },
+    };
+    onState({ ...idle, status: "stopping", sessionId: 1 });
+    onState(finalized);
+    onState(finalized);
+    expect(backend.getTranscriptHistory).toHaveBeenCalledTimes(2);
+    expect(element<HTMLElement>(".history-nav").hidden).toBe(true);
+    expect(element(".transcript-final").textContent).toBe("New transcript");
+
+    refreshedHistory.resolve({
       entries: ["New transcript", "Latest transcript", "Older transcript"],
       warning: null,
     });
-    onState({
-      ...idle, status: "transcribed", sessionId: 1,
-      transcript: { text: "New transcript", provider: "soniox" },
-    });
-    await Promise.resolve();
+    await refreshedHistory.promise;
     await Promise.resolve();
     expect(element(".transcript-final").textContent).toBe("New transcript");
     expect(element(".history-position").textContent).toBe("1 of 3");
+    element<HTMLButtonElement>(".older-transcript-button").click();
+    expect(element(".transcript-final").textContent).toBe("Latest transcript");
+    expect(element(".history-position").textContent).toBe("2 of 3");
+  });
+
+  it("does not refresh history when live text is followed by a blank final result", async () => {
+    vi.mocked(backend.getTranscriptHistory).mockResolvedValue({
+      entries: ["Saved transcript"],
+      warning: null,
+    });
+    await startApp();
+    const onState = vi.mocked(backend.onAppStateChanged).mock.calls[0][0];
+    const onPartial = vi.mocked(backend.onPartialTranscript).mock.calls[0][0];
+    onState({ ...idle, status: "recording", sessionId: 1 });
+    onPartial({ recordingSessionId: 1, providerSessionId: 1, finalText: "Live text", partialText: "" });
+    onState({
+      ...idle, status: "transcribed", sessionId: 1,
+      transcript: { text: " ", provider: "soniox" },
+    });
+
+    expect(backend.getTranscriptHistory).toHaveBeenCalledTimes(1);
+    expect(element(".history-position").textContent).toBe("1 of 1");
+    expect(element(".transcript-final").textContent).toBe("Saved transcript");
   });
 
   it("shows recording errors inline without a footer", async () => {

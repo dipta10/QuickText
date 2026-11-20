@@ -11,7 +11,6 @@ depends=(
   'libayatana-appindicator'
   'libpipewire'
   'libsecret'
-  'openssl'
   'webkit2gtk-4.1'
   'wtype'
   'xdotool'
@@ -46,6 +45,14 @@ build() {
   cd "$srcdir/$pkgname"
   export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/usr/src/debug/$pkgname"
   npm run tauri build -- --no-bundle
+
+  # Arch and Manjaro can ship different OpenSSL SONAMEs at the same time.
+  local needed
+  needed=$(readelf -d src-tauri/target/release/quicktext) || return 1
+  if grep -Eq '\(NEEDED\).*\[lib(ssl|crypto)\.so(\.[^]]+)?\]' <<< "$needed"; then
+    printf '%s\n' 'QuickText must not link directly against OpenSSL.' >&2
+    return 1
+  fi
 }
 
 package() {
